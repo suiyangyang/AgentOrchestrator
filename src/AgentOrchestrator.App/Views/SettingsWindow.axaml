@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:AgentOrchestrator.App.ViewModels"
+        xmlns:conv="using:AgentOrchestrator.App.Converters"
         x:Class="AgentOrchestrator.App.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="设置"
@@ -11,34 +12,78 @@
         CanResize="False"
         Background="#F5F5F7">
 
+    <Window.Resources>
+        <conv:BoolToPasswordCharConverter x:Key="BoolToPasswordCharConverter" />
+    </Window.Resources>
+
     <Grid RowDefinitions="*,Auto">
 
-        <!-- Top: ScrollViewer for content -->
+        <!-- Top: Scrollable content -->
         <ScrollViewer Grid.Row="0" Padding="24">
             <StackPanel Spacing="16">
-                <TextBlock Text="设置" FontSize="20" FontWeight="SemiBold" Foreground="#1F2328" />
-                <TextBlock Text="（设置内容占位 - 后续在此添加具体设置项）" FontSize="13" Foreground="#6E727A" />
 
+                <!-- Card 1: OpenCode CLI Path -->
                 <Border Background="White" CornerRadius="12" Padding="20" BorderBrush="#E3E5E9" BorderThickness="1">
-                    <StackPanel Spacing="8">
-                        <TextBlock Text="通用" FontSize="14" FontWeight="SemiBold" Foreground="#1F2328" />
-                        <TextBlock Text="通用设置项将放在这里" FontSize="12" Foreground="#6E727A" />
+                    <StackPanel Spacing="0">
+                        <TextBlock Text="OpenCode CLI Path" FontSize="14" FontWeight="SemiBold" Foreground="#1F2328" />
+                        <TextBlock Text="Path" FontSize="12" Foreground="#6E727A" Margin="0,12,0,4" />
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding OpenCodeCliPath}"
+                                     Background="#F0F1F3" CornerRadius="6" Padding="12,8"
+                                     BorderThickness="0" FontSize="13" Foreground="#1F2328" />
+                            <Button Grid.Column="1"
+                                    Content="Browse…"
+                                    Background="#1F78FF" Foreground="White"
+                                    Padding="14,8" CornerRadius="6" FontSize="13"
+                                    VerticalAlignment="Center" Margin="8,0,0,0"
+                                    Click="OnBrowseOpenCodeClick" />
+                        </Grid>
                     </StackPanel>
                 </Border>
 
+                <!-- Card 2: Network -->
                 <Border Background="White" CornerRadius="12" Padding="20" BorderBrush="#E3E5E9" BorderThickness="1">
-                    <StackPanel Spacing="8">
-                        <TextBlock Text="外观" FontSize="14" FontWeight="SemiBold" Foreground="#1F2328" />
-                        <TextBlock Text="主题、字体等外观设置将放在这里" FontSize="12" Foreground="#6E727A" />
+                    <StackPanel Spacing="0">
+                        <TextBlock Text="Network" FontSize="14" FontWeight="SemiBold" Foreground="#1F2328" />
+                        <TextBlock Text="Host" FontSize="12" Foreground="#6E727A" Margin="0,12,0,4" />
+                        <TextBox Text="{Binding Host}"
+                                 Background="#F0F1F3" CornerRadius="6" Padding="12,8"
+                                 BorderThickness="0" FontSize="13" Foreground="#1F2328" />
+                        <TextBlock Text="Port" FontSize="12" Foreground="#6E727A" Margin="0,12,0,4" />
+                        <TextBox Text="{Binding Port}"
+                                 Background="#F0F1F3" CornerRadius="6" Padding="12,8"
+                                 BorderThickness="0" FontSize="13" Foreground="#1F2328" />
                     </StackPanel>
                 </Border>
 
+                <!-- Card 3: Authentication -->
                 <Border Background="White" CornerRadius="12" Padding="20" BorderBrush="#E3E5E9" BorderThickness="1">
-                    <StackPanel Spacing="8">
-                        <TextBlock Text="高级" FontSize="14" FontWeight="SemiBold" Foreground="#1F2328" />
-                        <TextBlock Text="高级设置项将放在这里" FontSize="12" Foreground="#6E727A" />
+                    <StackPanel Spacing="0">
+                        <TextBlock Text="Authentication" FontSize="14" FontWeight="SemiBold" Foreground="#1F2328" />
+                        <TextBlock Text="Username" FontSize="12" Foreground="#6E727A" Margin="0,12,0,4" />
+                        <TextBox Text="{Binding Username}"
+                                 Background="#F0F1F3" CornerRadius="6" Padding="12,8"
+                                 BorderThickness="0" FontSize="13" Foreground="#1F2328" />
+                        <TextBlock Text="Password" FontSize="12" Foreground="#6E727A" Margin="0,12,0,4" />
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding Password}"
+                                     PasswordChar="{Binding IsPasswordVisible, Converter={StaticResource BoolToPasswordCharConverter}}"
+                                     Background="#F0F1F3" CornerRadius="6" Padding="12,8"
+                                     BorderThickness="0" FontSize="13" Foreground="#1F2328" />
+                            <Button Grid.Column="1"
+                                    Command="{Binding TogglePasswordVisibilityCommand}"
+                                    ToolTip.Tip="显示/隐藏密码"
+                                    VerticalAlignment="Center" Margin="8,0,0,0"
+                                    Background="Transparent" BorderThickness="0" Padding="4">
+                                <Path Width="18" Height="18" Stretch="Uniform" Fill="#6E727A"
+                                      Data="M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5ZM12,17.5C9.24,17.5 7,15.26 7,12.5C7,9.74 9.24,7.5 12,7.5C14.76,7.5 17,9.74 17,12.5C17,15.26 14.76,17.5 12,17.5ZM12,9.5C10.34,9.5 9,10.84 9,12.5C9,14.16 10.34,15.5 12,15.5C13.66,15.5 15,14.16 15,12.5C15,10.84 13.66,9.5 12,9.5Z" />
+                            </Button>
+                        </Grid>
                     </StackPanel>
                 </Border>
+
             </StackPanel>
         </ScrollViewer>
 

@@ -15,6 +15,7 @@
     <Folder Include="Converters\" />
     <Folder Include="Services\" />
     <AvaloniaResource Include="Assets\**" />
+    <EmbeddedResource Include="appsettings.json" />
   </ItemGroup>
 
   <ItemGroup>

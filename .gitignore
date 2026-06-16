@@ -361,3 +361,15 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# ============================================================
+# Local app configuration (developer-specific overrides)
+# ============================================================
+# The committed `appsettings.json` (embedded in the assembly) holds
+# safe defaults. `appsettings.local.json` lives in
+# %LOCALAPPDATA%\AgentOrchestrator\ on Windows (or the platform
+# equivalent) and may contain private credentials and dev paths.
+# Ignore it at every level so it can never be committed by accident
+# if a developer copies one into the project tree for debugging.
+**/appsettings.local.json
+appsettings.local.json

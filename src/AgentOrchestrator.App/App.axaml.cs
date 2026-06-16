@@ -4,6 +4,7 @@ using Avalonia.Data.Core;
 using Avalonia.Data.Core.Plugins;
 using System.Linq;
 using Avalonia.Markup.Xaml;
+using AgentOrchestrator.App.Services.Settings;
 using AgentOrchestrator.App.ViewModels;
 using AgentOrchestrator.App.Views;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,6 +34,7 @@ public partial class App : Application
 
     private static void ConfigureServices(IServiceCollection services)
     {
+        services.AddSingleton<IAppSettingsService, JsonAppSettingsService>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddTransient<MainWindow>();
