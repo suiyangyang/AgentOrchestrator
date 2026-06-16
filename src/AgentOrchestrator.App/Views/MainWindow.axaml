@@ -57,9 +57,10 @@
             </Grid>
         </Border>
 
-        <!-- Main Content -->
-        <Grid Grid.Row="1">
-            <controls:ChatWorkspaceControl DataContext="{Binding Chat}" />
+        <!-- Main Content: 2 columns (Sidebar | ActiveWorkspace) -->
+        <Grid Grid.Row="1" ColumnDefinitions="240,*">
+            <controls:SidebarControl Grid.Column="0" DataContext="{Binding Sidebar}" />
+            <ContentControl Grid.Column="1" Content="{Binding ActiveWorkspace}" />
         </Grid>
     </Grid>
 </Window>

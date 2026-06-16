@@ -1,0 +1,138 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AgentOrchestrator.App.ViewModels"
+             x:Class="AgentOrchestrator.App.Controls.SidebarControl"
+             x:DataType="vm:SidebarViewModel">
+    <Border Background="#F9F9FB" BorderBrush="#E2E5EA" BorderThickness="0,0,1,0">
+        <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,8,0,0">
+
+            <!-- 新对话 button -->
+            <Button Grid.Row="0"
+                    Classes="sidebar-new-chat"
+                    Margin="12,4,12,8"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Left"
+                    Command="{Binding RequestNewSessionCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="✎" FontSize="14" Foreground="#1F2328" />
+                    <TextBlock Text="新对话" FontSize="13" Foreground="#1F2328" FontWeight="SemiBold" />
+                </StackPanel>
+            </Button>
+
+            <!-- 搜索输入框 -->
+            <TextBox Grid.Row="1"
+                     Classes="sidebar-search"
+                     Margin="12,0,12,8"
+                     Padding="10,7"
+                     FontSize="12"
+                     Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     PlaceholderText="搜索会话" />
+
+            <!-- 任务编排 -->
+            <Button Grid.Row="2"
+                    Classes="sidebar-task-graph"
+                    Margin="12,0,12,12"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Left"
+                    Command="{Binding RequestTaskGraphCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="🧩" FontSize="14" />
+                    <TextBlock Text="任务编排" FontSize="12" Foreground="#40444B" />
+                </StackPanel>
+            </Button>
+
+            <!-- 树: 项目 + 对话 -->
+            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="2">
+
+                    <!-- 项目分类头 + 节点 -->
+                    <StackPanel IsVisible="{Binding IsProjectsVisible}">
+                        <Button Classes="sidebar-section-header"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Left"
+                                Click="OnProjectsHeaderClick">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="项目" Classes="sidebar-section-label" />
+                                <TextBlock Grid.Column="1" Text="+" Classes="sidebar-section-action" />
+                            </Grid>
+                        </Button>
+                        <ItemsControl ItemsSource="{Binding Projects}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:SidebarProjectViewModel">
+                                    <StackPanel IsVisible="{Binding IsExpanded}">
+                                        <!-- 项目名行 -->
+                                        <Button Classes="sidebar-project-header"
+                                                HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Left"
+                                                Click="OnProjectHeaderClick">
+                                            <Grid ColumnDefinitions="Auto,*">
+                                                <TextBlock Grid.Column="0" Text="▾" Classes="sidebar-project-caret" />
+                                                <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="sidebar-project-name" />
+                                            </Grid>
+                                        </Button>
+                                        <!-- 项目下的会话 -->
+                                        <ItemsControl ItemsSource="{Binding Sessions}" Margin="20,0,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="vm:SidebarSessionViewModel">
+                                                    <Button Classes="sidebar-session-item"
+                                                            Classes.sidebar-session-item-selected="{Binding IsSelected}"
+                                                            HorizontalAlignment="Stretch"
+                                                            HorizontalContentAlignment="Stretch"
+                                                            Click="OnSessionClick">
+                                                        <Grid ColumnDefinitions="*,Auto">
+                                                            <StackPanel Grid.Column="0" Spacing="2">
+                                                                <TextBlock Text="{Binding Title}" Classes="sidebar-session-title" TextTrimming="CharacterEllipsis" />
+                                                                <TextBlock Text="{Binding DisplayRelativeTime}" Classes="sidebar-session-time" />
+                                                            </StackPanel>
+                                                            <TextBlock Grid.Column="1" Text="..." Classes="sidebar-session-more" />
+                                                        </Grid>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <!-- 无会话占位 -->
+                                        <TextBlock Text="暂无对话"
+                                                   Classes="sidebar-empty"
+                                                   IsVisible="{Binding !HasSessions}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <!-- 对话分类头 + 节点 -->
+                    <StackPanel IsVisible="{Binding IsOrphansVisible}">
+                        <Button Classes="sidebar-section-header"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Left"
+                                Click="OnOrphansHeaderClick">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="对话" Classes="sidebar-section-label" />
+                                <TextBlock Grid.Column="1" Text="⌄" Classes="sidebar-section-caret" />
+                            </Grid>
+                        </Button>
+                        <ItemsControl ItemsSource="{Binding OrphanSessions}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:SidebarSessionViewModel">
+                                    <Button Classes="sidebar-session-item"
+                                            Classes.sidebar-session-item-selected="{Binding IsSelected}"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch"
+                                            Click="OnSessionClick">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2">
+                                                <TextBlock Text="{Binding Title}" Classes="sidebar-session-title" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding DisplayRelativeTime}" Classes="sidebar-session-time" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1" Text="..." Classes="sidebar-session-more" />
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</UserControl>
