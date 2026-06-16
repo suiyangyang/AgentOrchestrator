@@ -1,0 +1,25 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AgentOrchestrator.App.ViewModels"
+             x:Class="AgentOrchestrator.App.Controls.CollapsibleBlockControl"
+             x:DataType="vm:ChatBlockViewModel">
+    <Grid RowDefinitions="Auto,Auto">
+        <ToggleButton Grid.Row="0"
+                      Classes="collapsible-block"
+                      IsChecked="{Binding IsExpanded, Mode=TwoWay}">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Panel Width="14" Height="14">
+                    <Path Classes="collapsible-block-icon collapsible-block-icon-thought"
+                          IsVisible="{Binding ShowThoughtIcon}" />
+                    <Path Classes="collapsible-block-icon collapsible-block-icon-tool"
+                          IsVisible="{Binding ShowToolIcon}" />
+                </Panel>
+                <TextBlock Text="{Binding HeaderText}" Classes="collapsible-block-label" />
+                <Path Classes="collapsible-block-chevron" />
+            </StackPanel>
+        </ToggleButton>
+        <Border Grid.Row="1" Classes="collapsible-block-body" IsVisible="{Binding IsExpanded}">
+            <ContentControl x:Name="Body" />
+        </Border>
+    </Grid>
+</UserControl>

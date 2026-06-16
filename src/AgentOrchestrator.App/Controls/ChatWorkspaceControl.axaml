@@ -1,0 +1,220 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AgentOrchestrator.App.ViewModels"
+             xmlns:chat="using:AgentOrchestrator.App.Models.Chat"
+             xmlns:controls="using:AgentOrchestrator.App.Controls"
+             x:Class="AgentOrchestrator.App.Controls.ChatWorkspaceControl"
+             x:Name="Root"
+             x:DataType="vm:ChatWorkspaceViewModel">
+    <Grid RowDefinitions="*,Auto" Background="#FFFFFF">
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Messages}" Margin="38,22,38,16">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:ChatMessageViewModel">
+                        <Grid Margin="0,0,0,22">
+                            <StackPanel Spacing="10" MaxWidth="680">
+                                <Border Classes="user-bubble"
+                                        IsVisible="{Binding IsUser}"
+                                        HorizontalAlignment="Right">
+                                    <ItemsControl ItemsSource="{Binding Blocks}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="vm:ChatBlockViewModel">
+                                                <StackPanel Spacing="8">
+                                                    <controls:MarkdownBlockControl IsVisible="{Binding IsText}" DataContext="{Binding}" />
+                                                    <controls:CollapsibleBlockControl IsVisible="{Binding IsThought}" DataContext="{Binding}" />
+                                                    <controls:CollapsibleBlockControl IsVisible="{Binding IsTool}" DataContext="{Binding}" />
+                                                    <Border Classes="inline-attachment"
+                                                            IsVisible="{Binding IsImage}">
+                                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                                            <Border Classes="mini-file-icon">
+                                                                <TextBlock Text="+" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                            </Border>
+                                                            <TextBlock Text="{Binding Text}" VerticalAlignment="Center" FontSize="12" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Border>
+
+                                <StackPanel Spacing="14"
+                                            IsVisible="{Binding IsAssistant}">
+                                    <ItemsControl ItemsSource="{Binding Blocks}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="vm:ChatBlockViewModel">
+                                                <StackPanel Spacing="8">
+                                                    <controls:MarkdownBlockControl IsVisible="{Binding IsText}" DataContext="{Binding}" />
+                                                    <controls:CollapsibleBlockControl IsVisible="{Binding IsThought}" DataContext="{Binding}" />
+                                                    <controls:CollapsibleBlockControl IsVisible="{Binding IsTool}" DataContext="{Binding}" />
+                                                    <Border Classes="inline-attachment"
+                                                            IsVisible="{Binding IsImage}">
+                                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                                            <Border Classes="mini-file-icon">
+                                                                <TextBlock Text="+" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                            </Border>
+                                                            <TextBlock Text="{Binding Text}" VerticalAlignment="Center" FontSize="12" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <Border Grid.Row="1"
+                Classes="composer-shell"
+                HorizontalAlignment="Stretch"
+                MaxWidth="900"
+                Margin="38,0,38,26">
+            <Grid RowDefinitions="Auto,Auto,Auto">
+                <ItemsControl Grid.Row="0"
+                              ItemsSource="{Binding Attachments}"
+                              IsVisible="{Binding HasAttachments}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="chat:ChatAttachment">
+                            <Panel>
+                                <!-- File attachment (non-image): icon + name + close button (horizontal layout) -->
+                                <Border Classes="inline-attachment"
+                                        Margin="0,0,8,8"
+                                        IsVisible="{Binding !IsImage}">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Border Classes="mini-file-icon">
+                                            <TextBlock Text="+" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" FontSize="12" />
+                                        <Button Command="{Binding #Root.DataContext.RemoveAttachmentCommand}"
+                                                CommandParameter="{Binding}"
+                                                Classes="mini-close-button"
+                                                Content="×" />
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Image attachment: thumbnail + overlaid close button -->
+                                <Panel IsVisible="{Binding IsImage}"
+                                       Margin="0,0,8,8"
+                                       Width="68"
+                                       Height="84">
+                                    <Border Classes="image-thumbnail">
+                                        <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                                    </Border>
+                                    <Button Command="{Binding #Root.DataContext.RemoveAttachmentCommand}"
+                                            CommandParameter="{Binding}"
+                                            Classes="attachment-close-overlay"
+                                            Content="×"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Top"
+                                            Margin="0,4,4,0" />
+                                </Panel>
+                            </Panel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBox Grid.Row="1"
+                         Text="{Binding DraftText, Mode=TwoWay}"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         MinHeight="92"
+                         PlaceholderText="要求后续变更"
+                         KeyDown="OnDraftKeyDown"
+                         PastingFromClipboard="OnDraftPasting" />
+
+                <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" VerticalAlignment="Center" Margin="0,12,0,0">
+                    <Button Grid.Column="0" Classes="toolbar-icon-button" Command="{Binding AddAttachmentCommand}">
+                        <TextBlock Text="+" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="20" />
+                    </Button>
+
+                    <Button Grid.Column="1"
+                            x:Name="PermissionAnchor"
+                            Classes="permission-pill"
+                            Click="OnPermissionClick"
+                            HorizontalContentAlignment="Left"
+                            Padding="10,0"
+                            Margin="8,0,0,0">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <TextBlock Text="🛡!" Classes="permission-warning-icon" />
+                            <TextBlock Text="{Binding SelectedPermission.Title}" Classes="permission-pill-text" />
+                            <Path Classes="permission-caret" />
+                        </StackPanel>
+                    </Button>
+
+                    <Popup x:Name="PermissionPopup"
+                           Placement="Bottom"
+                           PlacementTarget="{Binding #PermissionAnchor}"
+                           IsLightDismissEnabled="True">
+                        <Border Classes="popup-shell">
+                            <ItemsControl ItemsSource="{Binding Permissions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="chat:PermissionOption">
+                                        <Button Classes="permission-item" Click="OnPermissionItemClick" CommandParameter="{Binding}">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" Margin="4">
+                                                <Border Classes="permission-item-icon">
+                                                    <TextBlock Text="{Binding Icon}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0">
+                                                    <TextBlock Text="{Binding Title}" Classes="permission-title" />
+                                                    <TextBlock Text="{Binding Description}" Classes="permission-description" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2"
+                                                           Text="✓"
+                                                           VerticalAlignment="Center"
+                                                           FontSize="16"
+                                                           IsVisible="{Binding IsSelected}" />
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </Popup>
+
+                    <Button Grid.Column="2"
+                            x:Name="ModelAnchor"
+                            Classes="model-pill"
+                            Click="OnModelClick"
+                            Margin="8,0,0,0">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding SelectedModel}" Classes="model-text" />
+                            <Path Classes="model-caret" />
+                        </StackPanel>
+                    </Button>
+
+                    <Popup x:Name="ModelPopup"
+                           Placement="Bottom"
+                           PlacementTarget="{Binding #ModelAnchor}"
+                           IsLightDismissEnabled="True">
+                        <Border Classes="popup-shell">
+                            <ItemsControl ItemsSource="{Binding Models}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Classes="permission-item" Click="OnModelItemClick" CommandParameter="{Binding}">
+                                            <TextBlock Text="{Binding .}" FontSize="12" />
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </Popup>
+
+                    <Button Grid.Column="5" Classes="send-circle-button" Command="{Binding SendCommand}">
+                        <TextBlock Text="↑" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="16" />
+                    </Button>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

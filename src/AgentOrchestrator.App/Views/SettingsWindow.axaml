@@ -1,0 +1,53 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AgentOrchestrator.App.ViewModels"
+        x:Class="AgentOrchestrator.App.Views.SettingsWindow"
+        x:DataType="vm:SettingsViewModel"
+        Title="设置"
+        Width="1000" Height="800"
+        MinWidth="1000" MinHeight="800"
+        MaxWidth="1000" MaxHeight="800"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="#F5F5F7">
+
+    <Grid RowDefinitions="*,Auto">
+
+        <!-- Top: ScrollViewer for content -->
+        <ScrollViewer Grid.Row="0" Padding="24">
+            <StackPanel Spacing="16">
+                <TextBlock Text="设置" FontSize="20" FontWeight="SemiBold" Foreground="#1F2328" />
+                <TextBlock Text="（设置内容占位 - 后续在此添加具体设置项）" FontSize="13" Foreground="#6E727A" />
+
+                <Border Background="White" CornerRadius="12" Padding="20" BorderBrush="#E3E5E9" BorderThickness="1">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="通用" FontSize="14" FontWeight="SemiBold" Foreground="#1F2328" />
+                        <TextBlock Text="通用设置项将放在这里" FontSize="12" Foreground="#6E727A" />
+                    </StackPanel>
+                </Border>
+
+                <Border Background="White" CornerRadius="12" Padding="20" BorderBrush="#E3E5E9" BorderThickness="1">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="外观" FontSize="14" FontWeight="SemiBold" Foreground="#1F2328" />
+                        <TextBlock Text="主题、字体等外观设置将放在这里" FontSize="12" Foreground="#6E727A" />
+                    </StackPanel>
+                </Border>
+
+                <Border Background="White" CornerRadius="12" Padding="20" BorderBrush="#E3E5E9" BorderThickness="1">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="高级" FontSize="14" FontWeight="SemiBold" Foreground="#1F2328" />
+                        <TextBlock Text="高级设置项将放在这里" FontSize="12" Foreground="#6E727A" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Bottom: OK / Cancel buttons (fixed) -->
+        <Border Grid.Row="1" Background="White" BorderBrush="#E3E5E9" BorderThickness="0,1,0,0" Padding="24,16">
+            <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right">
+                <Button Content="取消" Classes="settings-dialog-btn" Command="{Binding CancelCommand}" />
+                <Button Content="确定" Classes="settings-dialog-btn-primary" Command="{Binding OkCommand}" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

@@ -1,0 +1,65 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AgentOrchestrator.App.ViewModels"
+        xmlns:controls="using:AgentOrchestrator.App.Controls"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        d:DesignWidth="1100"
+        d:DesignHeight="820"
+        x:Class="AgentOrchestrator.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="Agent Orchestrator"
+        Width="1100" Height="820"
+        MinWidth="900" MinHeight="600"
+        ExtendClientAreaToDecorationsHint="True"
+        WindowDecorations="BorderOnly"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        Background="#F5F5F7">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel />
+    </Design.DataContext>
+
+    <Grid RowDefinitions="Auto,*">
+        <!-- Title Bar (drag-to-move via PointerPressed + BeginMoveDrag) -->
+        <Border Grid.Row="0" Classes="custom-title-bar"
+                PointerPressed="OnTitleBarPointerPressed"
+                DoubleTapped="OnTitleBarDoubleTapped">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <!-- Left: Icon + Title -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                    <Image Source="/Assets/avalonia-logo.ico" Width="16" Height="16"
+                           VerticalAlignment="Center" Stretch="Uniform" />
+                    <TextBlock Text="Agent Orchestrator" Classes="title-bar-text" />
+                </StackPanel>
+
+                <!-- Right: Settings + Window Controls -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="0">
+                    <!-- Settings (gear icon) -->
+                    <Button Classes="title-bar-btn" Click="OnSettingsButtonClick" ToolTip.Tip="设置">
+                        <Path Classes="title-bar-icon" Data="M19.14,15.8L15.81,12.5C16.3,11.64 16.64,10.65 16.64,9.6C16.64,7.21 14.66,5.24 12.27,5.24C9.88,5.24 7.91,7.21 7.91,9.6C7.91,11.99 9.88,13.96 12.27,13.96C13.32,13.96 14.3,13.62 15.17,13.13L18.5,16.46L19.14,15.8ZM12.27,12.4C10.41,12.4 8.91,10.9 8.91,9.05C8.91,7.2 10.41,5.7 12.27,5.7C14.13,5.7 15.64,7.21 15.64,9.05C15.64,10.9 14.13,12.4 12.27,12.4Z" />
+                    </Button>
+                    <!-- Minimize (dash) -->
+                    <Button Classes="title-bar-btn" Click="OnMinButtonClick" ToolTip.Tip="最小化">
+                        <Path Classes="title-bar-icon" Data="M3,11H21V13H3V11Z" />
+                    </Button>
+                    <!-- Maximize / Restore -->
+                    <Button x:Name="MaxButton" Classes="title-bar-btn" Click="OnMaxButtonClick" ToolTip.Tip="最大化">
+                        <Path Classes="title-bar-icon" Data="M4,4H20V20H4V4M6,6V18H18V6H6Z" />
+                    </Button>
+                    <!-- Close (X) -->
+                    <Button Classes="title-bar-btn title-bar-btn-close" Click="OnCloseButtonClick" ToolTip.Tip="关闭">
+                        <Path Classes="title-bar-icon" Data="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Content -->
+        <Grid Grid.Row="1">
+            <controls:ChatWorkspaceControl DataContext="{Binding Chat}" />
+        </Grid>
+    </Grid>
+</Window>
