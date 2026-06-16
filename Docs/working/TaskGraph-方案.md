@@ -1,9 +1,9 @@
 # TaskGraph 方案 (v1.0)
 
-> 状态:**方案已锁定**,待执行
-> 决策日期:2026-06-16
-> 范围:TaskGraph 工作区 v1 的功能、架构、模型、UI、生成策略、持久化、风险边界
-> 配套文档:`TaskGraph-改造计划.md`(在方案基础上叠加阶段任务、文件清单、验证步骤)
+> 状态: 方案已锁定,待执行
+> 决策日期: 2026-06-16
+> 范围: TaskGraph 工作区 v1 的功能、架构、模型、UI、生成策略、持久化、风险边界
+> 配套文档: `TaskGraph-改造计划.md` (在方案基础上叠加阶段任务、文件清单、验证步骤)
 
 ---
 
@@ -39,7 +39,7 @@
 
 ## 2. 架构总览
 
-```
+```text
 ┌──────────────────────── MainWindow (改) ─────────────────────────┐
 │ <Grid ColumnDefinitions="200, *">                                │
 │   <Border Classes="left-nav">                                    │
@@ -147,7 +147,7 @@ public sealed partial class TaskGraph : ObservableObject
 
 ### 3.3 派生数据约定
 
-- `Edges` 是派生数据,Persist 前调用 `RebuildEdges()` 同步
+- `Edges` 是派生数据, Persist 前调用 `RebuildEdges()` 同步
 - UI 渲染时直接读 `Edges`(便于直接连线)
 - `Position` 由画布布局服务维护,支持手动拖拽和自动布局覆盖
 
@@ -236,7 +236,7 @@ public sealed class TaskGraphExtractionResult
 
 ### 5.2 生成流程
 
-```
+```text
 ITaskGraphGenerator.ExtractAsync(source, options)
   │
   ├─ step1: 规则解析
@@ -294,7 +294,7 @@ public interface IChatTaskExtractor
 
 ### 6.1 MainWindow 整体
 
-```
+```text
 <Grid ColumnDefinitions="200, *">
   <Border Classes="left-nav">
     <!-- 200px 宽侧边栏,图标+标题组合 -->
@@ -312,7 +312,7 @@ public interface IChatTaskExtractor
 
 ### 6.3 TaskGraph 内部布局
 
-```
+```text
 +------------------------------------------------------------+
 | Toolbar (顶部 44px, 圆角 22)                                |
 | [+ Node] [Import] [From Chat] | [Layout] [Save] [Open] [New] |
@@ -358,7 +358,7 @@ public interface IChatTaskExtractor
 
 ### 7.2 事件流
 
-```
+```text
 [Chat 工具栏] [Extract as Graph] 按钮
   ↓ Command
 ChatWorkspaceViewModel.RequestExtractToGraph()
@@ -397,7 +397,7 @@ ImportDialog 是 v1 中用户体验的关键节点,三种入口共享:
 
 **UI 规格**(600×500,模态):
 
-```
+```text
 +--------------------------------------+
 | 标题(导入任务图) | 策略标签          |
 +--------------------------------------+

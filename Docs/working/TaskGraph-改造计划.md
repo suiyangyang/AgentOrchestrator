@@ -1,9 +1,9 @@
 # TaskGraph 改造计划 (v1.0)
 
-> 状态:**方案已锁定,待执行**
-> 决策日期:2026-06-16
-> 范围:TaskGraph v1 的**实施计划** —— 阶段任务、文件清单、子任务、验证步骤、技术债
-> 配套文档:`TaskGraph-方案.md`(架构/模型/UI/生成策略等设计内容,本文不重复)
+> 状态: 方案已锁定,待执行
+> 决策日期: 2026-06-16
+> 范围: TaskGraph v1 的**实施计划** —— 阶段任务、文件清单、子任务、验证步骤、技术债
+> 配套文档: `TaskGraph-方案.md`(架构/模型/UI/生成策略等设计内容,本文不重复)
 
 ---
 
@@ -25,6 +25,7 @@
 | Chat Control 工具栏 | `Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto"`(6 列) |
 | DI | 极简,只注册 `MainWindowViewModel` + `MainWindow` |
 | Models/Chat | `IChatBlock`/`IChatMessage`/`IChatTransport`/`ChatBlockKind{Text,Thought,Image,Tool}` 已就位 |
+| TaskGraph 入口 | 需要先提供一个可切换到的占位工作页 |
 | 项目成熟度 | **Disciplined** — 严格遵循 MVVM + CompiledBindings + 类选择器 Style |
 
 **Codebase 评估结论**:Disciplined,所有改动需严格遵循现有风格。
@@ -105,7 +106,7 @@
 | `App.axaml.cs` | DI 注册 + 事件接线 |
 | `App.axaml` | 在 `Application.Styles` 末尾追加新 Style(不破坏已有) |
 | `MainWindowViewModel.cs` | 加 `ActiveWorkspace` + `Workspaces` + `SwitchWorkspaceCommand` |
-| `MainWindow.axaml` | 改布局为 `200, *` 的 Grid,左侧 200px 导航 |
+| `MainWindow.axaml` | 改布局为 `200, *` 的 Grid,左侧 200px 导航,右侧 `ContentControl` 承载聊天与任务编排 |
 | `ChatWorkspaceViewModel.cs` | 加 `RequestExtractToGraph` 事件 + `/plan` 命令解析 |
 | `ChatWorkspaceControl.axaml` | 工具栏列从 6 列扩到 7 列,新增 [Extract] 按钮 |
 
@@ -174,12 +175,14 @@ chat.RequestExtractToGraph += graph.HandleChatExtractRequest;
 **任务**:
 - A1. 创建 `Models/TaskGraph/*` 全部文件
 - A2. 创建 `ViewModels/TaskGraph/TaskNodeViewModel.cs` / `TaskEdgeViewModel.cs` / `TaskGraphWorkspaceViewModel.cs`(空 Commands 占位)
-- A3. 创建 `TaskGraphCanvasControl` + `TaskNodeControl` + `EdgeRenderer` 三个控件,只渲染 seed(3 节点 2 边)
+- A3. 创建 `TaskGraphWorkspaceControl` 占位页,保证点击侧边栏 [Task Graph] 能切换过去
+- A4. 创建 `TaskGraphCanvasControl` + `TaskNodeControl` + `EdgeRenderer` 三个控件,只渲染 seed(3 节点 2 边)
 - A4. 创建空壳 `TaskGraphImportDialog` 和 `TaskNodeInspectorControl`
 
 **验收**:
 - `dotnet build` 干净,无 warning
-- 启动应用,点击左导航 [Task Graph] → 看到 3 节点 2 边的静态 demo 图
+- 启动应用,点击左导航 [Task Graph] → 至少能进入任务编排工作页
+- 若静态图已接入,显示 3 节点 2 边的静态 demo 图
 - 节点不响应任何交互(此阶段纯渲染)
 
 **关键文件**:
@@ -332,7 +335,7 @@ chat.RequestExtractToGraph += graph.HandleChatExtractRequest;
 2. **Markdown 导入**:TaskGraph [Import] → 粘贴 markdown 列表(含 depends on)→ 采纳(追加)→ 节点出现 + 自动布局
 3. **Chat 抽取**:Chat 工具栏 [Extract] → 弹预览 → 采纳(替换)→ 图出现
 4. **/plan 命令**:Chat 输入 `/plan 你好` → 收到 mock 回复 → 自动弹预览 → 采纳
-5. **Tab 切换状态保持**:Chat 输入一些内容 → 切到 Graph → 切回 Chat → DraftText 不丢
+5. **Tab 切换状态保持**:Chat 输入一些内容 → 切到 Graph 占位/工作页 → 切回 Chat → DraftText 不丢
 
 ---
 
@@ -361,7 +364,7 @@ chat.RequestExtractToGraph += graph.HandleChatExtractRequest;
 
 派发时 prompt 必须包含(每个 subagent):
 
-```
+```text
 1. TASK: 具体的 atomic 目标
 2. EXPECTED OUTCOME: 明确的可验证交付物
 3. REQUIRED TOOLS: 工具白名单
@@ -439,7 +442,7 @@ dotnet build -c Debug
 | 本阶段(已完成) | 改造计划 | `Docs/TaskGraph-改造计划.md`(本文件) |
 | Phase G 完成后 | AGENTS.md 更新 | `AGENTS.md`(增加 TaskGraph Architecture 章节) |
 
-> **不主动创建**:`README.md`(按项目约定)
+> **不主动创建**: `README.md`(按项目约定)
 
 ---
 
