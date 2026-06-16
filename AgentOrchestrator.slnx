@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/AgentOrchestrator.App/AgentOrchestrator.App.csproj" />
+    <Project Path="src/AgentOrchestrator.Cli/AgentOrchestrator.Cli.csproj" />
     <Project Path="src/OpenCode.Client/OpenCode.Client.csproj" />
   </Folder>
 </Solution>
