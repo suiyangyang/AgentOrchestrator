@@ -1,10 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Controls.Shapes;
 using Avalonia.Media;
 using Markdig;
+using Markdig.Extensions.Tables;
+using Markdig.Extensions.TaskLists;
 using Markdig.Syntax;
 
 namespace AgentOrchestrator.App.Services;
@@ -93,22 +97,63 @@ public static class MarkdownRenderer
                     grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
                     grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
 
-                    var bullet = list.IsOrdered ? $"{counter}." : "•";
-                    var bulletTb = new TextBlock
+                    // Detect task list item by checking for a TaskList inline
+                    // in the first paragraph. (Markdig 0.38 stores the checked
+                    // state as a Markdig.Extensions.TaskLists.TaskList LeafInline.)
+                    bool? isChecked = null;
+                    if (item.Count > 0 && item[0] is ParagraphBlock firstPara
+                        && firstPara.Inline?.FirstChild is TaskList tl)
                     {
-                        Text = bullet,
-                        FontSize = 12,
-                        Margin = new Thickness(0, 0, 8, 0)
-                    };
-                    Grid.SetColumn(bulletTb, 0);
-                    grid.Children.Add(bulletTb);
+                        isChecked = tl.Checked;
+                    }
+
+                    Control prefix;
+                    if (isChecked.HasValue)
+                    {
+                        prefix = RenderCheckbox(isChecked.Value);
+                    }
+                    else
+                    {
+                        var bullet = list.IsOrdered ? $"{counter}." : "•";
+                        prefix = new TextBlock
+                        {
+                            Text = bullet,
+                            FontSize = 12,
+                            Margin = new Thickness(0, 2, 8, 0),
+                            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top
+                        };
+                    }
+                    Grid.SetColumn(prefix, 0);
+                    grid.Children.Add(prefix);
 
                     var itemPanel = new StackPanel { Spacing = 4 };
+                    var isFirstChild = true;
                     foreach (Block child in item)
                     {
-                        var rendered = RenderBlock(child);
+                        Control? rendered;
+                        if (isFirstChild && isChecked.HasValue && child is LeafBlock leaf)
+                        {
+                            // Strip the task-list marker prefix ("[ ] " / "[x] ")
+                            // from the raw text so we don't render it twice.
+                            var text = GetBlockText(leaf);
+                            if (text.Length >= 4 && text[0] == '[' && text[2] == ']' && text[3] == ' ')
+                                text = text.Substring(4);
+                            var tb = new TextBlock
+                            {
+                                TextWrapping = TextWrapping.Wrap,
+                                LineHeight = 18,
+                                Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x23, 0x28))
+                            };
+                            tb.Inlines!.AddRange(ParseInlines(text));
+                            rendered = tb;
+                        }
+                        else
+                        {
+                            rendered = RenderBlock(child);
+                        }
                         if (rendered is not null)
                             itemPanel.Children.Add(rendered);
+                        isFirstChild = false;
                     }
                     Grid.SetColumn(itemPanel, 1);
                     grid.Children.Add(itemPanel);
@@ -137,6 +182,9 @@ public static class MarkdownRenderer
                 border.Child = quotePanel;
                 return border;
             }
+
+            case Table table:
+                return RenderTable(table);
 
             case ThematicBreakBlock:
             {
@@ -172,6 +220,42 @@ public static class MarkdownRenderer
         }
     }
 
+    private static Control RenderCheckbox(bool isChecked)
+    {
+        // Unchecked: 14x14 white box with a thin gray border.
+        // Checked  : 14x14 green box with a white checkmark drawn as a Path.
+        var border = new Border
+        {
+            Width = 14,
+            Height = 14,
+            CornerRadius = new CornerRadius(3),
+            BorderBrush = isChecked
+                ? new SolidColorBrush(Color.FromRgb(0x18, 0xA5, 0x58))
+                : new SolidColorBrush(Color.FromRgb(0xC5, 0xC8, 0xCE)),
+            BorderThickness = new Thickness(1.25),
+            Background = isChecked
+                ? new SolidColorBrush(Color.FromRgb(0x18, 0xA5, 0x58))
+                : Brushes.White,
+            Margin = new Thickness(0, 2, 8, 0)
+        };
+
+        if (isChecked)
+        {
+            border.Child = new Path
+            {
+                Data = StreamGeometry.Parse("M 3,7 L 6,10 L 11,4"),
+                Stroke = Brushes.White,
+                StrokeThickness = 1.5,
+                StrokeLineCap = PenLineCap.Round,
+                StrokeJoin = PenLineJoin.Round,
+                Stretch = Stretch.Uniform,
+                Margin = new Thickness(1)
+            };
+        }
+
+        return border;
+    }
+
     private static Control RenderCodeBlock(CodeBlock code)
     {
         var outer = new Border
@@ -204,6 +288,71 @@ public static class MarkdownRenderer
 
         outer.Child = panel;
         return outer;
+    }
+
+    private static Control RenderTable(Table table)
+    {
+        var colCount = Math.Max(1, table.ColumnDefinitions.Count);
+        var border = new Border
+        {
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xE2, 0xE5, 0xEA)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Background = Brushes.White
+        };
+
+        var grid = new Grid();
+        for (var c = 0; c < colCount; c++)
+            grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+
+        var rowIndex = 0;
+        foreach (Block rowBlock in table)
+        {
+            if (rowBlock is not TableRow row) continue;
+
+            grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            var colIndex = 0;
+            foreach (Block cellBlock in row)
+            {
+                if (cellBlock is not TableCell cell) continue;
+
+                var cellPanel = new StackPanel { Spacing = 4 };
+                foreach (Block child in cell)
+                {
+                    var rendered = RenderBlock(child);
+                    if (rendered is not null)
+                        cellPanel.Children.Add(rendered);
+                }
+
+                // Header row gets a tinted background + bold
+                var isHeader = rowIndex == 0 || row.IsHeader;
+                if (isHeader)
+                {
+                    cellPanel.Background = new SolidColorBrush(Color.FromRgb(0xF5, 0xF6, 0xF8));
+                    // promote any TextBlocks to bold for header readability
+                    foreach (var child in cellPanel.Children)
+                    {
+                        if (child is TextBlock tb)
+                            tb.FontWeight = FontWeight.SemiBold;
+                    }
+                }
+
+                // Padding wrapper
+                var cellContainer = new Border
+                {
+                    Padding = new Thickness(10, 8),
+                    Child = cellPanel
+                };
+                Grid.SetRow(cellContainer, rowIndex);
+                Grid.SetColumn(cellContainer, Math.Min(colIndex, colCount - 1));
+                grid.Children.Add(cellContainer);
+
+                colIndex++;
+            }
+            rowIndex++;
+        }
+        border.Child = grid;
+        return border;
     }
 
     // ── Block text helpers ────────────────────────────────────────────────
@@ -334,6 +483,21 @@ public static class MarkdownRenderer
                 }
             }
 
+            // ── Strikethrough: ~~text~~ ──────────────────────────────────────
+            if (i + 1 < len && text[i] == '~' && text[i + 1] == '~')
+            {
+                var end = text.IndexOf("~~", i + 2);
+                if (end > i)
+                {
+                    var inner = text.Substring(i + 2, end - i - 2);
+                    var strike = new Span { TextDecorations = TextDecorations.Strikethrough };
+                    strike.Inlines.AddRange(ParseInlines(inner));
+                    inlines.Add(strike);
+                    i = end + 2;
+                    continue;
+                }
+            }
+
             // ── Link: [text](url) ──────────────────────────────────────────
             if (text[i] == '[')
             {
@@ -346,12 +510,16 @@ public static class MarkdownRenderer
                     if (closeParen > closeBracket)
                     {
                         var linkText = text.Substring(i + 1, closeBracket - i - 1);
-                        var underline = new Underline();
-                        underline.Inlines.Add(new Run(linkText)
+                        var url = text.Substring(closeBracket + 2, closeParen - closeBracket - 2);
+                        // Avalonia 12 has no Documents.Hyperlink — use an
+                        // InlineUIContainer wrapping a HyperlinkButton instead.
+                        var linkBtn = new HyperlinkButton
                         {
-                            Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x6F, 0xEB))
-                        });
-                        inlines.Add(underline);
+                            Content = linkText
+                        };
+                        var capturedUrl = url;
+                        linkBtn.Click += (_, _) => OpenUrl(capturedUrl);
+                        inlines.Add(new InlineUIContainer(linkBtn));
                         i = closeParen + 1;
                         continue;
                     }
@@ -371,7 +539,7 @@ public static class MarkdownRenderer
             for (var j = i + 1; j < len; j++)
             {
                 var ch = text[j];
-                if (ch is '*' or '_' or '`' or '[' or '\n')
+                if (ch is '*' or '_' or '`' or '[' or '~' or '\n')
                 {
                     next = j;
                     break;
@@ -384,5 +552,19 @@ public static class MarkdownRenderer
         }
 
         return inlines;
+    }
+
+    private static void OpenUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch
+        {
+            // Swallow — links in chat are best-effort. The browser may not be available
+            // in headless / CI / sandboxed environments.
+        }
     }
 }

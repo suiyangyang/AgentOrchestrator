@@ -12,7 +12,7 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="vm:ChatMessageViewModel">
                         <Grid Margin="0,0,0,22">
-                            <StackPanel Spacing="10" MaxWidth="680">
+                            <StackPanel Spacing="10" MaxWidth="900">
                                 <Border Classes="user-bubble"
                                         IsVisible="{Binding IsUser}"
                                         HorizontalAlignment="Right">
