@@ -29,6 +29,9 @@
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
     <PackageReference Include="Markdig" Version="0.38.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.10" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
+    <PackageReference Include="OpenCode.Client" Version="1.0.0" />
+    <ProjectReference Include="..\OpenCode.Client\OpenCode.Client.csproj" />
   </ItemGroup>
 </Project>
