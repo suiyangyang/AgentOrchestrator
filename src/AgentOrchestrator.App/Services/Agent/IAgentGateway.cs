@@ -64,6 +64,10 @@ public interface IAgentGateway
         string agentSessionId,
         CancellationToken ct = default);
 
+    Task<IReadOnlyList<SubagentActivitySnapshot>> GetSubagentActivitiesAsync(
+        string agentSessionId,
+        CancellationToken ct = default);
+
     /// <summary>
     /// Sends a message to an existing Agent session and yields streaming
     /// chunks. The stream completes when the Agent's response ends.

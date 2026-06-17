@@ -12,6 +12,7 @@ namespace AgentOrchestrator.App.Services.Agent;
 /// </summary>
 public sealed record ChatStreamChunk(
     string MessageId,
+    string? PartId,
     ChatBlockKind Kind,
     string Content,
     bool Complete
