@@ -9,18 +9,23 @@
              x:DataType="vm:ChatWorkspaceViewModel">
     <Grid RowDefinitions="*,Auto" Background="#FFFFFF">
         <ScrollViewer x:Name="MessagesScrollViewer" Grid.Row="0" VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding Messages}" Margin="38,18,38,16">
+                <ItemsControl ItemsSource="{Binding Messages}" Margin="38,18,38,16">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="vm:ChatMessageViewModel">
-                        <Grid Margin="0,0,0,22">
+                        <Grid Margin="0,0,0,14">
                             <StackPanel Spacing="10" MaxWidth="900">
                                 <Border Classes="user-bubble"
                                         IsVisible="{Binding IsUser}"
                                         HorizontalAlignment="Right">
                                     <ItemsControl ItemsSource="{Binding Blocks}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Spacing="14" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="vm:ChatBlockViewModel">
-                                                <StackPanel Margin="0,0,0,14">
+                                                <StackPanel>
                                                     <controls:MarkdownBlockControl IsVisible="{Binding IsText}" DataContext="{Binding}" />
                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsThought}" DataContext="{Binding}" />
                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsTool}" DataContext="{Binding}" />
@@ -41,10 +46,25 @@
 
                                 <StackPanel Spacing="14"
                                             IsVisible="{Binding IsAssistant}">
+                                    <StackPanel Orientation="Horizontal"
+                                                Spacing="10"
+                                                IsVisible="{Binding ShowStreamingPlaceholder}">
+                                        <Border Classes="assistant-loading-dot-shell">
+                                            <Border Classes="assistant-loading-dot" />
+                                        </Border>
+                                        <TextBlock Text="Codex"
+                                                   Classes="assistant-loading-text"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
                                     <ItemsControl ItemsSource="{Binding Blocks}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Spacing="14" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="vm:ChatBlockViewModel">
-                                                <StackPanel Margin="0,0,0,14">
+                                                <StackPanel>
                                                     <controls:MarkdownBlockControl IsVisible="{Binding IsText}" DataContext="{Binding}" />
                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsThought}" DataContext="{Binding}" />
                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsTool}" DataContext="{Binding}" />
@@ -74,8 +94,43 @@
                 HorizontalAlignment="Stretch"
                 MaxWidth="900"
                 Margin="38,0,38,22">
-            <Grid RowDefinitions="Auto,Auto,Auto,Auto">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">
                 <ItemsControl Grid.Row="0"
+                              ItemsSource="{Binding QueuedDrafts}"
+                              IsVisible="{Binding HasQueuedDrafts}"
+                              Margin="0,0,0,10">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:QueuedChatDraftViewModel">
+                            <Border Classes="queue-item-shell" Margin="0,0,0,8">
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10" VerticalAlignment="Center">
+                                    <TextBlock Text="↪" Classes="queue-item-icon" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding DisplayText}"
+                                               Classes="queue-item-text"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <Button Grid.Column="2"
+                                            Classes="queue-item-action"
+                                            Command="{Binding #Root.DataContext.RestoreQueuedDraftCommand}"
+                                            CommandParameter="{Binding}">
+                                        <TextBlock Text="↳ 引导" Classes="queue-item-action-text" />
+                                    </Button>
+                                    <Button Grid.Column="3"
+                                            Classes="queue-item-action"
+                                            Command="{Binding #Root.DataContext.RemoveQueuedDraftCommand}"
+                                            CommandParameter="{Binding}">
+                                        <TextBlock Text="🗑" Classes="queue-item-action-icon" />
+                                    </Button>
+                                    <Button Grid.Column="4"
+                                            Classes="queue-item-action"
+                                            Content="⋯" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <ItemsControl Grid.Row="1"
                               ItemsSource="{Binding Attachments}"
                               IsVisible="{Binding HasAttachments}">
                     <ItemsControl.ItemsPanel>
@@ -86,7 +141,6 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="chat:ChatAttachment">
                             <Panel>
-                                <!-- File attachment (non-image): icon + name + close button (horizontal layout) -->
                                 <Border Classes="inline-attachment"
                                         Margin="0,0,8,8"
                                         IsVisible="{Binding !IsImage}">
@@ -102,7 +156,6 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- Image attachment: thumbnail + overlaid close button -->
                                 <Panel IsVisible="{Binding IsImage}"
                                        Margin="0,0,8,8"
                                        Width="68"
@@ -123,18 +176,19 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <TextBox Grid.Row="1"
-                          Text="{Binding DraftText, Mode=TwoWay}"
-                          AcceptsReturn="False"
-                          TextWrapping="Wrap"
-                          BorderThickness="0"
-                          Background="Transparent"
-                          MinHeight="64"
-                          PlaceholderText="要求后续变更"
-                          KeyDown="OnDraftKeyDown"
-                          PastingFromClipboard="OnDraftPasting" />
+                <Grid Grid.Row="2">
+                    <TextBox Text="{Binding DraftText, Mode=TwoWay}"
+                             AcceptsReturn="False"
+                             TextWrapping="Wrap"
+                             BorderThickness="0"
+                             Background="Transparent"
+                             MinHeight="64"
+                             PlaceholderText="要求后续变更"
+                             KeyDown="OnDraftKeyDown"
+                             PastingFromClipboard="OnDraftPasting" />
+                </Grid>
 
-                <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" VerticalAlignment="Center" Margin="0,12,0,0">
+                <Grid Grid.Row="3" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" VerticalAlignment="Center" Margin="0,12,0,0">
                     <Button Grid.Column="0" Classes="toolbar-icon-button" Command="{Binding AddAttachmentCommand}">
                         <TextBlock Text="+" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="20" />
                     </Button>
@@ -211,12 +265,17 @@
                         </Border>
                     </Popup>
 
-                    <Button Grid.Column="5" Classes="send-circle-button" Command="{Binding SendCommand}">
-                        <TextBlock Text="↑" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="16" />
+                    <Button Grid.Column="5" Classes="send-circle-button" Command="{Binding PrimaryActionCommand}">
+                        <Grid Width="34" Height="34">
+                            <Path Classes="composer-send-icon"
+                                  IsVisible="{Binding ShowSendButton}" />
+                            <Border Classes="composer-stop-icon"
+                                    IsVisible="{Binding ShowStopButton}" />
+                        </Grid>
                     </Button>
                 </Grid>
 
-                <TextBlock Grid.Row="3"
+                <TextBlock Grid.Row="4"
                            Text="{Binding StatusMessage}"
                            IsVisible="{Binding StatusMessage, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
                            FontSize="12"

@@ -50,10 +50,39 @@
             <Setter Property="BorderBrush" Value="#DCE1E8" />
             <Setter Property="BorderThickness" Value="1" />
         </Style>
+        <Style Selector="Border.queue-item-shell">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="BorderBrush" Value="#E3E5E9" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
         <Style Selector="Border.user-bubble">
             <Setter Property="Background" Value="#F5F6F8" />
             <Setter Property="CornerRadius" Value="16" />
             <Setter Property="Padding" Value="10,8" />
+        </Style>
+        <Style Selector="Border.assistant-loading-dot-shell">
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Background" Value="#F3F4F6" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="Border.assistant-loading-dot">
+            <Setter Property="Width" Value="8" />
+            <Setter Property="Height" Value="8" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Background" Value="#7B8088" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.assistant-loading-text">
+            <Setter Property="Foreground" Value="#6E727A" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontFamily" Value="Consolas" />
         </Style>
         <Style Selector="Border.inline-attachment">
             <Setter Property="Background" Value="#F7F8FA" />
@@ -167,12 +196,57 @@
             <Setter Property="Width" Value="34" />
             <Setter Property="Height" Value="34" />
             <Setter Property="CornerRadius" Value="17" />
-            <Setter Property="Background" Value="#5F5F61" />
+            <Setter Property="Background" Value="#1F2328" />
             <Setter Property="Foreground" Value="White" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Path.composer-send-icon">
+            <Setter Property="Data" Value="M 7 20 L 17 10 L 27 20" />
+            <Setter Property="Stroke" Value="White" />
+            <Setter Property="StrokeThickness" Value="2.4" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="Width" Value="20" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.composer-stop-icon">
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="CornerRadius" Value="1.5" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.queue-item-action">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="Foreground" Value="#8A9099" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.queue-item-action:pointerover">
+            <Setter Property="Background" Value="#F2F3F5" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Foreground" Value="#1F2328" />
+        </Style>
+        <Style Selector="TextBlock.queue-item-icon">
+            <Setter Property="Foreground" Value="#A0A6AE" />
+            <Setter Property="FontSize" Value="14" />
+        </Style>
+        <Style Selector="TextBlock.queue-item-text">
+            <Setter Property="Foreground" Value="#40444B" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="LineHeight" Value="18" />
+        </Style>
+        <Style Selector="TextBlock.queue-item-action-text">
+            <Setter Property="Foreground" Value="#70757D" />
+            <Setter Property="FontSize" Value="12" />
         </Style>
         <Style Selector="ComboBox.permission-combo">
             <Setter Property="Background" Value="Transparent" />
@@ -336,12 +410,16 @@
             <Setter Property="StrokeThickness" Value="1.5" />
             <Setter Property="StrokeLineCap" Value="Round" />
             <Setter Property="StrokeJoin" Value="Round" />
-            <Setter Property="Width" Value="8" />
-            <Setter Property="Height" Value="5" />
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Height" Value="6" />
             <Setter Property="Stretch" Value="Uniform" />
             <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsVisible" Value="False" />
             <Setter Property="Transitions">
                 <Transitions>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
                     <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.18" />
                 </Transitions>
             </Setter>
@@ -349,7 +427,13 @@
                 <RotateTransform Angle="0" />
             </Setter>
         </Style>
+        <Style Selector="ToggleButton.collapsible-block:pointerover Path.collapsible-block-chevron">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
         <Style Selector="ToggleButton.collapsible-block:checked Path.collapsible-block-chevron">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="IsVisible" Value="True" />
             <Setter Property="RenderTransform">
                 <RotateTransform Angle="180" />
             </Setter>
@@ -360,17 +444,21 @@
             <Setter Property="Fill" Value="Transparent" />
             <Setter Property="StrokeLineCap" Value="Round" />
             <Setter Property="StrokeJoin" Value="Round" />
-            <Setter Property="Width" Value="14" />
-            <Setter Property="Height" Value="16" />
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="18" />
             <Setter Property="Stretch" Value="Uniform" />
             <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
         </Style>
         <Style Selector="Path.collapsible-block-icon-thought">
             <Setter Property="StrokeThickness" Value="0" />
             <Setter Property="Fill" Value="#7B8088" />
-            <Setter Property="Width" Value="16" />
-            <Setter Property="Height" Value="16" />
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="18" />
             <Setter Property="Data" Value="M14.949 6.547a3.94 3.94 0 0 0-.348-3.273 4.11 4.11 0 0 0-4.4-1.934A4.1 4.1 0 0 0 8.423.2 4.15 4.15 0 0 0 6.305.086a4.1 4.1 0 0 0-1.891.948 4.04 4.04 0 0 0-1.158 1.753 4.1 4.1 0 0 0-1.563.679A4 4 0 0 0 .554 4.72a3.99 3.99 0 0 0 .502 4.731 3.94 3.94 0 0 0 .346 3.274 4.11 4.11 0 0 0 4.402 1.933c.382.425.852.764 1.377.995.526.231 1.095.35 1.67.346 1.78.002 3.358-1.132 3.901-2.804a4.1 4.1 0 0 0 1.563-.68 4 4 0 0 0 1.14-1.253 3.99 3.99 0 0 0-.506-4.716m-6.097 8.406a3.05 3.05 0 0 1-1.945-.694l.096-.054 3.23-1.838a.53.53 0 0 0 .265-.455v-4.49l1.366.778q.02.011.025.035v3.722c-.003 1.653-1.361 2.992-3.037 2.996m-6.53-2.75a2.95 2.95 0 0 1-.36-2.01l.095.057L5.29 12.09a.53.53 0 0 0 .527 0l3.949-2.246v1.555a.05.05 0 0 1-.022.041L6.473 13.3c-1.454.826-3.311.335-4.15-1.098m-.85-6.94A3.02 3.02 0 0 1 3.07 3.949v3.785a.51.51 0 0 0 .262.451l3.93 2.237-1.366.779a.05.05 0 0 1-.048 0L2.585 9.342a2.98 2.98 0 0 1-1.113-4.094zm11.216 2.571L8.747 5.576l1.362-.776a.05.05 0 0 1 .048 0l3.265 1.86a3 3 0 0 1 1.173 1.207 2.96 2.96 0 0 1-.27 3.2 3.05 3.05 0 0 1-1.36.997V8.279a.52.52 0 0 0-.276-.445m1.36-2.015-.097-.057-3.226-1.855a.53.53 0 0 0-.53 0L6.249 6.153V4.598a.04.04 0 0 1 .019-.04L9.533 2.7a3.07 3.07 0 0 1 3.257.139c.474.325.843.778 1.066 1.303.223.526.289 1.103.191 1.664zM5.503 8.575 4.139 7.8a.05.05 0 0 1-.026-.037V4.049c0-.57.166-1.127.476-1.607s.752-.864 1.275-1.105a3.08 3.08 0 0 1 3.234.41l-.096.054-3.23 1.838a.53.53 0 0 0-.265.455zm.742-1.577 1.758-1 1.762 1v2l-1.755 1-1.762-1z" />
+        </Style>
+        <Style Selector="ToggleButton.collapsible-block Path.collapsible-block-icon">
+            <Setter Property="Margin" Value="1,0,0,0" />
         </Style>
         <Style Selector="Path.collapsible-block-icon-tool">
             <Setter Property="Data" Value="M 12.7,2 C 11.2,2 9.8,2.7 9,3.9 C 8.2,5.1 8.2,6.6 8.8,7.8 L 2.7,13.9 C 2.3,14.3 2.3,14.9 2.7,15.3 L 4,16.6 C 4.4,17 5,17 5.4,16.6 L 11.4,10.5 C 12.6,11.1 14.1,11.1 15.3,10.3 C 16.5,9.5 17.2,8.1 17.2,6.6 C 17.2,6 17.1,5.4 16.8,4.9 L 14.6,7.1 C 14.2,7.5 13.5,7.5 13.1,7.1 L 12.2,6.2 C 11.8,5.8 11.8,5.1 12.2,4.7 L 14.4,2.5 C 13.9,2.2 13.3,2 12.7,2 Z" />
@@ -384,9 +472,12 @@
             <Setter Property="Background" Value="#F5F6F8" />
             <Setter Property="CornerRadius" Value="10" />
             <Setter Property="Padding" Value="14,12" />
-            <Setter Property="Margin" Value="0,10,0,0" />
+            <Setter Property="Margin" Value="0,12,0,0" />
             <Setter Property="BorderBrush" Value="#E2E5EA" />
             <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Border.collapsible-block-body TextBlock">
+            <Setter Property="FontFamily" Value="Consolas, Cascadia Code, Menlo, monospace" />
         </Style>
         <Style Selector="TextBlock.collapsible-block-state">
             <Setter Property="FontSize" Value="11" />
@@ -677,6 +768,73 @@
             <Setter Property="Foreground" Value="#1F2328" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
+        <Style Selector="TextBlock.right-panel-title">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#1F2328" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.right-panel-section-title">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#6E727A" />
+        </Style>
+        <Style Selector="TextBlock.right-panel-empty">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="#9096A0" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="Border.right-panel-placeholder">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#E2E5EA" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Height" Value="72" />
+            <Setter Property="Padding" Value="12" />
+        </Style>
+        <Style Selector="TextBlock.right-panel-placeholder-text">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="#9096A0" />
+        </Style>
+        <Style Selector="Button.right-panel-action">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#DCE1E8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#6E727A" />
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="17" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.right-panel-action:pointerover">
+            <Setter Property="Background" Value="#F3F4F6" />
+            <Setter Property="BorderBrush" Value="#C5C8CE" />
+            <Setter Property="Foreground" Value="#1F2328" />
+        </Style>
+        <Style Selector="Border.subagent-item">
+            <Setter Property="Background" Value="#F7F8FA" />
+            <Setter Property="BorderBrush" Value="#E2E5EA" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="10,8" />
+        </Style>
+        <Style Selector="TextBlock.subagent-title">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#1F2328" />
+        </Style>
+        <Style Selector="TextBlock.subagent-status">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="#7B8088" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.subagent-message">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="#6E727A" />
+            <Setter Property="LineHeight" Value="16" />
+        </Style>
         <Style Selector="Button.workspace-header-action">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="#DCE1E8" />
@@ -695,6 +853,16 @@
             <Setter Property="Background" Value="#F3F4F6" />
             <Setter Property="BorderBrush" Value="#C5C8CE" />
             <Setter Property="Foreground" Value="#1F2328" />
+        </Style>
+        <Style Selector="ToggleButton.task-orchestration-toggle:checked">
+            <Setter Property="Background" Value="#E8EEF9" />
+            <Setter Property="BorderBrush" Value="#BFD2F3" />
+            <Setter Property="Foreground" Value="#2459B8" />
+        </Style>
+        <Style Selector="ToggleButton.task-orchestration-toggle:checked:pointerover">
+            <Setter Property="Background" Value="#DEE8FA" />
+            <Setter Property="BorderBrush" Value="#AFC6EE" />
+            <Setter Property="Foreground" Value="#1F4E9F" />
         </Style>
         <Style Selector="GridSplitter">
             <Setter Property="Background" Value="Transparent" />

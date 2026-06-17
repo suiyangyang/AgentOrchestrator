@@ -54,9 +54,9 @@ public partial class ChatWorkspaceControl : UserControl
         }
         else
         {
-            // Enter (no Shift): send.
-            if (viewModel.SendCommand.CanExecute(null))
-                viewModel.SendCommand.Execute(null);
+            // Enter (no Shift): trigger the same primary action as the button.
+            if (viewModel.PrimaryActionCommand.CanExecute(null))
+                viewModel.PrimaryActionCommand.Execute(null);
         }
 
         e.Handled = true;

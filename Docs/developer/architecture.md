@@ -35,7 +35,19 @@
 - Search opens as a centered modal overlay with a dimmed backdrop and
   filters the current sessions by title; selecting a result opens that
   session and closes the overlay
-- `ChatWorkspaceControl` is the main chat surface (message list + composer)
+- `ChatWorkspaceControl` is the main chat surface (fixed top header strip + message list + composer)
+- Assistant messages show a left-side loading placeholder immediately
+  after send; the placeholder is replaced by normal blocks when the first
+  streamed block arrives
+- The composer primary button switches between send and stop based on
+  whether the draft box currently has content; when a response is still
+  streaming and the draft box is empty, the same button cancels the send
+- While a response is streaming, additional composer submissions are
+  added to a visible queue above the input and are sent automatically in
+  order after the current response finishes
+- Streamed chat blocks are created as soon as the first block header is
+  detected, then their text/tool body is updated in place as later stream
+  chunks arrive
 - `TaskGraphWorkspaceControl` is a placeholder until the TaskGraph plan
   ships; v1 shows a fixed "coming soon" page
 - `SettingsWindow` is a separate dialog
@@ -91,8 +103,13 @@ View ── ViewModel ── IAgentGateway / ISidebarRepository
 - `ISidebarRepository` is the local SQLite store for project and
   session metadata (no message content is persisted locally)
 - `OpenCodeAgentGateway` wraps `OpenCodeClient`, translates Part/Message/
-  ToolState into the chat-block vocabulary, and routes SSE events into
-  streaming `ChatStreamChunk` envelopes
+  ToolState into the chat-block vocabulary, routes SSE events into
+  streaming `ChatStreamChunk` envelopes, and queries child sessions plus
+  session status for subagent activity snapshots
+- `ChatWorkspaceViewModel` does a final `GetMessagesAsync` reconciliation
+  after a send stream completes so tool blocks reflect the server's
+  terminal state even when the last SSE tool update was only `running`
+  and refreshes subagent activity while the current session is streaming
 - The CLI (`AgentOrchestrator.Cli`) reuses the same services for
   headless verification
 

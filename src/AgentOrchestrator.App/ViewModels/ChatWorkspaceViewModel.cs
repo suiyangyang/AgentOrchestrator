@@ -33,7 +33,9 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     private readonly IAgentGateway _agent;
     private readonly ISidebarRepository _repo;
     private readonly SidebarViewModel _sidebar;
+    private readonly Queue<QueuedSendRequest> _pendingSendQueue = new();
     private CancellationTokenSource? _sendCts;
+    private CancellationTokenSource? _subagentRefreshCts;
 
     public ChatWorkspaceViewModel(
         IAgentGateway agent,
@@ -47,10 +49,14 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         _selectedPermission = Permissions[2];
         _selectedPermission.IsSelected = true;
         Attachments.CollectionChanged += OnAttachmentsChanged;
+        SubagentActivities.CollectionChanged += OnSubagentActivitiesChanged;
+        QueuedDrafts.CollectionChanged += OnQueuedDraftsChanged;
     }
 
     public ObservableCollection<ChatMessageViewModel> Messages { get; } = [];
     public ObservableCollection<ChatAttachment> Attachments { get; } = [];
+    public ObservableCollection<SubagentActivityViewModel> SubagentActivities { get; } = [];
+    public ObservableCollection<QueuedChatDraftViewModel> QueuedDrafts { get; } = [];
     public ObservableCollection<PermissionOption> Permissions { get; } =
     [
         new("ask", "请求批准", "编辑外部文件和使用互联网时始终询问", "✋"),
@@ -86,7 +92,12 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     private string _headerTitle = "新对话";
 
     public bool HasAttachments => Attachments.Count > 0;
+    public bool HasSubagentActivities => SubagentActivities.Count > 0;
+    public bool HasQueuedDrafts => QueuedDrafts.Count > 0;
     public bool IsBlankPage => CurrentSessionId is null && Messages.Count == 0;
+    public bool CanQueueCurrentDraft => !string.IsNullOrWhiteSpace(DraftText.Trim()) || Attachments.Count > 0;
+    public bool ShowSendButton => !ShowStopButton;
+    public bool ShowStopButton => IsStreaming && !CanQueueCurrentDraft;
 
     /// <summary>Fired when a brand-new session is created (so MainWindow can switch workspace).</summary>
     public event EventHandler? SessionChanged;
@@ -97,7 +108,29 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     }
 
     private void OnAttachmentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        => OnPropertyChanged(nameof(HasAttachments));
+    {
+        OnPropertyChanged(nameof(HasAttachments));
+        OnComposerStateChanged();
+    }
+
+    private void OnSubagentActivitiesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        => OnPropertyChanged(nameof(HasSubagentActivities));
+
+    private void OnQueuedDraftsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        => OnPropertyChanged(nameof(HasQueuedDrafts));
+
+    partial void OnDraftTextChanged(string value)
+        => OnComposerStateChanged();
+
+    partial void OnIsStreamingChanged(bool value)
+        => OnComposerStateChanged();
+
+    private void OnComposerStateChanged()
+    {
+        OnPropertyChanged(nameof(CanQueueCurrentDraft));
+        OnPropertyChanged(nameof(ShowSendButton));
+        OnPropertyChanged(nameof(ShowStopButton));
+    }
 
     // ── Public session lifecycle (called by MainWindowViewModel) ─────────
 
@@ -114,6 +147,8 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         CurrentAgentSessionId = record.AgentSessionId;
         HeaderTitle = string.IsNullOrWhiteSpace(record.Title) ? "新对话" : record.Title;
         Messages.Clear();
+        ClearPendingQueue();
+        await RefreshSubagentActivitiesAsync(record.AgentSessionId, ct).ConfigureAwait(true);
         StatusMessage = "正在加载历史…";
 
         try
@@ -147,6 +182,8 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         CurrentAgentSessionId = null;
         HeaderTitle = "新对话";
         Messages.Clear();
+        SubagentActivities.Clear();
+        ClearPendingQueue();
         StatusMessage = null;
 
         if (!string.IsNullOrEmpty(workingDirectory))
@@ -163,26 +200,54 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     [RelayCommand]
     private async Task SendAsync()
     {
-        var prompt = DraftText.Trim();
-        if (string.IsNullOrWhiteSpace(prompt) && Attachments.Count == 0) return;
-        if (IsStreaming) return;
+        var request = CaptureDraft();
+        if (request is null) return;
 
+        if (IsStreaming)
+        {
+            EnqueuePendingDraft(request);
+            StatusMessage = $"已加入队列，前方还有 {QueuedDrafts.Count} 条";
+            return;
+        }
+
+        await RunSendQueueAsync(request).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task PrimaryActionAsync()
+    {
+        if (ShowStopButton)
+        {
+            Cancel();
+            return;
+        }
+
+        await SendAsync().ConfigureAwait(true);
+    }
+
+    private async Task RunSendQueueAsync(QueuedSendRequest firstRequest)
+    {
+        var request = firstRequest;
+        while (request is not null)
+        {
+            await SendOneAsync(request).ConfigureAwait(true);
+            request = DequeuePendingDraft();
+        }
+    }
+
+    private async Task SendOneAsync(QueuedSendRequest request)
+    {
         // 1. Build the user message locally so the UI reflects it immediately.
         var userMessage = new ChatMessageViewModel(Guid.NewGuid().ToString("N"), ChatRole.User, "你");
-        if (!string.IsNullOrWhiteSpace(prompt))
+        if (!string.IsNullOrWhiteSpace(request.Prompt))
         {
-            userMessage.Blocks.Add(new ChatBlockViewModel(ChatBlockKind.Text, prompt));
+            userMessage.Blocks.Add(new ChatBlockViewModel(ChatBlockKind.Text, partId: null, text: request.Prompt));
         }
-        foreach (var attachment in Attachments)
+        foreach (var attachment in request.Attachments)
         {
-            userMessage.Blocks.Add(new ChatBlockViewModel(ChatBlockKind.Image, attachment.DisplayName, attachment.Path));
+            userMessage.Blocks.Add(new ChatBlockViewModel(ChatBlockKind.Image, partId: null, text: attachment.DisplayName, assetPath: attachment.Path));
         }
         Messages.Add(userMessage);
-
-        // Snapshot the composer state and clear it BEFORE any async work.
-        var snapshotAttachments = Attachments.ToList();
-        DraftText = string.Empty;
-        Attachments.Clear();
 
         // 2. Placeholder assistant message that streaming chunks will append to.
         var assistantId = Guid.NewGuid().ToString("N");
@@ -196,10 +261,10 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
         _sendCts = new CancellationTokenSource();
         var ct = _sendCts.Token;
+        StartSubagentRefreshLoop(ct);
 
         try
         {
-            // 3. Resolve / create session. Blank page -> first-create.
             if (CurrentAgentSessionId is null)
             {
                 var workingDir = ResolveWorkingDirectory();
@@ -211,10 +276,9 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsBlankPage));
             }
 
-            // 4. Build ChatRequest and stream chunks into the assistant message.
             var chatRequest = new AgentChatRequest(
-                Prompt: prompt,
-                Attachments: snapshotAttachments,
+                Prompt: request.Prompt,
+                Attachments: request.Attachments,
                 Permission: SelectedPermission.Key,
                 Model: SelectedModel);
 
@@ -225,13 +289,13 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                 ApplyChunk(assistantMessage, chunk);
             }
 
-            // 5. Title sync (best-effort).
+            await SyncFinalAssistantStateAsync(assistantMessage, ct).ConfigureAwait(true);
+            await RefreshSubagentActivitiesAsync(CurrentAgentSessionId!, ct).ConfigureAwait(true);
             await TrySyncTitleAsync(ct).ConfigureAwait(true);
             StatusMessage = null;
         }
         catch (OperationCanceledException)
         {
-            // leave IsStreaming=true; ChatMessageViewModel already shows the partial.
             StatusMessage = "已取消";
         }
         catch (Exception ex)
@@ -242,8 +306,51 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         {
             assistantMessage.IsStreaming = false;
             IsStreaming = false;
+            StopSubagentRefreshLoop();
             SendCancellationCleanup();
         }
+    }
+
+    private QueuedSendRequest? CaptureDraft()
+    {
+        var prompt = DraftText.Trim();
+        var snapshotAttachments = Attachments.ToList();
+        if (string.IsNullOrWhiteSpace(prompt) && snapshotAttachments.Count == 0)
+        {
+            return null;
+        }
+
+        DraftText = string.Empty;
+        Attachments.Clear();
+        return new QueuedSendRequest(Guid.NewGuid().ToString("N"), prompt, snapshotAttachments);
+    }
+
+    private void EnqueuePendingDraft(QueuedSendRequest request)
+    {
+        _pendingSendQueue.Enqueue(request);
+        QueuedDrafts.Add(new QueuedChatDraftViewModel(request.Id, request.Prompt, request.Attachments));
+    }
+
+    private QueuedSendRequest? DequeuePendingDraft()
+    {
+        if (_pendingSendQueue.Count == 0)
+        {
+            return null;
+        }
+
+        var request = _pendingSendQueue.Dequeue();
+        var vm = QueuedDrafts.FirstOrDefault(x => x.Id == request.Id);
+        if (vm is not null)
+        {
+            QueuedDrafts.Remove(vm);
+        }
+        return request;
+    }
+
+    private void ClearPendingQueue()
+    {
+        _pendingSendQueue.Clear();
+        QueuedDrafts.Clear();
     }
 
     private void SendCancellationCleanup()
@@ -252,10 +359,85 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         _sendCts = null;
     }
 
+    private void StartSubagentRefreshLoop(CancellationToken ct)
+    {
+        StopSubagentRefreshLoop();
+        _subagentRefreshCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _ = RefreshSubagentActivitiesLoopAsync(_subagentRefreshCts.Token);
+    }
+
+    private void StopSubagentRefreshLoop()
+    {
+        _subagentRefreshCts?.Cancel();
+        _subagentRefreshCts?.Dispose();
+        _subagentRefreshCts = null;
+    }
+
+    private async Task RefreshSubagentActivitiesLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                if (!IsStreaming || CurrentAgentSessionId is null)
+                {
+                    return;
+                }
+
+                await RefreshSubagentActivitiesAsync(CurrentAgentSessionId, ct).ConfigureAwait(true);
+                await Task.Delay(TimeSpan.FromSeconds(1.5), ct).ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), ct).ConfigureAwait(true);
+            }
+        }
+    }
+
     [RelayCommand]
     private void Cancel()
     {
         _sendCts?.Cancel();
+    }
+
+    [RelayCommand]
+    private void RemoveQueuedDraft(QueuedChatDraftViewModel draft)
+    {
+        if (draft is null)
+        {
+            return;
+        }
+
+        var remaining = _pendingSendQueue.Where(x => x.Id != draft.Id).ToArray();
+        _pendingSendQueue.Clear();
+        foreach (var item in remaining)
+        {
+            _pendingSendQueue.Enqueue(item);
+        }
+
+        QueuedDrafts.Remove(draft);
+        OnPropertyChanged(nameof(HasQueuedDrafts));
+    }
+
+    [RelayCommand]
+    private void RestoreQueuedDraft(QueuedChatDraftViewModel draft)
+    {
+        if (draft is null)
+        {
+            return;
+        }
+
+        RemoveQueuedDraft(draft);
+        DraftText = draft.Prompt;
+        Attachments.Clear();
+        foreach (var attachment in draft.Attachments)
+        {
+            Attachments.Add(attachment);
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
@@ -330,16 +512,13 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
     private void ApplyChunk(ChatMessageViewModel assistant, ChatStreamChunk chunk)
     {
-        var block = assistant.Blocks.LastOrDefault();
-        if (block is null || !CanAppendToBlock(block, chunk))
+        var block = FindBlockForChunk(assistant, chunk);
+        if (block is null)
         {
             block = CreateBlockForChunk(chunk);
             if (block is null) return;
             assistant.Blocks.Add(block);
         }
-
-        var index = assistant.Blocks.IndexOf(block);
-        if (index < 0) return;
 
         switch (chunk.Kind)
         {
@@ -347,22 +526,23 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             case ChatBlockKind.Thought:
                 if (!string.IsNullOrEmpty(chunk.Content))
                 {
-                    var combined = (block.Text ?? string.Empty) + chunk.Content;
-                    assistant.Blocks[index] = new ChatBlockViewModel(block.Kind, combined, isExpanded: block.IsExpanded);
+                    block.Text = (block.Text ?? string.Empty) + chunk.Content;
                 }
                 break;
 
             case ChatBlockKind.Image:
                 if (!string.IsNullOrEmpty(chunk.Content))
                 {
-                    assistant.Blocks[index] = new ChatBlockViewModel(ChatBlockKind.Image, chunk.Content, isExpanded: block.IsExpanded);
+                    block.Text = chunk.Content;
                 }
                 break;
 
             case ChatBlockKind.Tool:
                 {
                     var (toolName, toolState, toolOutput) = ParseToolChunk(block, chunk);
-                    assistant.Blocks[index] = new ChatBlockViewModel(toolName, toolState, toolOutput, isExpanded: block.IsExpanded);
+                    block.ToolName = toolName;
+                    block.ToolState = toolState;
+                    block.ToolOutput = toolOutput;
                 }
                 break;
         }
@@ -372,30 +552,42 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     {
         return chunk.Kind switch
         {
-            ChatBlockKind.Text => new ChatBlockViewModel(ChatBlockKind.Text, string.Empty),
-            ChatBlockKind.Thought => new ChatBlockViewModel(ChatBlockKind.Thought, string.Empty, isExpanded: false),
-            ChatBlockKind.Tool => new ChatBlockViewModel(ExtractToolNameFromChunk(chunk.Content), ToolState.Running, string.Empty, isExpanded: false),
-            ChatBlockKind.Image => new ChatBlockViewModel(ChatBlockKind.Image, chunk.Content),
+            ChatBlockKind.Text => new ChatBlockViewModel(ChatBlockKind.Text, chunk.PartId, string.Empty),
+            ChatBlockKind.Thought => new ChatBlockViewModel(ChatBlockKind.Thought, chunk.PartId, string.Empty, isExpanded: false),
+            ChatBlockKind.Tool => new ChatBlockViewModel(chunk.PartId, ExtractToolNameFromChunk(chunk.Content), ToolState.Running, string.Empty, isExpanded: false),
+            ChatBlockKind.Image => new ChatBlockViewModel(ChatBlockKind.Image, chunk.PartId, chunk.Content),
             _ => null,
         };
     }
 
-    private static bool CanAppendToBlock(ChatBlockViewModel block, ChatStreamChunk chunk)
+    private static ChatBlockViewModel? FindBlockForChunk(ChatMessageViewModel assistant, ChatStreamChunk chunk)
     {
-        if (block.Kind != chunk.Kind)
+        if (!string.IsNullOrEmpty(chunk.PartId))
         {
-            return false;
+            var matchByPart = assistant.Blocks.LastOrDefault(b => string.Equals(b.PartId, chunk.PartId, StringComparison.Ordinal));
+            if (matchByPart is not null)
+            {
+                return matchByPart;
+            }
+        }
+
+        var last = assistant.Blocks.LastOrDefault();
+        if (last is null || last.Kind != chunk.Kind)
+        {
+            return null;
         }
 
         if (chunk.Kind != ChatBlockKind.Tool)
         {
-            return true;
+            return last;
         }
 
         return string.Equals(
-            block.ToolName ?? string.Empty,
+            last.ToolName ?? string.Empty,
             ExtractToolNameFromChunk(chunk.Content),
-            StringComparison.Ordinal);
+            StringComparison.Ordinal)
+            ? last
+            : null;
     }
 
     private static (string name, ToolState state, string? output) ParseToolChunk(ChatBlockViewModel block, ChatStreamChunk chunk)
@@ -465,16 +657,17 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             switch (b.Kind)
             {
                 case ChatBlockKind.Text:
-                    vm.Blocks.Add(new ChatBlockViewModel(ChatBlockKind.Text, b.Text));
+                    vm.Blocks.Add(new ChatBlockViewModel(ChatBlockKind.Text, b.PartId, b.Text));
                     break;
                 case ChatBlockKind.Thought:
-                    vm.Blocks.Add(new ChatBlockViewModel(ChatBlockKind.Thought, b.Text, isExpanded: false));
+                    vm.Blocks.Add(new ChatBlockViewModel(ChatBlockKind.Thought, b.PartId, b.Text, isExpanded: false));
                     break;
                 case ChatBlockKind.Image:
-                    vm.Blocks.Add(new ChatBlockViewModel(ChatBlockKind.Image, b.Text));
+                    vm.Blocks.Add(new ChatBlockViewModel(ChatBlockKind.Image, b.PartId, b.Text));
                     break;
                 case ChatBlockKind.Tool:
                     vm.Blocks.Add(new ChatBlockViewModel(
+                        b.PartId,
                         b.ToolName ?? "tool",
                         b.ToolState ?? ToolState.Completed,
                         b.ToolOutput,
@@ -483,6 +676,66 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             }
         }
         return vm;
+    }
+
+    private async Task SyncFinalAssistantStateAsync(ChatMessageViewModel assistant, CancellationToken ct)
+    {
+        if (CurrentAgentSessionId is null)
+        {
+            return;
+        }
+
+        var messages = await _agent.GetMessagesAsync(CurrentAgentSessionId, ct).ConfigureAwait(true);
+        var remoteAssistant = messages.LastOrDefault(m => m.Role == ChatRole.Assistant);
+        if (remoteAssistant is null) return;
+
+        var existing = assistant.Blocks
+            .Where(b => !string.IsNullOrEmpty(b.PartId))
+            .ToDictionary(b => b.PartId!, StringComparer.Ordinal);
+
+        foreach (var block in remoteAssistant.Blocks)
+        {
+            if (!string.IsNullOrEmpty(block.PartId) && existing.TryGetValue(block.PartId, out var current))
+            {
+                current.Text = block.Text;
+                current.ToolName = block.ToolName;
+                current.ToolState = block.ToolState ?? current.ToolState;
+                current.ToolOutput = block.ToolOutput;
+            }
+            else
+            {
+                assistant.Blocks.Add(CreateRemoteBlock(block));
+            }
+        }
+    }
+
+    private static ChatBlockViewModel CreateRemoteBlock(RemoteBlock block) =>
+        block.Kind switch
+        {
+            ChatBlockKind.Text => new ChatBlockViewModel(ChatBlockKind.Text, block.PartId, block.Text),
+            ChatBlockKind.Thought => new ChatBlockViewModel(ChatBlockKind.Thought, block.PartId, block.Text, isExpanded: false),
+            ChatBlockKind.Image => new ChatBlockViewModel(ChatBlockKind.Image, block.PartId, block.Text),
+            ChatBlockKind.Tool => new ChatBlockViewModel(block.PartId, block.ToolName ?? "tool", block.ToolState ?? ToolState.Completed, block.ToolOutput, isExpanded: false),
+            _ => new ChatBlockViewModel(ChatBlockKind.Text, block.PartId, block.Text)
+        };
+
+    private async Task RefreshSubagentActivitiesAsync(string agentSessionId, CancellationToken ct)
+    {
+        try
+        {
+            var snapshots = await _agent.GetSubagentActivitiesAsync(agentSessionId, ct).ConfigureAwait(true);
+            SubagentActivities.Clear();
+            foreach (var snapshot in snapshots)
+            {
+                var vm = new SubagentActivityViewModel();
+                vm.UpdateFrom(snapshot);
+                SubagentActivities.Add(vm);
+            }
+        }
+        catch
+        {
+            // Best-effort only.
+        }
     }
 
     // ── Attachment commands (kept for XAML compat) ──────────────────────
@@ -516,6 +769,11 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
     [RelayCommand]
     private void RemoveAttachment(ChatAttachment attachment) => Attachments.Remove(attachment);
+
+    private sealed record QueuedSendRequest(
+        string Id,
+        string Prompt,
+        IReadOnlyList<ChatAttachment> Attachments);
 }
 
 /// <summary>
