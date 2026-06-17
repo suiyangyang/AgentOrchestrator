@@ -131,7 +131,10 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     }
 
     /// <summary>Switches the workspace back to a blank page.</summary>
-    public void OpenBlankPage()
+    /// <param name="workingDirectory">Optional directory to use as the
+    /// working directory when the first message is sent. If null, falls
+    /// back to <see cref="ProjectsTracker"/> or the app base directory.</param>
+    public void OpenBlankPage(string? workingDirectory = null)
     {
         _sendCts?.Cancel();
         SendCancellationCleanup();
@@ -140,6 +143,12 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         CurrentAgentSessionId = null;
         Messages.Clear();
         StatusMessage = null;
+
+        if (!string.IsNullOrEmpty(workingDirectory))
+        {
+            ProjectsTracker.CurrentWorkingDirectory = workingDirectory;
+        }
+
         OnPropertyChanged(nameof(IsBlankPage));
         SessionChanged?.Invoke(this, EventArgs.Empty);
     }

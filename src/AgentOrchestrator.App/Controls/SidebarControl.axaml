@@ -46,93 +46,144 @@
                 <StackPanel Spacing="2">
 
                     <!-- 项目分类头 + 节点 -->
-                    <StackPanel IsVisible="{Binding IsProjectsVisible}">
-                        <Button Classes="sidebar-section-header"
+                    <StackPanel>
+                        <Button x:Name="ProjectsHeader"
+                                Classes="sidebar-section-header"
                                 HorizontalAlignment="Stretch"
-                                HorizontalContentAlignment="Left"
+                                HorizontalContentAlignment="Stretch"
                                 Click="OnProjectsHeaderClick">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Grid.Column="0" Text="项目" Classes="sidebar-section-label" />
-                                <TextBlock Grid.Column="1" Text="+" Classes="sidebar-section-action" />
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                <TextBlock Grid.Column="0" Text="▾" Classes="sidebar-section-caret" />
+                                <TextBlock Grid.Column="1" Text="项目" Classes="sidebar-section-label" />
+                                <Button Grid.Column="2"
+                                        Classes="sidebar-section-action-btn"
+                                        Content="..."
+                                        Click="OnProjectSectionMoreClick"
+                                        IsVisible="{Binding #ProjectsHeader.IsPointerOver}" />
+                                <Button Grid.Column="3"
+                                        Classes="sidebar-section-action-btn"
+                                        Content="+"
+                                        Command="{Binding RequestAddProjectCommand}"
+                                        IsVisible="{Binding #ProjectsHeader.IsPointerOver}" />
                             </Grid>
                         </Button>
                         <ItemsControl ItemsSource="{Binding Projects}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vm:SidebarProjectViewModel">
-                                    <StackPanel IsVisible="{Binding IsExpanded}">
-                                        <!-- 项目名行 -->
-                                        <Button Classes="sidebar-project-header"
+                                    <StackPanel>
+                                        <Button x:Name="ProjectRow"
+                                                Classes="sidebar-project-row"
+                                                Classes.sidebar-project-row-current="{Binding IsCurrent}"
                                                 HorizontalAlignment="Stretch"
-                                                HorizontalContentAlignment="Left"
-                                                Click="OnProjectHeaderClick">
-                                            <Grid ColumnDefinitions="Auto,*">
-                                                <TextBlock Grid.Column="0" Text="▾" Classes="sidebar-project-caret" />
-                                                <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="sidebar-project-name" />
+                                                HorizontalContentAlignment="Stretch"
+                                                Click="OnProjectRowClick">
+                                            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+                                                <TextBlock Grid.Column="0" Text="📁" Classes="sidebar-project-icon" />
+                                                <TextBlock Grid.Column="1" Text="▾" Classes="sidebar-project-caret" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Name}" Classes="sidebar-project-name" />
+                                                <Button Grid.Column="3"
+                                                        Classes="sidebar-row-action-btn"
+                                                        Content="..."
+                                                        Click="OnProjectRowMoreClick"
+                                                        Tag="{Binding Id}"
+                                                        IsVisible="{Binding #ProjectRow.IsPointerOver}" />
+                                                <Button Grid.Column="4"
+                                                        Classes="sidebar-row-action-btn"
+                                                        Content="+"
+                                                        Click="OnProjectRowAddClick"
+                                                        Tag="{Binding Id}"
+                                                        IsVisible="{Binding #ProjectRow.IsPointerOver}" />
                                             </Grid>
                                         </Button>
-                                        <!-- 项目下的会话 -->
-                                        <ItemsControl ItemsSource="{Binding Sessions}" Margin="20,0,0,0">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate DataType="vm:SidebarSessionViewModel">
-                                                    <Button Classes="sidebar-session-item"
-                                                            Classes.sidebar-session-item-selected="{Binding IsSelected}"
-                                                            HorizontalAlignment="Stretch"
-                                                            HorizontalContentAlignment="Stretch"
-                                                            Click="OnSessionClick">
-                                                        <Grid ColumnDefinitions="*,Auto">
-                                                            <StackPanel Grid.Column="0" Spacing="2">
-                                                                <TextBlock Text="{Binding Title}" Classes="sidebar-session-title" TextTrimming="CharacterEllipsis" />
-                                                                <TextBlock Text="{Binding DisplayRelativeTime}" Classes="sidebar-session-time" />
-                                                            </StackPanel>
-                                                            <TextBlock Grid.Column="1" Text="..." Classes="sidebar-session-more" />
-                                                        </Grid>
-                                                    </Button>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                        <!-- 无会话占位 -->
-                                        <TextBlock Text="暂无对话"
-                                                   Classes="sidebar-empty"
-                                                   IsVisible="{Binding !HasSessions}" />
+                                        <StackPanel IsVisible="{Binding IsExpanded}" Margin="20,0,0,0">
+                                            <ItemsControl ItemsSource="{Binding Sessions}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="vm:SidebarSessionViewModel">
+                                                        <Button x:Name="SessionRow"
+                                                                Classes="sidebar-session-item"
+                                                                Classes.sidebar-session-item-selected="{Binding IsSelected}"
+                                                                HorizontalAlignment="Stretch"
+                                                                HorizontalContentAlignment="Stretch"
+                                                                Click="OnSessionClick">
+                                                            <Grid ColumnDefinitions="*,Auto">
+                                                                <StackPanel Grid.Column="0" Spacing="2">
+                                                                    <TextBlock Text="{Binding Title}" Classes="sidebar-session-title" TextTrimming="CharacterEllipsis" />
+                                                                    <TextBlock Text="{Binding DisplayRelativeTime}" Classes="sidebar-session-time" />
+                                                                </StackPanel>
+                                                                <Button Grid.Column="1"
+                                                                        Classes="sidebar-row-action-btn"
+                                                                        Content="..."
+                                                                        Click="OnSessionRowMoreClick"
+                                                                        Tag="{Binding SessionId}"
+                                                                        IsVisible="{Binding #SessionRow.IsPointerOver}" />
+                                                            </Grid>
+                                                        </Button>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <TextBlock Text="暂无对话"
+                                                       Classes="sidebar-empty"
+                                                       IsVisible="{Binding !HasSessions}" />
+                                        </StackPanel>
                                     </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <TextBlock Text="尚未添加项目 — 悬停 “项目” 标题并点击 + 来添加"
+                                   Classes="sidebar-empty-hint" />
                     </StackPanel>
 
-                    <!-- 对话分类头 + 节点 -->
-                    <StackPanel IsVisible="{Binding IsOrphansVisible}">
+                    <!-- 对话分类头 + 节点 (always shown, even when empty) -->
+                    <StackPanel Margin="0,8,0,0">
                         <Button Classes="sidebar-section-header"
                                 HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Left"
                                 Click="OnOrphansHeaderClick">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Grid.Column="0" Text="对话" Classes="sidebar-section-label" />
-                                <TextBlock Grid.Column="1" Text="⌄" Classes="sidebar-section-caret" />
-                            </Grid>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="▾" Classes="sidebar-section-caret" />
+                                <TextBlock Text="对话" Classes="sidebar-section-label" />
+                            </StackPanel>
                         </Button>
                         <ItemsControl ItemsSource="{Binding OrphanSessions}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vm:SidebarSessionViewModel">
-                                    <Button Classes="sidebar-session-item"
+                                    <Button x:Name="OrphanSessionRow"
+                                            Classes="sidebar-session-item"
                                             Classes.sidebar-session-item-selected="{Binding IsSelected}"
                                             HorizontalAlignment="Stretch"
                                             HorizontalContentAlignment="Stretch"
+                                            Margin="10,0,4,0"
                                             Click="OnSessionClick">
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Grid.Column="0" Spacing="2">
                                                 <TextBlock Text="{Binding Title}" Classes="sidebar-session-title" TextTrimming="CharacterEllipsis" />
                                                 <TextBlock Text="{Binding DisplayRelativeTime}" Classes="sidebar-session-time" />
                                             </StackPanel>
-                                            <TextBlock Grid.Column="1" Text="..." Classes="sidebar-session-more" />
+                                            <Button Grid.Column="1"
+                                                    Classes="sidebar-row-action-btn"
+                                                    Content="..."
+                                                    Click="OnSessionRowMoreClick"
+                                                    Tag="{Binding SessionId}"
+                                                    IsVisible="{Binding #OrphanSessionRow.IsPointerOver}" />
                                         </Grid>
                                     </Button>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <TextBlock Text="暂无未归属的对话"
+                                   Classes="sidebar-empty" />
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>
+
+            <!-- Shared Popup for the "..." menus. We relocate it on each click. -->
+            <Popup x:Name="RowActionPopup"
+                   Placement="Right"
+                   IsLightDismissEnabled="True">
+                <Border Classes="popup-shell" Padding="4">
+                    <StackPanel x:Name="RowActionPanel" Spacing="2" />
+                </Border>
+            </Popup>
         </Grid>
     </Border>
 </UserControl>

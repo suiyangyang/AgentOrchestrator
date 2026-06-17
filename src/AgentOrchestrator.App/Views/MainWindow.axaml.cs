@@ -19,6 +19,15 @@ public partial class MainWindow : Window
         DataContext = viewModel;
     }
 
+    protected override void OnOpened(System.EventArgs e)
+    {
+        base.OnOpened(e);
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.Storage = StorageProvider;
+        }
+    }
+
     // --- Title bar drag-to-move ---
     // Pattern matches IChromAgent.Desktop reference:
     // BeginMoveDrag only activates when the pointer MOVES while pressed,

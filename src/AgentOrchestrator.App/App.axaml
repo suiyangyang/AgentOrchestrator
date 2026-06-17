@@ -2,6 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="AgentOrchestrator.App.App"
              xmlns:local="using:AgentOrchestrator.App"
+             xmlns:vm="using:AgentOrchestrator.App.ViewModels"
+             xmlns:controls="using:AgentOrchestrator.App.Controls"
              RequestedThemeVariant="Default">
     <!-- Shared width cap for chat content and composer — keeps message columns aligned with input. -->
     <Application.Resources>
@@ -10,6 +12,15 @@
 
     <Application.DataTemplates>
         <local:ViewLocator />
+        <!-- Explicit DataTemplates: the ViewLocator's "ViewModel" -> "View" rule
+             doesn't match the project's "Control" naming convention, so map
+             the workspace VMs to their concrete controls here. -->
+        <DataTemplate DataType="vm:ChatWorkspaceViewModel">
+            <controls:ChatWorkspaceControl />
+        </DataTemplate>
+        <DataTemplate DataType="vm:TaskGraphWorkspaceViewModel">
+            <controls:TaskGraphWorkspaceControl />
+        </DataTemplate>
     </Application.DataTemplates>
 
     <Application.Styles>
@@ -540,6 +551,81 @@
         </Style>
         <Style Selector="Button.sidebar-project-header:pointerover">
             <Setter Property="Background" Value="#F2F3F5" />
+        </Style>
+
+        <!-- Project row: single-row, hover-revealed actions. -->
+        <Style Selector="Button.sidebar-project-row">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="Margin" Value="4,0,4,0" />
+            <Setter Property="CornerRadius" Value="6" />
+        </Style>
+        <Style Selector="Button.sidebar-project-row:pointerover">
+            <Setter Property="Background" Value="#F2F3F5" />
+        </Style>
+        <Style Selector="Button.sidebar-project-row-current">
+            <Setter Property="Background" Value="#EEF0F3" />
+        </Style>
+        <Style Selector="Button.sidebar-project-row-current:pointerover">
+            <Setter Property="Background" Value="#EEF0F3" />
+        </Style>
+
+        <!-- Inline action button (revealed on row hover). -->
+        <Style Selector="Button.sidebar-row-action-btn">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="MinWidth" Value="20" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="#6E727A" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.sidebar-row-action-btn:pointerover">
+            <Setter Property="Background" Value="#DDE0E4" />
+            <Setter Property="CornerRadius" Value="4" />
+        </Style>
+
+        <!-- Section header hover-revealed action button. -->
+        <Style Selector="Button.sidebar-section-action-btn">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="MinWidth" Value="20" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="#6E727A" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.sidebar-section-action-btn:pointerover">
+            <Setter Property="Background" Value="#DDE0E4" />
+            <Setter Property="CornerRadius" Value="4" />
+        </Style>
+
+        <!-- Menu items inside the "..." popup. -->
+        <Style Selector="Button.sidebar-menu-item">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="CornerRadius" Value="6" />
+        </Style>
+        <Style Selector="Button.sidebar-menu-item:pointerover">
+            <Setter Property="Background" Value="#F2F3F5" />
+        </Style>
+
+        <Style Selector="TextBlock.sidebar-empty-hint">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontStyle" Value="Italic" />
+            <Setter Property="Foreground" Value="#9096A0" />
+            <Setter Property="Margin" Value="20,4,12,4" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style Selector="TextBlock.sidebar-project-icon">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,4,0" />
         </Style>
         <Style Selector="TextBlock.sidebar-project-caret">
             <Setter Property="FontSize" Value="10" />

@@ -8,17 +8,31 @@ namespace AgentOrchestrator.App.ViewModels;
 
 /// <summary>
 /// A project group node in the sidebar tree. Owns its child sessions and
-/// tracks its own expand/collapse state.
+/// tracks its own expand/collapse / current / pinned state.
 /// </summary>
 public sealed class SidebarProjectViewModel : INotifyPropertyChanged
 {
     public SidebarProjectViewModel(ProjectRecord record)
     {
-        Record = record;
+        _record = record;
     }
 
-    public ProjectRecord Record { get; }
-    public string ProjectId => Record.Id;
+    private ProjectRecord _record;
+    public ProjectRecord Record
+    {
+        get => _record;
+        set
+        {
+            if (_record == value) return;
+            _record = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(Id));
+            OnPropertyChanged(nameof(Name));
+            OnPropertyChanged(nameof(Directory));
+        }
+    }
+
+    public string Id => Record.Id;
     public string Name => Record.Name;
     public string Directory => Record.Directory;
 
@@ -38,7 +52,31 @@ public sealed class SidebarProjectViewModel : INotifyPropertyChanged
         }
     }
 
+    private bool _isCurrent;
+    public bool IsCurrent
+    {
+        get => _isCurrent;
+        set
+        {
+            if (_isCurrent == value) return;
+            _isCurrent = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private bool _isPinned;
+    public bool IsPinned
+    {
+        get => _isPinned;
+        set
+        {
+            if (_isPinned == value) return;
+            _isPinned = value;
+            OnPropertyChanged();
+        }
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
-    private void OnPropertyChanged([CallerMemberName] string? name = null)
+    public void OnPropertyChanged([CallerMemberName] string? name = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
