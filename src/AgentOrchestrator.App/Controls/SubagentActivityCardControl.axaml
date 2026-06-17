@@ -1,0 +1,23 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AgentOrchestrator.App.ViewModels"
+             xmlns:controls="using:AgentOrchestrator.App.Controls"
+             x:Class="AgentOrchestrator.App.Controls.SubagentActivityCardControl"
+             x:DataType="vm:SubagentActivityViewModel">
+    <Border Classes="subagent-item">
+        <Grid RowDefinitions="*,Auto"
+              RowSpacing="10">
+            <ScrollViewer x:Name="CardScrollViewer"
+                          Grid.Row="0"
+                          Classes="subagent-body-scroll"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <controls:MarkdownBlockControl MarkdownText="{Binding Content}" />
+            </ScrollViewer>
+
+            <TextBlock Grid.Row="1"
+                       Text="{Binding FooterText}"
+                       Classes="subagent-footer" />
+        </Grid>
+    </Border>
+</UserControl>
