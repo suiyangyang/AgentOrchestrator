@@ -118,9 +118,9 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
             var blocks = new List<RemoteBlock>();
             foreach (var p in mp.Parts)
             {
-                if (TryConvertPart(p, out var block))
+                if (TryConvertPart(p, out var convertedBlocks))
                 {
-                    blocks.Add(block);
+                    blocks.AddRange(convertedBlocks);
                 }
             }
 
@@ -160,7 +160,9 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
 
         // 5. Translate events into chat chunks. End the stream on session.idle.
         var idle = false;
-        var pending = new List<ChatStreamChunk>(capacity: 8);
+        var assistantMessageIds = new HashSet<string>(StringComparer.Ordinal);
+        var userMessageIds = new HashSet<string>(StringComparer.Ordinal);
+        var promptText = (request.Prompt ?? string.Empty).Trim();
 
         await foreach (var ev in eventStream.WithCancellation(ct).ConfigureAwait(false))
         {
@@ -173,23 +175,17 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
                     if (sessionId is null || messageId is null) break;
                     if (!string.Equals(sessionId, agentSessionId, StringComparison.Ordinal))
                         break;
-                    if (TryConvertPart(p.Properties.Part, out var block))
+                    if (TryConvertPart(p.Properties.Part, out var blocks))
                     {
-                        var delta = p.Properties.Delta;
-                        var payload = !string.IsNullOrEmpty(delta)
-                            ? delta
-                            : (block.Kind switch
-                            {
-                                ChatBlockKind.Text => block.Text ?? string.Empty,
-                                ChatBlockKind.Thought => block.Text ?? string.Empty,
-                                ChatBlockKind.Tool => BuildToolContent(block),
-                                _ => string.Empty,
-                            });
-                        pending.Add(new ChatStreamChunk(
-                            MessageId: messageId,
-                            Kind: block.Kind,
-                            Content: payload,
-                            Complete: false));
+                        if (ShouldSuppressUserEcho(p.Properties.Part, promptText, userMessageIds.Contains(messageId), assistantMessageIds.Contains(messageId)))
+                        {
+                            break;
+                        }
+
+                        foreach (var chunk in ConvertPartToChunks(messageId, p.Properties.Part, blocks, p.Properties.Delta))
+                        {
+                            yield return chunk;
+                        }
                     }
                     break;
                 }
@@ -199,11 +195,17 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
                     {
                         if (!string.Equals(aw.Value.SessionID, agentSessionId, StringComparison.Ordinal))
                             break;
-                        pending.Add(new ChatStreamChunk(
+                        assistantMessageIds.Add(aw.Value.Id);
+                        yield return new ChatStreamChunk(
                             MessageId: aw.Value.Id,
                             Kind: ChatBlockKind.Text,
                             Content: string.Empty,
-                            Complete: true));
+                            Complete: true);
+                    }
+                    else if (mu.Properties.Info is UserMessageWrapper uw
+                        && string.Equals(uw.Value.SessionID, agentSessionId, StringComparison.Ordinal))
+                    {
+                        userMessageIds.Add(uw.Value.Id);
                     }
                     break;
                 }
@@ -216,12 +218,6 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
                     break;
                 }
             }
-
-            foreach (var c in pending)
-            {
-                yield return c;
-            }
-            pending.Clear();
 
             if (idle)
             {
@@ -280,40 +276,167 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         _ => null,
     };
 
-    private static bool TryConvertPart(Part part, out RemoteBlock block)
+    private static bool TryConvertPart(Part part, out IReadOnlyList<RemoteBlock> blocks)
     {
         switch (part)
         {
             case TextPart tp:
-                block = new RemoteBlock(ChatBlockKind.Text, Text: tp.Text ?? string.Empty);
+                blocks = SplitTextBlocks(tp.Text);
                 return true;
 
             case ReasoningPart rp:
-                block = new RemoteBlock(ChatBlockKind.Thought, Text: rp.Text ?? string.Empty);
+                blocks = [new RemoteBlock(ChatBlockKind.Thought, Text: rp.Text ?? string.Empty)];
                 return true;
 
             case FilePart fp:
-                block = new RemoteBlock(ChatBlockKind.Image, Text: fp.Filename ?? fp.Url);
+                blocks = [new RemoteBlock(ChatBlockKind.Image, Text: fp.Filename ?? fp.Url)];
                 return true;
 
             case ToolPart tool:
             {
                 var resolved = ResolveTool(tool);
-                block = new RemoteBlock(
+                blocks =
+                [
+                    new RemoteBlock(
                     ChatBlockKind.Tool,
                     Text: null,
                     ToolName: resolved.Name,
                     ToolState: resolved.State,
-                    ToolOutput: resolved.Output);
+                    ToolOutput: resolved.Output)
+                ];
                 return true;
             }
 
             // step-start / step-finish / snapshot / patch / agent / retry /
             // compaction / subtask → not user-visible, skip.
             default:
-                block = default!;
+                blocks = Array.Empty<RemoteBlock>();
                 return false;
         }
+    }
+
+    private static bool ShouldSuppressUserEcho(
+        Part part,
+        string promptText,
+        bool knownUserMessage,
+        bool knownAssistantMessage)
+    {
+        if (knownAssistantMessage)
+        {
+            return false;
+        }
+
+        if (knownUserMessage)
+        {
+            return true;
+        }
+
+        return part switch
+        {
+            TextPart tp => string.Equals((tp.Text ?? string.Empty).Trim(), promptText, StringComparison.Ordinal),
+            _ => false,
+        };
+    }
+
+    private static IReadOnlyList<ChatStreamChunk> ConvertPartToChunks(
+        string messageId,
+        Part originalPart,
+        IReadOnlyList<RemoteBlock> blocks,
+        string? delta)
+    {
+        if (blocks.Count == 0)
+        {
+            return Array.Empty<ChatStreamChunk>();
+        }
+
+        if (originalPart is ToolPart)
+        {
+            return
+            [
+                new ChatStreamChunk(
+                    MessageId: messageId,
+                    Kind: blocks[0].Kind,
+                    Content: BuildToolContent(blocks[0]),
+                    Complete: false)
+            ];
+        }
+
+        if (!string.IsNullOrEmpty(delta))
+        {
+            var deltaBlocks = SplitTextBlocks(delta);
+            var chunks = new List<ChatStreamChunk>(deltaBlocks.Count);
+            foreach (var block in deltaBlocks)
+            {
+                chunks.Add(new ChatStreamChunk(
+                    MessageId: messageId,
+                    Kind: block.Kind,
+                    Content: block.Text ?? string.Empty,
+                    Complete: false));
+            }
+            return chunks;
+        }
+
+        var result = new List<ChatStreamChunk>(blocks.Count);
+        foreach (var block in blocks)
+        {
+            var payload = block.Kind switch
+            {
+                ChatBlockKind.Text => block.Text ?? string.Empty,
+                ChatBlockKind.Thought => block.Text ?? string.Empty,
+                ChatBlockKind.Tool => BuildToolContent(block),
+                _ => string.Empty,
+            };
+            result.Add(new ChatStreamChunk(
+                MessageId: messageId,
+                Kind: block.Kind,
+                Content: payload,
+                Complete: false));
+        }
+        return result;
+    }
+
+    private static IReadOnlyList<RemoteBlock> SplitTextBlocks(string? text)
+    {
+        var source = text ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            return [new RemoteBlock(ChatBlockKind.Text, Text: source)];
+        }
+
+        const string openTag = "<think>";
+        const string closeTag = "</think>";
+        var openIndex = source.IndexOf(openTag, StringComparison.OrdinalIgnoreCase);
+        var closeIndex = source.IndexOf(closeTag, StringComparison.OrdinalIgnoreCase);
+
+        if (openIndex < 0 || closeIndex < openIndex)
+        {
+            return [new RemoteBlock(ChatBlockKind.Text, Text: source)];
+        }
+
+        var blocks = new List<RemoteBlock>(capacity: 3);
+        var before = source[..openIndex].Trim();
+        if (!string.IsNullOrEmpty(before))
+        {
+            blocks.Add(new RemoteBlock(ChatBlockKind.Text, Text: before));
+        }
+
+        var thoughtStart = openIndex + openTag.Length;
+        var thought = source.Substring(thoughtStart, closeIndex - thoughtStart).Trim();
+        if (!string.IsNullOrEmpty(thought))
+        {
+            blocks.Add(new RemoteBlock(ChatBlockKind.Thought, Text: thought));
+        }
+
+        var afterStart = closeIndex + closeTag.Length;
+        var after = source[afterStart..].Trim();
+        if (!string.IsNullOrEmpty(after))
+        {
+            blocks.Add(new RemoteBlock(ChatBlockKind.Text, Text: after));
+        }
+
+        return blocks.Count == 0
+            ? [new RemoteBlock(ChatBlockKind.Text, Text: source)]
+            : blocks;
     }
 
     private static (string Name, ChatToolState State, string? Output) ResolveTool(ToolPart tool)
