@@ -9,18 +9,26 @@
 - DI via Microsoft.Extensions.DependencyInjection 10.0.9
 - Local persistence: SQLite via `Microsoft.Data.Sqlite`
 - Local DB lives at `{AppContext.BaseDirectory}/Datas/OrchestratorDb.db`
+- User settings (including `LastProjectId`) live at
+  `%LOCALAPPDATA%/AgentOrchestrator/appsettings.local.json`
 
 ## Code Layout
 
 - `Program.cs` boots Avalonia
 - `App.axaml.cs` creates the service provider
+- `App.axaml` declares explicit DataTemplates so `MainWindowViewModel`
+  → `ChatWorkspaceViewModel` → `ChatWorkspaceControl` resolves
+  correctly without depending on the `ViewLocator` convention
 - `MainWindowViewModel` owns `Chat`, `TaskGraph`, `Sidebar`, `Settings`
-  and an `ActiveWorkspace` that switches between `Chat` and `TaskGraph`
+  and an `ActiveWorkspace` that switches between `Chat` and `TaskGraph`.
+  It is also the only place that knows about dialogs (folder picker,
+  rename, remove-confirm) — the sidebar raises events and the shell
+  handles them.
 - `ChatWorkspaceViewModel` manages messages, attachments, permissions,
   draft input, and the full session lifecycle (new / open / send /
   stream) via `IAgentGateway` and `ISidebarRepository`
-- `SidebarViewModel` owns the project + session tree and the search
-  filter; wired to `MainWindowViewModel` via events
+- `SidebarViewModel` owns the project + session tree, the search
+  filter, the current-project focus, and the per-row "..." actions
 - `MainWindow.axaml` hosts a 2-column grid (sidebar | active workspace)
 - `SettingsWindow.axaml` is a fixed-size settings dialog
 
@@ -31,9 +39,13 @@
 - Global style tokens live in `App.axaml`
 - `TextBox` uses the chat input style
 - `TextBlock.code-text` is the code style
-- `TextBlock.assistant-text` and `TextBlock.thinking-body-text` are chat content styles
-- Sidebar styles live under `Button.sidebar-*` and `TextBlock.sidebar-*`
-  classes (see `App.axaml`)
+- `TextBlock.assistant-text` and `TextBlock.thinking-body-text` are
+  chat content styles
+- Sidebar styles live under `Button.sidebar-*` and
+  `TextBlock.sidebar-*` classes (see `App.axaml`)
+- Per-row hover-revealed action buttons: `sidebar-row-action-btn` and
+  `sidebar-section-action-btn`
+- "..." menu items: `sidebar-menu-item`
 
 ## CLI Tool
 
