@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOrchestrator.App.Models.Chat;
@@ -11,6 +13,7 @@ using OpenCode.Client.Models;
 using OpenCode.Client.Models.Events;
 using OpenCode.Client.Requests;
 using ChatToolState = AgentOrchestrator.App.Models.Chat.ToolState;
+using OcToolState = OpenCode.Client.Models.ToolState;
 using OcSessionCreateRequest = OpenCode.Client.Requests.SessionCreateRequest;
 using OcSessionPromptRequest = OpenCode.Client.Requests.SessionPromptRequest;
 using OcPartInputRequest = OpenCode.Client.Requests.PartInputRequest;
@@ -101,6 +104,42 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         return s.Title ?? string.Empty;
     }
 
+    public async Task<IReadOnlyList<SubagentActivitySnapshot>> GetSubagentActivitiesAsync(
+        string agentSessionId,
+        CancellationToken ct = default)
+    {
+        var session = await _client.Sessions
+            .GetAsync(agentSessionId, directory: null, ct: ct)
+            .ConfigureAwait(false);
+
+        var children = await _client.Sessions
+            .ChildrenAsync(agentSessionId, directory: session.Directory, ct: ct)
+            .ConfigureAwait(false);
+        var statuses = await _client.Sessions
+            .StatusAsync(directory: session.Directory, ct: ct)
+            .ConfigureAwait(false);
+
+        var result = new List<SubagentActivitySnapshot>(children.Count);
+        foreach (var child in children.OrderByDescending(x => x.Time.Updated))
+        {
+            statuses.TryGetValue(child.Id, out var status);
+            var details = await GetSubagentDetailsAsync(child.Id, session.Directory, child.Time.Created, child.Time.Updated, ct)
+                .ConfigureAwait(false);
+            result.Add(new SubagentActivitySnapshot(
+                SessionId: child.Id,
+                Title: string.IsNullOrWhiteSpace(child.Title) ? child.Id : child.Title,
+                StatusText: ResolveSessionStatusText(status),
+                AgentName: details.AgentName,
+                ModelName: details.ModelName,
+                Content: details.Content,
+                IsBusy: status is SessionStatusBusy or SessionStatusRetry,
+                DurationMs: details.DurationMs,
+                UpdatedAt: child.Time.Updated));
+        }
+
+        return result;
+    }
+
     public async Task<IReadOnlyList<RemoteMessage>> GetMessagesAsync(
         string agentSessionId,
         CancellationToken ct = default)
@@ -153,16 +192,19 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
             .SubscribeAsync(directory: session.Directory, ct: ct)
             .ConfigureAwait(false);
 
-        // 4. Fire the prompt (fire-and-forget; events will carry the response).
-        await _client.Sessions
-            .PromptAsyncAsync(agentSessionId, prompt, directory: session.Directory, ct: ct)
-            .ConfigureAwait(false);
+        // 4. Fire the prompt without blocking event consumption. Some servers
+        // don't complete this request until the full answer finishes, so
+        // awaiting it here would turn the entire UI into "fake streaming".
+        var promptTask = _client.Sessions
+            .PromptAsyncAsync(agentSessionId, prompt, directory: session.Directory, ct: ct);
 
         // 5. Translate events into chat chunks. End the stream on session.idle.
         var idle = false;
         var assistantMessageIds = new HashSet<string>(StringComparer.Ordinal);
         var userMessageIds = new HashSet<string>(StringComparer.Ordinal);
         var promptText = (request.Prompt ?? string.Empty).Trim();
+        var textPartStates = new Dictionary<string, StreamedTextPartState>(StringComparer.Ordinal);
+        var streamedParts = new Dictionary<string, Part>(StringComparer.Ordinal);
 
         await foreach (var ev in eventStream.WithCancellation(ct).ConfigureAwait(false))
         {
@@ -175,6 +217,11 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
                     if (sessionId is null || messageId is null) break;
                     if (!string.Equals(sessionId, agentSessionId, StringComparison.Ordinal))
                         break;
+                    var partId = GetPartId(p.Properties.Part);
+                    if (!string.IsNullOrEmpty(partId))
+                    {
+                        streamedParts[partId] = p.Properties.Part;
+                    }
                     if (TryConvertPart(p.Properties.Part, out var blocks))
                     {
                         if (ShouldSuppressUserEcho(p.Properties.Part, promptText, userMessageIds.Contains(messageId), assistantMessageIds.Contains(messageId)))
@@ -182,10 +229,25 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
                             break;
                         }
 
-                        foreach (var chunk in ConvertPartToChunks(messageId, p.Properties.Part, blocks, p.Properties.Delta))
+                        foreach (var chunk in ConvertPartToChunks(messageId, p.Properties.Part, blocks, p.Properties.Delta, textPartStates))
                         {
                             yield return chunk;
                         }
+                    }
+                    break;
+                }
+                case EventMessagePartDelta pd:
+                {
+                    if (!string.Equals(pd.Properties.SessionID, agentSessionId, StringComparison.Ordinal))
+                        break;
+                    if (!streamedParts.TryGetValue(pd.Properties.PartID, out var knownPart))
+                        break;
+                    if (ShouldSuppressUserEcho(knownPart, promptText, userMessageIds.Contains(pd.Properties.MessageID), assistantMessageIds.Contains(pd.Properties.MessageID)))
+                        break;
+
+                    foreach (var chunk in ConvertPartDeltaToChunks(pd.Properties.MessageID, knownPart, pd.Properties.Field, pd.Properties.Delta, textPartStates))
+                    {
+                        yield return chunk;
                     }
                     break;
                 }
@@ -196,11 +258,6 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
                         if (!string.Equals(aw.Value.SessionID, agentSessionId, StringComparison.Ordinal))
                             break;
                         assistantMessageIds.Add(aw.Value.Id);
-                        yield return new ChatStreamChunk(
-                            MessageId: aw.Value.Id,
-                            Kind: ChatBlockKind.Text,
-                            Content: string.Empty,
-                            Complete: true);
                     }
                     else if (mu.Properties.Info is UserMessageWrapper uw
                         && string.Equals(uw.Value.SessionID, agentSessionId, StringComparison.Ordinal))
@@ -221,9 +278,12 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
 
             if (idle)
             {
+                await promptTask.ConfigureAwait(false);
                 yield break;
             }
         }
+
+        await promptTask.ConfigureAwait(false);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
@@ -281,24 +341,26 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         switch (part)
         {
             case TextPart tp:
-                blocks = SplitTextBlocks(tp.Text);
+                blocks = SplitTextBlocks(tp.Id, tp.Text);
                 return true;
 
             case ReasoningPart rp:
-                blocks = [new RemoteBlock(ChatBlockKind.Thought, Text: rp.Text ?? string.Empty)];
+                blocks = [new RemoteBlock(ChatBlockKind.Thought, PartId: rp.Id, Text: rp.Text ?? string.Empty)];
                 return true;
 
             case FilePart fp:
-                blocks = [new RemoteBlock(ChatBlockKind.Image, Text: fp.Filename ?? fp.Url)];
+                blocks = [new RemoteBlock(ChatBlockKind.Image, PartId: fp.Id, Text: fp.Filename ?? fp.Url)];
                 return true;
 
             case ToolPart tool:
             {
                 var resolved = ResolveTool(tool);
+                var kind = IsTaskTool(tool) ? ChatBlockKind.Task : ChatBlockKind.Tool;
                 blocks =
                 [
                     new RemoteBlock(
-                    ChatBlockKind.Tool,
+                    kind,
+                    PartId: tool.Id,
                     Text: null,
                     ToolName: resolved.Name,
                     ToolState: resolved.State,
@@ -342,11 +404,22 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         string messageId,
         Part originalPart,
         IReadOnlyList<RemoteBlock> blocks,
-        string? delta)
+        string? delta,
+        Dictionary<string, StreamedTextPartState> textPartStates)
     {
         if (blocks.Count == 0)
         {
             return Array.Empty<ChatStreamChunk>();
+        }
+
+        if (originalPart is TextPart textPart)
+        {
+            return ConvertTextPartToChunks(messageId, textPart, delta, textPartStates);
+        }
+
+        if (originalPart is ReasoningPart reasoningPart)
+        {
+            return ConvertReasoningPartToChunks(messageId, reasoningPart, delta);
         }
 
         if (originalPart is ToolPart)
@@ -355,6 +428,7 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
             [
                 new ChatStreamChunk(
                     MessageId: messageId,
+                    PartId: blocks[0].PartId,
                     Kind: blocks[0].Kind,
                     Content: BuildToolContent(blocks[0]),
                     Complete: false)
@@ -363,12 +437,13 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
 
         if (!string.IsNullOrEmpty(delta))
         {
-            var deltaBlocks = SplitTextBlocks(delta);
+            var deltaBlocks = SplitTextBlocks(GetPartId(originalPart), delta);
             var chunks = new List<ChatStreamChunk>(deltaBlocks.Count);
             foreach (var block in deltaBlocks)
             {
                 chunks.Add(new ChatStreamChunk(
                     MessageId: messageId,
+                    PartId: block.PartId,
                     Kind: block.Kind,
                     Content: block.Text ?? string.Empty,
                     Complete: false));
@@ -388,6 +463,7 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
             };
             result.Add(new ChatStreamChunk(
                 MessageId: messageId,
+                PartId: block.PartId,
                 Kind: block.Kind,
                 Content: payload,
                 Complete: false));
@@ -395,52 +471,356 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         return result;
     }
 
-    private static IReadOnlyList<RemoteBlock> SplitTextBlocks(string? text)
+    private static IReadOnlyList<ChatStreamChunk> ConvertPartDeltaToChunks(
+        string messageId,
+        Part originalPart,
+        string field,
+        string delta,
+        Dictionary<string, StreamedTextPartState> textPartStates)
+    {
+        if (string.IsNullOrEmpty(delta))
+        {
+            return Array.Empty<ChatStreamChunk>();
+        }
+
+        if (originalPart is TextPart textPart)
+        {
+            return string.Equals(field, "text", StringComparison.Ordinal)
+                ? ConvertTextPartToChunks(messageId, textPart, delta, textPartStates)
+                : Array.Empty<ChatStreamChunk>();
+        }
+
+        if (originalPart is ReasoningPart reasoningPart)
+        {
+            return string.Equals(field, "text", StringComparison.Ordinal)
+                ? ConvertReasoningPartToChunks(messageId, reasoningPart, delta)
+                : Array.Empty<ChatStreamChunk>();
+        }
+
+        if (originalPart is ToolPart toolPart)
+        {
+            return ConvertToolPartDeltaToChunks(messageId, toolPart, field, delta);
+        }
+
+        var partId = GetPartId(originalPart);
+        if (string.IsNullOrEmpty(partId))
+        {
+            return Array.Empty<ChatStreamChunk>();
+        }
+
+        return
+        [
+            new ChatStreamChunk(
+                MessageId: messageId,
+                PartId: partId,
+                Kind: ChatBlockKind.Text,
+                Content: delta,
+                Complete: false)
+        ];
+    }
+
+    private static IReadOnlyList<ChatStreamChunk> ConvertToolPartDeltaToChunks(
+        string messageId,
+        ToolPart toolPart,
+        string field,
+        string delta)
+    {
+        var kind = IsTaskTool(toolPart) ? ChatBlockKind.Task : ChatBlockKind.Tool;
+        var headerState = ResolveTool(toolPart);
+        var content = field switch
+        {
+            "text" => $"[{headerState.State}] {headerState.Name}\n{delta}",
+            "title" => $"[{headerState.State}] {delta}",
+            "output" => $"[{headerState.State}] {headerState.Name}\n{delta}",
+            "error" => $"[{ChatToolState.Failed}] {headerState.Name}\n{delta}",
+            _ => string.Empty,
+        };
+
+        if (string.IsNullOrEmpty(content))
+        {
+            return Array.Empty<ChatStreamChunk>();
+        }
+
+        return
+        [
+            new ChatStreamChunk(
+                MessageId: messageId,
+                PartId: toolPart.Id,
+                Kind: kind,
+                Content: content,
+                Complete: false)
+        ];
+    }
+
+    private static IReadOnlyList<ChatStreamChunk> ConvertReasoningPartToChunks(
+        string messageId,
+        ReasoningPart reasoningPart,
+        string? delta)
+    {
+        var content = string.IsNullOrEmpty(delta) ? reasoningPart.Text : delta;
+        return
+        [
+            new ChatStreamChunk(
+                MessageId: messageId,
+                PartId: reasoningPart.Id,
+                Kind: ChatBlockKind.Thought,
+                Content: content ?? string.Empty,
+                Complete: false)
+        ];
+    }
+
+    private static IReadOnlyList<ChatStreamChunk> ConvertTextPartToChunks(
+        string messageId,
+        TextPart textPart,
+        string? delta,
+        Dictionary<string, StreamedTextPartState> textPartStates)
+    {
+        if (!textPartStates.TryGetValue(textPart.Id, out var state))
+        {
+            state = new StreamedTextPartState();
+            textPartStates[textPart.Id] = state;
+        }
+
+        var snapshotText = textPart.Text ?? string.Empty;
+        if (string.IsNullOrEmpty(delta))
+        {
+            var snapshotBlocks = SplitTextBlocks(textPart.Id, snapshotText);
+            var chunks = BuildIncrementalChunksFromSnapshot(messageId, textPart.Id, state, snapshotBlocks);
+            state.SourceText = snapshotText;
+            return chunks;
+        }
+
+        var nextSourceText = BuildNextSourceText(state.SourceText, snapshotText, delta);
+        var blocks = SplitTextBlocks(textPart.Id, nextSourceText);
+        var result = BuildIncrementalChunksFromSnapshot(messageId, textPart.Id, state, blocks);
+        state.SourceText = nextSourceText;
+        return result;
+    }
+
+    private static IReadOnlyList<ChatStreamChunk> BuildIncrementalChunksFromSnapshot(
+        string messageId,
+        string sourcePartId,
+        StreamedTextPartState state,
+        IReadOnlyList<RemoteBlock> blocks)
+    {
+        var chunks = new List<ChatStreamChunk>(blocks.Count);
+        foreach (var block in blocks)
+        {
+            var partId = block.PartId ?? sourcePartId;
+            var content = block.Text ?? string.Empty;
+            var isKnownBlock = state.EmittedTextBySegmentId.TryGetValue(partId, out var previous);
+
+            if (isKnownBlock && content.Length >= previous!.Length && content.StartsWith(previous, StringComparison.Ordinal))
+            {
+                var appended = content[previous.Length..];
+                if (appended.Length > 0)
+                {
+                    chunks.Add(new ChatStreamChunk(
+                        MessageId: messageId,
+                        PartId: partId,
+                        Kind: block.Kind,
+                        Content: appended,
+                        Complete: false));
+                }
+            }
+            else if (!isKnownBlock)
+            {
+                chunks.Add(new ChatStreamChunk(
+                    MessageId: messageId,
+                    PartId: partId,
+                    Kind: block.Kind,
+                    Content: content,
+                    Complete: false));
+            }
+
+            state.EmittedTextBySegmentId[partId] = content;
+        }
+
+        return chunks;
+    }
+
+    private static string BuildNextSourceText(string previousSourceText, string snapshotText, string delta)
+    {
+        if (!string.IsNullOrEmpty(snapshotText))
+        {
+            if (!string.IsNullOrEmpty(previousSourceText)
+                && snapshotText.Length >= previousSourceText.Length
+                && snapshotText.StartsWith(previousSourceText, StringComparison.Ordinal))
+            {
+                return snapshotText;
+            }
+
+            if (snapshotText.Length >= delta.Length && snapshotText.EndsWith(delta, StringComparison.Ordinal))
+            {
+                return snapshotText;
+            }
+        }
+
+        return previousSourceText + delta;
+    }
+
+    private static IReadOnlyList<ChatStreamChunk> ConvertBlocksToChunks(
+        string messageId,
+        IReadOnlyList<RemoteBlock> blocks)
+    {
+        var result = new List<ChatStreamChunk>(blocks.Count);
+        foreach (var block in blocks)
+        {
+            result.Add(new ChatStreamChunk(
+                MessageId: messageId,
+                PartId: block.PartId,
+                Kind: block.Kind,
+                Content: block.Text ?? string.Empty,
+                Complete: false));
+        }
+
+        return result;
+    }
+
+    private static string? GetPartId(Part part) => part switch
+    {
+        TextPart tp => tp.Id,
+        ReasoningPart rp => rp.Id,
+        FilePart fp => fp.Id,
+        ToolPart tp => tp.Id,
+        _ => null,
+    };
+
+    private static IReadOnlyList<RemoteBlock> SplitTextBlocks(string? partId, string? text)
     {
         var source = text ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(source))
+        ReadOnlySpan<string> openTags = ["<think>", "<thinking>"];
+        ReadOnlySpan<string> closeTags = ["</think>", "</thinking>"];
+        var blocks = new List<RemoteBlock>();
+        var cursor = 0;
+        var segmentIndex = 0;
+        var mode = ChatBlockKind.Text;
+
+        while (cursor < source.Length)
         {
-            return [new RemoteBlock(ChatBlockKind.Text, Text: source)];
+            var nextTag = FindNextTag(
+                source,
+                cursor,
+                mode == ChatBlockKind.Text ? openTags : closeTags);
+            if (nextTag.Index >= 0)
+            {
+                AddTextSegment(blocks, partId, mode, segmentIndex++, source[cursor..nextTag.Index], forceCreate: false);
+                cursor = nextTag.Index + nextTag.Tag.Length;
+                mode = mode == ChatBlockKind.Text ? ChatBlockKind.Thought : ChatBlockKind.Text;
+                if (cursor >= source.Length)
+                {
+                    AddTextSegment(blocks, partId, mode, segmentIndex++, string.Empty, forceCreate: true);
+                }
+                continue;
+            }
+
+            var remainder = source[cursor..];
+            var hiddenSuffixLength = GetTrailingPartialTagLength(
+                remainder,
+                mode == ChatBlockKind.Text ? openTags : closeTags);
+            var visibleLength = remainder.Length - hiddenSuffixLength;
+            AddTextSegment(
+                blocks,
+                partId,
+                mode,
+                segmentIndex++,
+                visibleLength > 0 ? remainder[..visibleLength] : string.Empty,
+                forceCreate: mode == ChatBlockKind.Thought);
+            break;
         }
 
-        const string openTag = "<think>";
-        const string closeTag = "</think>";
-        var openIndex = source.IndexOf(openTag, StringComparison.OrdinalIgnoreCase);
-        var closeIndex = source.IndexOf(closeTag, StringComparison.OrdinalIgnoreCase);
-
-        if (openIndex < 0 || closeIndex < openIndex)
+        if (blocks.Count == 0)
         {
-            return [new RemoteBlock(ChatBlockKind.Text, Text: source)];
+            return [new RemoteBlock(ChatBlockKind.Text, PartId: BuildTextSegmentPartId(partId, 0, ChatBlockKind.Text), Text: string.Empty)];
         }
 
-        var blocks = new List<RemoteBlock>(capacity: 3);
-        var before = source[..openIndex].Trim();
-        if (!string.IsNullOrEmpty(before))
+        return blocks;
+    }
+
+    private static void AddTextSegment(
+        List<RemoteBlock> blocks,
+        string? originalPartId,
+        ChatBlockKind kind,
+        int segmentIndex,
+        string text,
+        bool forceCreate)
+    {
+        if (!forceCreate && text.Length == 0)
         {
-            blocks.Add(new RemoteBlock(ChatBlockKind.Text, Text: before));
+            return;
         }
 
-        var thoughtStart = openIndex + openTag.Length;
-        var thought = source.Substring(thoughtStart, closeIndex - thoughtStart).Trim();
-        if (!string.IsNullOrEmpty(thought))
+        blocks.Add(new RemoteBlock(
+            kind,
+            PartId: BuildTextSegmentPartId(originalPartId, segmentIndex, kind),
+            Text: text));
+    }
+
+    private static string? BuildTextSegmentPartId(string? originalPartId, int segmentIndex, ChatBlockKind kind)
+    {
+        if (string.IsNullOrEmpty(originalPartId))
         {
-            blocks.Add(new RemoteBlock(ChatBlockKind.Thought, Text: thought));
+            return null;
         }
 
-        var afterStart = closeIndex + closeTag.Length;
-        var after = source[afterStart..].Trim();
-        if (!string.IsNullOrEmpty(after))
+        return $"{originalPartId}::seg{segmentIndex}:{kind}";
+    }
+
+    private static (int Index, string Tag) FindNextTag(string text, int startIndex, ReadOnlySpan<string> tags)
+    {
+        var bestIndex = -1;
+        string bestTag = string.Empty;
+
+        foreach (var tag in tags)
         {
-            blocks.Add(new RemoteBlock(ChatBlockKind.Text, Text: after));
+            var index = text.IndexOf(tag, startIndex, StringComparison.OrdinalIgnoreCase);
+            if (index < 0)
+            {
+                continue;
+            }
+
+            if (bestIndex < 0 || index < bestIndex)
+            {
+                bestIndex = index;
+                bestTag = tag;
+            }
         }
 
-        return blocks.Count == 0
-            ? [new RemoteBlock(ChatBlockKind.Text, Text: source)]
-            : blocks;
+        return (bestIndex, bestTag);
+    }
+
+    private static int GetTrailingPartialTagLength(string text, ReadOnlySpan<string> fullTags)
+    {
+        var bestLength = 0;
+
+        foreach (var fullTag in fullTags)
+        {
+            var maxLength = Math.Min(text.Length, fullTag.Length - 1);
+            for (var length = maxLength; length > 0; length--)
+            {
+                if (length <= bestLength)
+                {
+                    break;
+                }
+
+                if (fullTag.StartsWith(text[^length..], StringComparison.OrdinalIgnoreCase))
+                {
+                    bestLength = length;
+                    break;
+                }
+            }
+        }
+
+        return bestLength;
     }
 
     private static (string Name, ChatToolState State, string? Output) ResolveTool(ToolPart tool)
     {
+        if (IsTaskTool(tool))
+        {
+            return ResolveTaskTool(tool);
+        }
+
         var state = tool.State switch
         {
             ToolStatePending => ChatToolState.Pending,
@@ -465,12 +845,286 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         return (tool.Tool, state, output);
     }
 
+    private static (string Name, ChatToolState State, string? Output) ResolveTaskTool(ToolPart tool)
+    {
+        var state = MapToolState(tool.State);
+        var title = ResolveTaskTitle(tool);
+        var output = ResolveTaskOutput(tool);
+        return (title, state, output);
+    }
+
+    private static ChatToolState MapToolState(OcToolState state) => state switch
+    {
+        ToolStatePending => ChatToolState.Pending,
+        ToolStateRunning => ChatToolState.Running,
+        ToolStateCompleted => ChatToolState.Completed,
+        ToolStateError => ChatToolState.Failed,
+        _ => ChatToolState.Pending,
+    };
+
+    private static bool IsTaskTool(ToolPart tool)
+        => string.Equals(tool.Tool, "task", StringComparison.OrdinalIgnoreCase);
+
+    private static string ResolveTaskTitle(ToolPart tool)
+    {
+        if (tool.State is ToolStateCompleted completed && !string.IsNullOrWhiteSpace(completed.Title))
+        {
+            return completed.Title.Trim();
+        }
+
+        if (tool.State is ToolStateRunning running && !string.IsNullOrWhiteSpace(running.Title))
+        {
+            return running.Title.Trim();
+        }
+
+        if (TryGetJsonString(tool.Metadata, "title", out var metadataTitle))
+        {
+            return metadataTitle;
+        }
+
+        if (TryGetJsonString(tool.Metadata, "prompt", out var prompt))
+        {
+            return prompt;
+        }
+
+        return "Task";
+    }
+
+    private static string? ResolveTaskOutput(ToolPart tool)
+    {
+        if (tool.State is ToolStateCompleted completed && !string.IsNullOrWhiteSpace(completed.Output))
+        {
+            return completed.Output.Trim();
+        }
+
+        if (tool.State is ToolStateError error && !string.IsNullOrWhiteSpace(error.Error))
+        {
+            return error.Error.Trim();
+        }
+
+        if (TryGetJsonString(tool.Metadata, "prompt", out var prompt))
+        {
+            return prompt;
+        }
+
+        if (tool.State is ToolStateRunning running && !string.IsNullOrWhiteSpace(running.Title))
+        {
+            return running.Title.Trim();
+        }
+
+        return null;
+    }
+
+    private static bool TryGetJsonString(IReadOnlyDictionary<string, JsonElement>? values, string key, out string value)
+    {
+        value = string.Empty;
+        if (values is null || !values.TryGetValue(key, out var element))
+        {
+            return false;
+        }
+
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.String:
+                value = (element.GetString() ?? string.Empty).Trim();
+                break;
+            case JsonValueKind.Number:
+            case JsonValueKind.True:
+            case JsonValueKind.False:
+                value = element.ToString().Trim();
+                break;
+            default:
+                return false;
+        }
+
+        return !string.IsNullOrWhiteSpace(value);
+    }
+
+    private static string ResolveSessionStatusText(SessionStatus? status) => status switch
+    {
+        SessionStatusBusy => "运行中",
+        SessionStatusRetry retry => $"重试 {retry.Attempt}",
+        SessionStatusIdle => "空闲",
+        _ => "未知",
+    };
+
+    private async Task<SubagentDetails> GetSubagentDetailsAsync(
+        string sessionId,
+        string directory,
+        long sessionCreatedAt,
+        long sessionUpdatedAt,
+        CancellationToken ct)
+    {
+        var messages = await _client.Sessions
+            .MessagesAsync(sessionId, directory: directory, ct: ct)
+            .ConfigureAwait(false);
+
+        string? agentName = null;
+        string? modelName = null;
+        long? startedAt = null;
+        long? endedAt = null;
+
+        foreach (var message in messages)
+        {
+            switch (message.Info)
+            {
+                case UserMessageWrapper user:
+                    startedAt ??= user.Value.Time.Created;
+                    endedAt = Math.Max(endedAt ?? long.MinValue, user.Value.Time.Created);
+                    if (!string.IsNullOrWhiteSpace(user.Value.Agent))
+                    {
+                        agentName = user.Value.Agent.Trim();
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(user.Value.Model.ModelID) && string.IsNullOrWhiteSpace(modelName))
+                    {
+                        modelName = user.Value.Model.ModelID.Trim();
+                    }
+                    break;
+
+                case AssistantMessageWrapper assistant:
+                    startedAt ??= assistant.Value.Time.Created;
+                    endedAt = Math.Max(
+                        endedAt ?? long.MinValue,
+                        assistant.Value.Time.Completed ?? assistant.Value.Time.Created);
+                    if (!string.IsNullOrWhiteSpace(assistant.Value.ModelID))
+                    {
+                        modelName = assistant.Value.ModelID.Trim();
+                    }
+                    break;
+            }
+
+            foreach (var part in message.Parts)
+            {
+                if (TryResolveAgentName(part, out var resolvedAgentName))
+                {
+                    agentName = resolvedAgentName;
+                }
+
+                if (TryResolvePartTimestamp(part, out var timestamp))
+                {
+                    startedAt ??= timestamp;
+                    endedAt = Math.Max(endedAt ?? long.MinValue, timestamp);
+                }
+            }
+        }
+
+        var contentSections = new List<string>();
+        foreach (var message in messages)
+        {
+            var blockLines = new List<string>();
+            foreach (var part in message.Parts)
+            {
+                var segment = GetPartContent(part);
+                if (!string.IsNullOrWhiteSpace(segment))
+                {
+                    blockLines.Add(segment.Trim());
+                }
+            }
+
+            if (blockLines.Count == 0)
+            {
+                continue;
+            }
+
+            var heading = message.Info switch
+            {
+                UserMessageWrapper => "### User",
+                AssistantMessageWrapper => "### Assistant",
+                _ => "### Message"
+            };
+
+            contentSections.Add($"{heading}\n\n{string.Join("\n\n", blockLines)}");
+        }
+
+        return new SubagentDetails(
+            agentName ?? "subagent",
+            modelName ?? "unknown",
+            contentSections.Count > 0 ? string.Join("\n\n---\n\n", contentSections) : "暂无消息",
+            Math.Max((endedAt ?? sessionUpdatedAt) - (startedAt ?? sessionCreatedAt), 0));
+    }
+
+    private static string? GetPartContent(Part part) => part switch
+    {
+        TextPart tp when !string.IsNullOrWhiteSpace(tp.Text) => tp.Text.Trim(),
+        ReasoningPart rp when !string.IsNullOrWhiteSpace(rp.Text) => rp.Text.Trim(),
+        FilePart fp => $"附件：{fp.Filename ?? fp.Url}",
+        ToolPart tool => BuildToolMarkdown(tool),
+        AgentPart agent => string.IsNullOrWhiteSpace(agent.Name) ? "subagent" : $"Agent：{agent.Name.Trim()}",
+        SubtaskPart subtask when !string.IsNullOrWhiteSpace(subtask.Description) => $"子任务：{subtask.Description.Trim()}",
+        SubtaskPart subtask => $"子任务 Agent：{subtask.Agent}",
+        _ => null,
+    };
+
+    private static bool TryResolveAgentName(Part part, out string agentName)
+    {
+        agentName = part switch
+        {
+            AgentPart agent when !string.IsNullOrWhiteSpace(agent.Name) => agent.Name.Trim(),
+            SubtaskPart subtask when !string.IsNullOrWhiteSpace(subtask.Agent) => subtask.Agent.Trim(),
+            _ => string.Empty,
+        };
+
+        return !string.IsNullOrWhiteSpace(agentName);
+    }
+
+    private static bool TryResolvePartTimestamp(Part part, out long timestamp)
+    {
+        timestamp = part switch
+        {
+            TextPart text when text.Time?.End is long end => end,
+            TextPart text when text.Time?.Start is long start => start,
+            ReasoningPart reasoning when reasoning.Time.End is long end => end,
+            ReasoningPart reasoning => reasoning.Time.Start,
+            RetryPart retry => retry.Time.Created,
+            _ => 0,
+        };
+
+        return timestamp > 0;
+    }
+
     private static string BuildToolContent(RemoteBlock block)
     {
         var name = block.ToolName ?? "tool";
         var state = block.ToolState?.ToString() ?? "Pending";
         var output = block.ToolOutput ?? string.Empty;
         return $"[{state}] {name}\n{output}";
+    }
+
+    private static string BuildToolMarkdown(ToolPart tool)
+    {
+        var state = tool.State switch
+        {
+            ToolStatePending => "Pending",
+            ToolStateRunning => "Running",
+            ToolStateCompleted => "Completed",
+            ToolStateError => "Error",
+            _ => "Unknown"
+        };
+
+        var detail = tool.State switch
+        {
+            ToolStateCompleted completed when !string.IsNullOrWhiteSpace(completed.Output) => completed.Output.Trim(),
+            ToolStateError error when !string.IsNullOrWhiteSpace(error.Error) => error.Error.Trim(),
+            ToolStateRunning running when !string.IsNullOrWhiteSpace(running.Title) => running.Title.Trim(),
+            _ => string.Empty
+        };
+
+        return string.IsNullOrWhiteSpace(detail)
+            ? $"**Tool** `{tool.Tool}` [{state}]"
+            : $"**Tool** `{tool.Tool}` [{state}]\n\n```text\n{detail}\n```";
+    }
+
+    private sealed record SubagentDetails(
+        string AgentName,
+        string ModelName,
+        string Content,
+        long DurationMs);
+
+    private sealed class StreamedTextPartState
+    {
+        public string SourceText { get; set; } = string.Empty;
+        public Dictionary<string, string> EmittedTextBySegmentId { get; } = new(StringComparer.Ordinal);
     }
 
     private static IReadOnlyList<OcPartInputRequest> BuildPromptParts(ChatRequest request)
