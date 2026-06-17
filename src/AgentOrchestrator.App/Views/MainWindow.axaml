@@ -30,37 +30,147 @@
             <Grid ColumnDefinitions="Auto,*,Auto">
                 <!-- Left: Icon + Title -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
-                    <Image Source="/Assets/avalonia-logo.ico" Width="16" Height="16"
-                           VerticalAlignment="Center" Stretch="Uniform" />
-                    <TextBlock Text="Agent Orchestrator" Classes="title-bar-text" />
+                    <Button Classes="title-bar-btn" Click="OnSidebarToggleButtonClick"
+                            ToolTip.Tip="显示/隐藏左侧边栏"
+                            Content="&#xE700;" />
                 </StackPanel>
 
-                <!-- Right: Settings + Window Controls -->
+                <!-- Right: Settings + Window Controls (Segoe MDL2 Assets glyphs) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="0">
-                    <!-- Settings (gear icon) -->
-                    <Button Classes="title-bar-btn" Click="OnSettingsButtonClick" ToolTip.Tip="设置">
-                        <Path Classes="title-bar-icon" Data="M19.14,15.8L15.81,12.5C16.3,11.64 16.64,10.65 16.64,9.6C16.64,7.21 14.66,5.24 12.27,5.24C9.88,5.24 7.91,7.21 7.91,9.6C7.91,11.99 9.88,13.96 12.27,13.96C13.32,13.96 14.3,13.62 15.17,13.13L18.5,16.46L19.14,15.8ZM12.27,12.4C10.41,12.4 8.91,10.9 8.91,9.05C8.91,7.2 10.41,5.7 12.27,5.7C14.13,5.7 15.64,7.21 15.64,9.05C15.64,10.9 14.13,12.4 12.27,12.4Z" />
-                    </Button>
-                    <!-- Minimize (dash) -->
-                    <Button Classes="title-bar-btn" Click="OnMinButtonClick" ToolTip.Tip="最小化">
-                        <Path Classes="title-bar-icon" Data="M3,11H21V13H3V11Z" />
-                    </Button>
-                    <!-- Maximize / Restore -->
-                    <Button x:Name="MaxButton" Classes="title-bar-btn" Click="OnMaxButtonClick" ToolTip.Tip="最大化">
-                        <Path Classes="title-bar-icon" Data="M4,4H20V20H4V4M6,6V18H18V6H6Z" />
-                    </Button>
-                    <!-- Close (X) -->
-                    <Button Classes="title-bar-btn title-bar-btn-close" Click="OnCloseButtonClick" ToolTip.Tip="关闭">
-                        <Path Classes="title-bar-icon" Data="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" />
-                    </Button>
+                    <!-- Settings (gear icon: &#xE115;) -->
+                    <Button Classes="title-bar-btn" Click="OnSettingsButtonClick" ToolTip.Tip="设置"
+                            Content="&#xE115;" />
+                    <!-- Minimize (dash: &#xE921;) -->
+                    <Button Classes="title-bar-btn" Click="OnMinButtonClick" ToolTip.Tip="最小化"
+                            Content="&#xE921;" />
+                    <!-- Maximize / Restore (&#xE922; ↔ &#xE923;) -->
+                    <Button x:Name="MaxButton" Classes="title-bar-btn" Click="OnMaxButtonClick" ToolTip.Tip="最大化"
+                            Content="&#xE922;" />
+                    <!-- Close (X: &#xE8BB;) -->
+                    <Button Classes="title-bar-btn title-bar-btn-close" Click="OnCloseButtonClick" ToolTip.Tip="关闭"
+                            Content="&#xE8BB;" />
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- Main Content: 2 columns (Sidebar | ActiveWorkspace) -->
-        <Grid Grid.Row="1" ColumnDefinitions="240,*">
-            <controls:SidebarControl Grid.Column="0" DataContext="{Binding Sidebar}" />
-            <ContentControl Grid.Column="1" Content="{Binding ActiveWorkspace}" />
+        <!-- Main Content: 3 columns (Sidebar | Chat/Workspace | Right Sidebar) -->
+        <Grid Grid.Row="1" RowDefinitions="Auto,*">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="{Binding LeftSidebarWidth}" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="{Binding RightSidebarWidth}" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.RowSpan="2" Grid.Column="0" IsVisible="{Binding IsLeftSidebarVisible}">
+                <controls:SidebarControl DataContext="{Binding Sidebar}" />
+            </Border>
+
+            <Border Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Classes="workspace-header">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding ActiveWorkspaceTitle}"
+                               Classes="workspace-header-title"
+                               TextTrimming="CharacterEllipsis" />
+                    <Button Grid.Column="1"
+                            Classes="workspace-header-action"
+                            Click="OnRightSidebarToggleButtonClick"
+                            ToolTip.Tip="显示/隐藏右侧边栏"
+                            Content="&#xE8A7;" />
+                </Grid>
+            </Border>
+
+            <ContentControl Grid.Row="1" Grid.Column="1" Content="{Binding ActiveWorkspace}" />
+
+            <Grid Grid.Row="1" Grid.Column="2" Background="#FBFBFC" IsVisible="{Binding IsRightSidebarVisible}">
+                <Border BorderBrush="#E2E5EA" BorderThickness="1,0,0,0" />
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+                    <TextBlock Text="右侧边栏"
+                               Foreground="#6E727A"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="暂未添加内容"
+                               Foreground="#9096A0"
+                               FontSize="11"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+            </Grid>
+
+            <GridSplitter Grid.RowSpan="2"
+                          Grid.Column="0"
+                          Width="4"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Stretch"
+                          Background="Transparent"
+                          ShowsPreview="True" />
+            <GridSplitter Grid.RowSpan="2"
+                          Grid.Column="2"
+                          Width="4"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Stretch"
+                          Background="Transparent"
+                          ShowsPreview="True" />
+        </Grid>
+
+        <Grid Grid.Row="1"
+              Background="#66000000"
+              IsVisible="{Binding Sidebar.IsSearchOverlayVisible}"
+              PointerPressed="OnSearchOverlayPointerPressed">
+            <Border HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Width="620"
+                    Padding="16"
+                    CornerRadius="18"
+                    Background="#FFFFFFFF"
+                    BorderBrush="#E3E5E9"
+                    BorderThickness="1">
+                <Grid RowDefinitions="Auto,Auto,*" ColumnDefinitions="*">
+                    <TextBox x:Name="SearchBox"
+                             Grid.Row="0"
+                             PlaceholderText="搜索对话"
+                             Text="{Binding Sidebar.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             FontSize="14"
+                             Margin="0,0,0,12" />
+                    <TextBlock Grid.Row="1"
+                               Text="近期对话"
+                               FontSize="12"
+                               Foreground="#9096A0"
+                               Margin="2,0,0,8" />
+                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" MaxHeight="420">
+                        <ItemsControl ItemsSource="{Binding Sidebar.SearchResults}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:SidebarSessionViewModel">
+                                    <Button Classes="search-result-row"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch"
+                                            Click="OnSearchResultClick"
+                                            CommandParameter="{Binding SessionId}">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="8,6">
+                                            <TextBlock Grid.Column="0"
+                                                       Text="◌"
+                                                       Foreground="#7B8088"
+                                                       Margin="0,0,10,0" />
+                                            <StackPanel Grid.Column="1" Spacing="2">
+                                                <TextBlock Text="{Binding Title}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="#1F2328" />
+                                                <TextBlock Text="{Binding DisplayRelativeTime}"
+                                                           FontSize="11"
+                                                           Foreground="#9096A0" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{Binding ProjectId}"
+                                                       FontSize="11"
+                                                       Foreground="#C5C8CE"
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
         </Grid>
     </Grid>
 </Window>

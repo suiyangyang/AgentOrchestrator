@@ -1,8 +1,6 @@
 ﻿using Avalonia.Controls;
-using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Media;
 using AgentOrchestrator.App.ViewModels;
 
 namespace AgentOrchestrator.App.Views;
@@ -53,7 +51,10 @@ public partial class MainWindow : Window
 
     private void OnMaxButtonClick(object? sender, RoutedEventArgs e)
     {
-        ToggleMaximize();
+        var isMaximized = WindowState == WindowState.Maximized;
+        WindowState = isMaximized ? WindowState.Normal : WindowState.Maximized;
+        // Segoe MDL2 Assets: \uE922 = maximize, \uE923 = restore
+        MaxButton.Content = isMaximized ? "\uE922" : "\uE923";
     }
 
     private void OnCloseButtonClick(object? sender, RoutedEventArgs e)
@@ -73,21 +74,46 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnSidebarToggleButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.ToggleLeftSidebarCommand.Execute(null);
+        }
+    }
+
+    private void OnRightSidebarToggleButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.ToggleRightSidebarCommand.Execute(null);
+        }
+    }
+
+    private void OnSearchOverlayPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm && e.Source == sender)
+        {
+            vm.Sidebar.CloseSearchOverlayCommand.Execute(null);
+        }
+    }
+
+    private void OnSearchResultClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: SidebarSessionViewModel session }
+            && DataContext is MainWindowViewModel vm)
+        {
+            vm.Sidebar.SelectSessionCommand.Execute(session.SessionId);
+        }
+    }
+
     private void ToggleMaximize()
     {
         WindowState = WindowState == WindowState.Maximized
             ? WindowState.Normal
             : WindowState.Maximized;
-        UpdateMaxButtonIcon();
-    }
-
-    private void UpdateMaxButtonIcon()
-    {
-        if (this.FindControl<Button>("MaxButton")?.Content is Path path)
-        {
-            path.Data = WindowState == WindowState.Maximized
-                ? Geometry.Parse("M4,8H8V4H20V16H16V20H4V8M6,10V18H14V18H16V10H6M18,6H10V8H18V6Z")
-                : Geometry.Parse("M4,4H20V20H4V4M6,6V18H18V6H6Z");
-        }
+        // Mirror the maximize icon swap so the double-tap path stays in sync.
+        var isMaximized = WindowState == WindowState.Maximized;
+        MaxButton.Content = isMaximized ? "\uE923" : "\uE922";
     }
 }

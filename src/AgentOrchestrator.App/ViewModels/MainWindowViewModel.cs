@@ -22,8 +22,13 @@ namespace AgentOrchestrator.App.ViewModels;
 /// </summary>
 public partial class MainWindowViewModel : ViewModelBase
 {
+    private static readonly GridLength DefaultLeftSidebarWidth = new(240);
+    private static readonly GridLength DefaultRightSidebarWidth = new(280);
+
     private readonly ISidebarRepository _repo;
     private readonly IAppSettingsService _settingsService;
+    private GridLength _leftSidebarExpandedWidth = DefaultLeftSidebarWidth;
+    private GridLength _rightSidebarExpandedWidth = DefaultRightSidebarWidth;
 
     public MainWindowViewModel(
         ChatWorkspaceViewModel chat,
@@ -46,6 +51,7 @@ public partial class MainWindowViewModel : ViewModelBase
         Sidebar.AddProjectRequested += (_, _) => _ = OnAddProjectRequested();
         Sidebar.ProjectActionRequested += OnProjectActionRequested;
         Sidebar.SessionActionRequested += OnSessionActionRequested;
+        Sidebar.SessionSelected += OnSidebarSessionSelectionChanged;
 
         // Persist focus changes back to the settings file so the next
         // launch can restore the same working directory.
@@ -56,6 +62,9 @@ public partial class MainWindowViewModel : ViewModelBase
                 _settingsService.Save(BuildSettingsSnapshot());
             }
         };
+
+        Chat.PropertyChanged += OnWorkspacePropertyChanged;
+        TaskGraph.PropertyChanged += OnWorkspacePropertyChanged;
 
         ActiveWorkspace = Chat;
         _ = InitializeAsync();
@@ -68,6 +77,18 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private ViewModelBase _activeWorkspace = null!;
+
+    [ObservableProperty]
+    private GridLength _leftSidebarWidth = DefaultLeftSidebarWidth;
+
+    [ObservableProperty]
+    private GridLength _rightSidebarWidth = DefaultRightSidebarWidth;
+
+    [ObservableProperty]
+    private bool _isLeftSidebarVisible = true;
+
+    [ObservableProperty]
+    private bool _isRightSidebarVisible = true;
 
     /// <summary>The MainWindow sets this on Opened so dialogs and pickers can find it.</summary>
     public IStorageProvider? Storage { get; set; }
@@ -95,6 +116,70 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    partial void OnLeftSidebarWidthChanged(GridLength value)
+    {
+        if (IsLeftSidebarVisible && value.Value > 0)
+        {
+            _leftSidebarExpandedWidth = value;
+        }
+    }
+
+    partial void OnRightSidebarWidthChanged(GridLength value)
+    {
+        if (IsRightSidebarVisible && value.Value > 0)
+        {
+            _rightSidebarExpandedWidth = value;
+        }
+    }
+
+    partial void OnIsLeftSidebarVisibleChanged(bool value)
+    {
+        if (!value)
+        {
+            if (LeftSidebarWidth.Value > 0)
+            {
+                _leftSidebarExpandedWidth = LeftSidebarWidth;
+            }
+
+            LeftSidebarWidth = new GridLength(0);
+            return;
+        }
+
+        LeftSidebarWidth = NormalizeRestoredWidth(_leftSidebarExpandedWidth, DefaultLeftSidebarWidth);
+    }
+
+    partial void OnIsRightSidebarVisibleChanged(bool value)
+    {
+        if (!value)
+        {
+            if (RightSidebarWidth.Value > 0)
+            {
+                _rightSidebarExpandedWidth = RightSidebarWidth;
+            }
+
+            RightSidebarWidth = new GridLength(0);
+            return;
+        }
+
+        RightSidebarWidth = NormalizeRestoredWidth(_rightSidebarExpandedWidth, DefaultRightSidebarWidth);
+    }
+
+    private static GridLength NormalizeRestoredWidth(GridLength value, GridLength fallback)
+        => value.Value > 0 ? value : fallback;
+
+    partial void OnActiveWorkspaceChanged(ViewModelBase value)
+    {
+        OnPropertyChanged(nameof(ActiveWorkspaceTitle));
+    }
+
+    private void OnWorkspacePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (sender == Chat && e.PropertyName == nameof(ChatWorkspaceViewModel.HeaderTitle))
+        {
+            OnPropertyChanged(nameof(ActiveWorkspaceTitle));
+        }
+    }
+
     // ── Sidebar event handlers ─────────────────────────────────────────
 
     private async void OnSidebarSessionSelected(object? sender, string sessionId)
@@ -103,6 +188,11 @@ public partial class MainWindowViewModel : ViewModelBase
         var record = await _repo.GetSessionAsync(sessionId);
         if (record is null) return;
         await Chat.OpenSessionAsync(record);
+    }
+
+    private void OnSidebarSessionSelectionChanged(object? sender, string sessionId)
+    {
+        Sidebar.CloseSearchOverlayCommand.Execute(null);
     }
 
     private void OnSidebarNewSessionRequested(object? sender, NewSessionContext ctx)
@@ -255,4 +345,23 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         ActiveWorkspace = TaskGraph;
     }
+
+    [RelayCommand]
+    private void ToggleLeftSidebar()
+    {
+        IsLeftSidebarVisible = !IsLeftSidebarVisible;
+    }
+
+    [RelayCommand]
+    private void ToggleRightSidebar()
+    {
+        IsRightSidebarVisible = !IsRightSidebarVisible;
+    }
+
+    public string ActiveWorkspaceTitle => ActiveWorkspace switch
+    {
+        ChatWorkspaceViewModel chat => chat.HeaderTitle,
+        TaskGraphWorkspaceViewModel graph => graph.HeaderTitle,
+        _ => "工作区",
+    };
 }
