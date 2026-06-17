@@ -1,21 +1,132 @@
 using System;
+using System.Collections.Specialized;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using AgentOrchestrator.App.Models.Chat;
 
 namespace AgentOrchestrator.App.Controls;
 
 public partial class ChatWorkspaceControl : UserControl
 {
+    private ViewModels.ChatWorkspaceViewModel? _attachedVm;
+    private ViewModels.ChatMessageViewModel? _subscribedTail;
+    private readonly NotifyCollectionChangedEventHandler _blocksHandler;
+
     public ChatWorkspaceControl()
     {
         InitializeComponent();
+        _blocksHandler = OnBlocksCollectionChanged;
     }
+
+    // ── Enter / Shift+Enter handling ────────────────────────────────────
+    //
+    // TextBox.AcceptsReturn must stay False here because the TextBox does
+    // not expose a PreviewKeyDown tunnel event in Avalonia 12 — its
+    // internal Enter handling runs before any bubbling KeyDown we could
+    // intercept. So Enter is fully owned by this handler: plain Enter
+    // triggers SendCommand; Shift+Enter inserts a "\n" at the caret.
+
+    private void OnDraftKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not ViewModels.ChatWorkspaceViewModel viewModel) return;
+
+        if (e.Key != Key.Enter) return;
+
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        {
+            // Shift+Enter: insert newline at caret, replacing any selection.
+            if (sender is TextBox tb)
+            {
+                var text = tb.Text ?? string.Empty;
+                var start = tb.SelectionStart;
+                var end = tb.SelectionEnd;
+                if (start > end) (start, end) = (end, start);
+                tb.Text = string.Concat(text.AsSpan(0, start), "\n", text.AsSpan(end));
+                tb.CaretIndex = start + 1;
+            }
+        }
+        else
+        {
+            // Enter (no Shift): send.
+            if (viewModel.SendCommand.CanExecute(null))
+                viewModel.SendCommand.Execute(null);
+        }
+
+        e.Handled = true;
+    }
+
+    // ── Auto-scroll subscription management ─────────────────────────────
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+
+        UnsubscribeFromVm();
+
+        if (DataContext is ViewModels.ChatWorkspaceViewModel vm)
+        {
+            _attachedVm = vm;
+            vm.Messages.CollectionChanged += OnMessagesCollectionChanged;
+            SubscribeToLastMessageBlocks(vm);
+        }
+    }
+
+    private void UnsubscribeFromVm()
+    {
+        if (_attachedVm is null) return;
+
+        _attachedVm.Messages.CollectionChanged -= OnMessagesCollectionChanged;
+        DetachTailBlocksSubscription();
+        _attachedVm = null;
+    }
+
+    private void SubscribeToLastMessageBlocks(ViewModels.ChatWorkspaceViewModel vm)
+    {
+        DetachTailBlocksSubscription();
+        var last = vm.Messages.LastOrDefault();
+        if (last is null) return;
+        last.Blocks.CollectionChanged += _blocksHandler;
+        _subscribedTail = last;
+    }
+
+    private void DetachTailBlocksSubscription()
+    {
+        if (_subscribedTail is null) return;
+        _subscribedTail.Blocks.CollectionChanged -= _blocksHandler;
+        _subscribedTail = null;
+    }
+
+    private void OnMessagesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        ScrollToEnd();
+
+        // The tail may have shifted (or been removed/reset); re-attach.
+        if (_attachedVm is not null)
+        {
+            SubscribeToLastMessageBlocks(_attachedVm);
+        }
+    }
+
+    private void OnBlocksCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        ScrollToEnd();
+    }
+
+    private void ScrollToEnd()
+    {
+        Dispatcher.UIThread.Post(
+            () => MessagesScrollViewer.ScrollToEnd(),
+            DispatcherPriority.Background);
+    }
+
+    // ── Popup handlers ──────────────────────────────────────────────────
 
     private void OnPermissionClick(object? sender, RoutedEventArgs e)
     {
@@ -49,30 +160,8 @@ public partial class ChatWorkspaceControl : UserControl
         }
     }
 
-    private async void OnDraftKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (DataContext is not ViewModels.ChatWorkspaceViewModel viewModel)
-        {
-            return;
-        }
+    // ── Paste-image handling ────────────────────────────────────────────
 
-        if (e.Key == Key.Enter && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
-        {
-            if (viewModel.SendCommand.CanExecute(null))
-            {
-                viewModel.SendCommand.Execute(null);
-            }
-
-            e.Handled = true;
-        }
-    }
-
-    /// <summary>
-    /// Intercepts the TextBox's paste operation. If the clipboard holds an image,
-    /// the image is saved to a temp file and added as an attachment, and the
-    /// default text paste is cancelled by marking the event as handled. Otherwise
-    /// the event is left unhandled so the TextBox performs its normal text paste.
-    /// </summary>
     private async void OnDraftPasting(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not ViewModels.ChatWorkspaceViewModel viewModel)
@@ -86,11 +175,6 @@ public partial class ChatWorkspaceControl : UserControl
         }
     }
 
-    /// <summary>
-    /// If the clipboard currently holds an image, save it to a temp file and add it as
-    /// an attachment on the view model. Returns true when an image was consumed
-    /// (so the caller can mark the key event as handled and suppress default text paste).
-    /// </summary>
     private async Task<bool> TryPasteImageAsync(ViewModels.ChatWorkspaceViewModel viewModel)
     {
         if (TopLevel.GetTopLevel(this)?.Clipboard is not IClipboard clipboard)

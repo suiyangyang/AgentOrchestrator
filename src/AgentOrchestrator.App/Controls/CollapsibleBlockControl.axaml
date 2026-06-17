@@ -7,16 +7,25 @@
         <ToggleButton Grid.Row="0"
                       Classes="collapsible-block"
                       IsChecked="{Binding IsExpanded, Mode=TwoWay}">
-            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center">
                 <Panel Width="14" Height="14">
                     <Path Classes="collapsible-block-icon collapsible-block-icon-thought"
                           IsVisible="{Binding ShowThoughtIcon}" />
                     <Path Classes="collapsible-block-icon collapsible-block-icon-tool"
                           IsVisible="{Binding ShowToolIcon}" />
                 </Panel>
-                <TextBlock Text="{Binding HeaderText}" Classes="collapsible-block-label" />
-                <Path Classes="collapsible-block-chevron" />
-            </StackPanel>
+                <TextBlock Grid.Column="1"
+                           Text="{Binding HeaderText}"
+                           Classes="collapsible-block-label"
+                           Margin="8,0,0,0" />
+                <TextBlock Text="{Binding ToolStateText}"
+                           Grid.Column="2"
+                           IsVisible="{Binding IsTool}"
+                           Classes="collapsible-block-state" />
+                <Path Grid.Column="3"
+                      Classes="collapsible-block-chevron"
+                      Margin="8,0,0,0" />
+            </Grid>
         </ToggleButton>
         <Border Grid.Row="1" Classes="collapsible-block-body" IsVisible="{Binding IsExpanded}">
             <ContentControl x:Name="Body" />

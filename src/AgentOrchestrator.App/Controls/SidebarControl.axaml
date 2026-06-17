@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:AgentOrchestrator.App.ViewModels"
              x:Class="AgentOrchestrator.App.Controls.SidebarControl"
@@ -6,43 +6,39 @@
     <Border Background="#F9F9FB" BorderBrush="#E2E5EA" BorderThickness="0,0,1,0">
         <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,8,0,0">
 
-            <!-- 新对话 button -->
-            <Button Grid.Row="0"
-                    Classes="sidebar-new-chat"
-                    Margin="12,4,12,8"
-                    HorizontalAlignment="Stretch"
-                    HorizontalContentAlignment="Left"
-                    Command="{Binding RequestNewSessionCommand}">
-                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <TextBlock Text="✎" FontSize="14" Foreground="#1F2328" />
-                    <TextBlock Text="新对话" FontSize="13" Foreground="#1F2328" FontWeight="SemiBold" />
-                </StackPanel>
-            </Button>
-
-            <!-- 搜索输入框 -->
-            <TextBox Grid.Row="1"
-                     Classes="sidebar-search"
-                     Margin="12,0,12,8"
-                     Padding="10,7"
-                     FontSize="12"
-                     Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                     PlaceholderText="搜索会话" />
-
-            <!-- 任务编排 -->
-            <Button Grid.Row="2"
-                    Classes="sidebar-task-graph"
-                    Margin="12,0,12,12"
-                    HorizontalAlignment="Stretch"
-                    HorizontalContentAlignment="Left"
-                    Command="{Binding RequestTaskGraphCommand}">
-                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <TextBlock Text="🧩" FontSize="14" />
-                    <TextBlock Text="任务编排" FontSize="12" Foreground="#40444B" />
-                </StackPanel>
-            </Button>
+            <!-- 新对话 / 搜索 / 任务编排 -->
+            <StackPanel Grid.Row="0" Margin="12,4,12,12" Spacing="4">
+                <Button Classes="sidebar-nav-entry"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Command="{Binding RequestNewSessionCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <TextBlock Text="✎" Classes="sidebar-nav-icon" />
+                        <TextBlock Text="新对话" Classes="sidebar-nav-text" />
+                    </StackPanel>
+                </Button>
+                <Button Classes="sidebar-nav-entry"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Command="{Binding OpenSearchOverlayCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <TextBlock Text="⌕" Classes="sidebar-nav-icon" />
+                        <TextBlock Text="搜索" Classes="sidebar-nav-text" />
+                    </StackPanel>
+                </Button>
+                <Button Classes="sidebar-nav-entry"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Command="{Binding RequestTaskGraphCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <TextBlock Text="◌" Classes="sidebar-nav-icon" />
+                        <TextBlock Text="插件" Classes="sidebar-nav-text" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
 
             <!-- 树: 项目 + 对话 -->
-            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="2">
 
                     <!-- 项目分类头 + 节点 -->
@@ -129,20 +125,27 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                        <TextBlock Text="尚未添加项目 — 悬停 “项目” 标题并点击 + 来添加"
-                                   Classes="sidebar-empty-hint" />
+                        <TextBlock Text="暂未添加项目"
+                                   Classes="sidebar-empty-hint"
+                                   IsVisible="{Binding !HasProjects}" />
                     </StackPanel>
 
                     <!-- 对话分类头 + 节点 (always shown, even when empty) -->
                     <StackPanel Margin="0,8,0,0">
-                        <Button Classes="sidebar-section-header"
+                        <Button x:Name="OrphansHeader"
+                                Classes="sidebar-section-header"
                                 HorizontalAlignment="Stretch"
-                                HorizontalContentAlignment="Left"
+                                HorizontalContentAlignment="Stretch"
                                 Click="OnOrphansHeaderClick">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <TextBlock Text="▾" Classes="sidebar-section-caret" />
-                                <TextBlock Text="对话" Classes="sidebar-section-label" />
-                            </StackPanel>
+                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                <TextBlock Grid.Column="0" Text="▾" Classes="sidebar-section-caret" />
+                                <TextBlock Grid.Column="1" Text="对话" Classes="sidebar-section-label" />
+                                <Button Grid.Column="2"
+                                        Classes="sidebar-section-action-btn"
+                                        Content="+"
+                                        Command="{Binding RequestNewSessionCommand}"
+                                        IsVisible="{Binding #OrphansHeader.IsPointerOver}" />
+                            </Grid>
                         </Button>
                         <ItemsControl ItemsSource="{Binding OrphanSessions}">
                             <ItemsControl.ItemTemplate>

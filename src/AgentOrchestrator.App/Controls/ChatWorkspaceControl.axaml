@@ -2,13 +2,14 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:AgentOrchestrator.App.ViewModels"
              xmlns:chat="using:AgentOrchestrator.App.Models.Chat"
-             xmlns:controls="using:AgentOrchestrator.App.Controls"
+              xmlns:controls="using:AgentOrchestrator.App.Controls"
+              xmlns:conv="using:Avalonia.Data.Converters"
              x:Class="AgentOrchestrator.App.Controls.ChatWorkspaceControl"
              x:Name="Root"
              x:DataType="vm:ChatWorkspaceViewModel">
     <Grid RowDefinitions="*,Auto" Background="#FFFFFF">
-        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding Messages}" Margin="38,22,38,16">
+        <ScrollViewer x:Name="MessagesScrollViewer" Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Messages}" Margin="38,18,38,16">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="vm:ChatMessageViewModel">
                         <Grid Margin="0,0,0,22">
@@ -19,7 +20,7 @@
                                     <ItemsControl ItemsSource="{Binding Blocks}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="vm:ChatBlockViewModel">
-                                                <StackPanel Spacing="8">
+                                                <StackPanel Margin="0,0,0,14">
                                                     <controls:MarkdownBlockControl IsVisible="{Binding IsText}" DataContext="{Binding}" />
                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsThought}" DataContext="{Binding}" />
                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsTool}" DataContext="{Binding}" />
@@ -43,7 +44,7 @@
                                     <ItemsControl ItemsSource="{Binding Blocks}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="vm:ChatBlockViewModel">
-                                                <StackPanel Spacing="8">
+                                                <StackPanel Margin="0,0,0,14">
                                                     <controls:MarkdownBlockControl IsVisible="{Binding IsText}" DataContext="{Binding}" />
                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsThought}" DataContext="{Binding}" />
                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsTool}" DataContext="{Binding}" />
@@ -72,8 +73,8 @@
                 Classes="composer-shell"
                 HorizontalAlignment="Stretch"
                 MaxWidth="900"
-                Margin="38,0,38,26">
-            <Grid RowDefinitions="Auto,Auto,Auto">
+                Margin="38,0,38,22">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto">
                 <ItemsControl Grid.Row="0"
                               ItemsSource="{Binding Attachments}"
                               IsVisible="{Binding HasAttachments}">
@@ -123,15 +124,15 @@
                 </ItemsControl>
 
                 <TextBox Grid.Row="1"
-                         Text="{Binding DraftText, Mode=TwoWay}"
-                         AcceptsReturn="True"
-                         TextWrapping="Wrap"
-                         BorderThickness="0"
-                         Background="Transparent"
-                         MinHeight="92"
-                         PlaceholderText="要求后续变更"
-                         KeyDown="OnDraftKeyDown"
-                         PastingFromClipboard="OnDraftPasting" />
+                          Text="{Binding DraftText, Mode=TwoWay}"
+                          AcceptsReturn="False"
+                          TextWrapping="Wrap"
+                          BorderThickness="0"
+                          Background="Transparent"
+                          MinHeight="64"
+                          PlaceholderText="要求后续变更"
+                          KeyDown="OnDraftKeyDown"
+                          PastingFromClipboard="OnDraftPasting" />
 
                 <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" VerticalAlignment="Center" Margin="0,12,0,0">
                     <Button Grid.Column="0" Classes="toolbar-icon-button" Command="{Binding AddAttachmentCommand}">
@@ -214,6 +215,14 @@
                         <TextBlock Text="↑" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="16" />
                     </Button>
                 </Grid>
+
+                <TextBlock Grid.Row="3"
+                           Text="{Binding StatusMessage}"
+                           IsVisible="{Binding StatusMessage, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
+                           FontSize="12"
+                           Foreground="#8A1F1F"
+                           Margin="4,8,4,0"
+                           TextWrapping="Wrap" />
             </Grid>
         </Border>
     </Grid>
