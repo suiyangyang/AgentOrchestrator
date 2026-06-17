@@ -82,6 +82,9 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     [ObservableProperty]
     private string? _statusMessage;
 
+    [ObservableProperty]
+    private string _headerTitle = "新对话";
+
     public bool HasAttachments => Attachments.Count > 0;
     public bool IsBlankPage => CurrentSessionId is null && Messages.Count == 0;
 
@@ -109,6 +112,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
         CurrentSessionId = record.SessionId;
         CurrentAgentSessionId = record.AgentSessionId;
+        HeaderTitle = string.IsNullOrWhiteSpace(record.Title) ? "新对话" : record.Title;
         Messages.Clear();
         StatusMessage = "正在加载历史…";
 
@@ -141,6 +145,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
         CurrentSessionId = null;
         CurrentAgentSessionId = null;
+        HeaderTitle = "新对话";
         Messages.Clear();
         StatusMessage = null;
 
@@ -201,6 +206,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                 var record = await CreateSessionForFirstMessageAsync(workingDir, ct).ConfigureAwait(true);
                 CurrentSessionId = record.SessionId;
                 CurrentAgentSessionId = record.AgentSessionId;
+                HeaderTitle = record.Title;
                 _sidebar.AddOrUpdateSession(record);
                 OnPropertyChanged(nameof(IsBlankPage));
             }
@@ -308,6 +314,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             if (newTitle == "新对话") return;
 
             _sidebar.UpdateSessionTitle(CurrentSessionId, newTitle);
+            HeaderTitle = newTitle;
             var existing = await _repo.GetSessionAsync(CurrentSessionId, ct).ConfigureAwait(true);
             if (existing is not null)
             {
@@ -323,46 +330,72 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
     private void ApplyChunk(ChatMessageViewModel assistant, ChatStreamChunk chunk)
     {
-        // Find the latest block of the matching kind, or create one.
-        var block = assistant.Blocks.LastOrDefault(b => b.Kind == chunk.Kind);
-        if (block is null)
+        var block = assistant.Blocks.LastOrDefault();
+        if (block is null || !CanAppendToBlock(block, chunk))
         {
-            block = chunk.Kind switch
-            {
-                ChatBlockKind.Text => new ChatBlockViewModel(ChatBlockKind.Text, string.Empty),
-                ChatBlockKind.Thought => new ChatBlockViewModel(ChatBlockKind.Thought, string.Empty, isExpanded: false),
-                ChatBlockKind.Tool => new ChatBlockViewModel("tool", ToolState.Running, string.Empty, isExpanded: false),
-                ChatBlockKind.Image => new ChatBlockViewModel(ChatBlockKind.Image, chunk.Content),
-                _ => null,
-            };
+            block = CreateBlockForChunk(chunk);
             if (block is null) return;
             assistant.Blocks.Add(block);
         }
+
+        var index = assistant.Blocks.IndexOf(block);
+        if (index < 0) return;
 
         switch (chunk.Kind)
         {
             case ChatBlockKind.Text:
             case ChatBlockKind.Thought:
+                if (!string.IsNullOrEmpty(chunk.Content))
+                {
+                    var combined = (block.Text ?? string.Empty) + chunk.Content;
+                    assistant.Blocks[index] = new ChatBlockViewModel(block.Kind, combined, isExpanded: block.IsExpanded);
+                }
+                break;
+
             case ChatBlockKind.Image:
                 if (!string.IsNullOrEmpty(chunk.Content))
                 {
-                    // Text/Thought are immutable strings; replace by adding a new block
-                    // to keep CommunityToolkit happy (string is init-only).
-                    var combined = (block.Text ?? string.Empty) + chunk.Content;
-                    var index = assistant.Blocks.IndexOf(block);
-                    assistant.Blocks[index] = new ChatBlockViewModel(block.Kind, combined, isExpanded: false);
+                    assistant.Blocks[index] = new ChatBlockViewModel(ChatBlockKind.Image, chunk.Content, isExpanded: block.IsExpanded);
                 }
                 break;
 
             case ChatBlockKind.Tool:
                 {
-                    // Tool blocks carry state changes; replace the block to keep VM in sync.
                     var (toolName, toolState, toolOutput) = ParseToolChunk(block, chunk);
-                    var index = assistant.Blocks.IndexOf(block);
-                    assistant.Blocks[index] = new ChatBlockViewModel(toolName, toolState, toolOutput, isExpanded: false);
+                    assistant.Blocks[index] = new ChatBlockViewModel(toolName, toolState, toolOutput, isExpanded: block.IsExpanded);
                 }
                 break;
         }
+    }
+
+    private static ChatBlockViewModel? CreateBlockForChunk(ChatStreamChunk chunk)
+    {
+        return chunk.Kind switch
+        {
+            ChatBlockKind.Text => new ChatBlockViewModel(ChatBlockKind.Text, string.Empty),
+            ChatBlockKind.Thought => new ChatBlockViewModel(ChatBlockKind.Thought, string.Empty, isExpanded: false),
+            ChatBlockKind.Tool => new ChatBlockViewModel(ExtractToolNameFromChunk(chunk.Content), ToolState.Running, string.Empty, isExpanded: false),
+            ChatBlockKind.Image => new ChatBlockViewModel(ChatBlockKind.Image, chunk.Content),
+            _ => null,
+        };
+    }
+
+    private static bool CanAppendToBlock(ChatBlockViewModel block, ChatStreamChunk chunk)
+    {
+        if (block.Kind != chunk.Kind)
+        {
+            return false;
+        }
+
+        if (chunk.Kind != ChatBlockKind.Tool)
+        {
+            return true;
+        }
+
+        return string.Equals(
+            block.ToolName ?? string.Empty,
+            ExtractToolNameFromChunk(chunk.Content),
+            StringComparison.Ordinal);
     }
 
     private static (string name, ToolState state, string? output) ParseToolChunk(ChatBlockViewModel block, ChatStreamChunk chunk)
@@ -398,6 +431,29 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     {
         var nl = content.IndexOf('\n');
         return (nl > 0 ? content[..nl] : content).Trim();
+    }
+
+    private static string ExtractToolNameFromChunk(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return "tool";
+        }
+
+        if (content.StartsWith("[", StringComparison.Ordinal))
+        {
+            var rb = content.IndexOf(']');
+            if (rb > 0)
+            {
+                var rest = content[(rb + 1)..].TrimStart('\n', ' ');
+                var nl = rest.IndexOf('\n');
+                var name = nl > 0 ? rest[..nl] : rest;
+                return string.IsNullOrWhiteSpace(name) ? "tool" : name.Trim();
+            }
+        }
+
+        var fallback = ExtractToolName(content);
+        return string.IsNullOrWhiteSpace(fallback) ? "tool" : fallback;
     }
 
     private static ChatMessageViewModel MapRemoteMessage(RemoteMessage msg)

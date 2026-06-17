@@ -29,18 +29,34 @@ public sealed partial class SidebarViewModel : ViewModelBase
     private readonly Dictionary<string, SidebarProjectViewModel> _projectsById = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SidebarSessionViewModel> _sessionsById = new(StringComparer.Ordinal);
     private readonly ObservableCollection<SidebarSessionViewModel> _orphanSessions = [];
-    private CancellationTokenSource? _searchDebounce;
 
     public SidebarViewModel(ISidebarRepository repo)
     {
         _repo = repo;
+        Projects.CollectionChanged += (s, e) =>
+        {
+            if (e.Action is System.Collections.Specialized.NotifyCollectionChangedAction
+                    .Add or System.Collections.Specialized.NotifyCollectionChangedAction.Remove
+                    or System.Collections.Specialized.NotifyCollectionChangedAction.Reset
+                    or System.Collections.Specialized.NotifyCollectionChangedAction.Replace)
+            {
+                OnPropertyChanged(nameof(HasProjects));
+            }
+        };
     }
 
     public ObservableCollection<SidebarProjectViewModel> Projects { get; } = [];
     public ObservableCollection<SidebarSessionViewModel> OrphanSessions => _orphanSessions;
+    public ObservableCollection<SidebarSessionViewModel> SearchResults { get; } = [];
+
+    public bool HasProjects => Projects.Count > 0;
+    public bool HasSearchResults => SearchResults.Count > 0;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
+
+    [ObservableProperty]
+    private bool _isSearchOverlayVisible;
 
     /// <summary>Currently focused project (or null = no project selected / orphan chat).</summary>
     [ObservableProperty]
@@ -88,7 +104,7 @@ public sealed partial class SidebarViewModel : ViewModelBase
             AddSessionToTree(new SidebarSessionViewModel(s));
         }
 
-        ApplyFilter();
+        RefreshSearchResults();
     }
 
     public void AddOrUpdateSession(SessionRecord record)
@@ -99,7 +115,7 @@ public sealed partial class SidebarViewModel : ViewModelBase
             return;
         }
         AddSessionToTree(new SidebarSessionViewModel(record));
-        ApplyFilter();
+        RefreshSearchResults();
     }
 
     public void UpdateSessionTitle(string sessionId, string newTitle)
@@ -107,6 +123,7 @@ public sealed partial class SidebarViewModel : ViewModelBase
         if (_sessionsById.TryGetValue(sessionId, out var vm))
         {
             vm.Title = newTitle;
+            RefreshSearchResults();
         }
     }
 
@@ -163,6 +180,7 @@ public sealed partial class SidebarViewModel : ViewModelBase
             }
         }
         await _repo.DeleteSessionAsync(sessionId, ct).ConfigureAwait(true);
+        RefreshSearchResults();
     }
 
     /// <summary>Sets the focused project (used by the chat VM when it picks a project).</summary>
@@ -238,6 +256,21 @@ public sealed partial class SidebarViewModel : ViewModelBase
     private void RequestTaskGraph() => TaskGraphRequested?.Invoke(this, EventArgs.Empty);
 
     [RelayCommand]
+    private void OpenSearchOverlay()
+    {
+        IsSearchOverlayVisible = true;
+        RefreshSearchResults();
+    }
+
+    [RelayCommand]
+    private void CloseSearchOverlay()
+    {
+        IsSearchOverlayVisible = false;
+        SearchText = string.Empty;
+        RefreshSearchResults();
+    }
+
+    [RelayCommand]
     private void RequestAddProject() => AddProjectRequested?.Invoke(this, EventArgs.Empty);
 
     [RelayCommand]
@@ -279,51 +312,24 @@ public sealed partial class SidebarViewModel : ViewModelBase
 
     partial void OnSearchTextChanged(string value)
     {
-        _searchDebounce?.Cancel();
-        _searchDebounce = new CancellationTokenSource();
-        var token = _searchDebounce.Token;
-        _ = Task.Delay(200, token).ContinueWith(t =>
-        {
-            if (t.IsCanceled) return;
-            Avalonia.Threading.Dispatcher.UIThread.Post(ApplyFilter);
-        }, TaskScheduler.Default);
+        RefreshSearchResults();
     }
 
-    private void ApplyFilter()
+    private void RefreshSearchResults()
     {
+        SearchResults.Clear();
+
         var query = (SearchText ?? string.Empty).Trim();
-        if (query.Length == 0)
+        var sessions = _sessionsById.Values
+            .OrderByDescending(s => s.Record.CreatedAt)
+            .Where(s => query.Length == 0 || s.Title.Contains(query, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var session in sessions)
         {
-            foreach (var p in Projects)
-            {
-                p.IsExpanded = true;
-                foreach (var s in p.Sessions) s.IsSelected = false;
-            }
-            return;
+            SearchResults.Add(session);
         }
 
-        var hitSessionIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var p in Projects)
-        {
-            var anyHit = false;
-            foreach (var s in p.Sessions)
-            {
-                if (s.Title.Contains(query, StringComparison.OrdinalIgnoreCase))
-                {
-                    hitSessionIds.Add(s.SessionId);
-                    anyHit = true;
-                }
-            }
-            p.IsExpanded = anyHit;
-        }
-
-        foreach (var s in _orphanSessions)
-        {
-            if (s.Title.Contains(query, StringComparison.OrdinalIgnoreCase))
-            {
-                hitSessionIds.Add(s.SessionId);
-            }
-        }
+        OnPropertyChanged(nameof(HasSearchResults));
     }
 }
 

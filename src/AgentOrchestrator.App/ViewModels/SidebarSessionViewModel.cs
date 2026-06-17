@@ -15,6 +15,7 @@ public sealed class SidebarSessionViewModel : INotifyPropertyChanged
     public SidebarSessionViewModel(SessionRecord record)
     {
         Record = record;
+        _title = string.IsNullOrWhiteSpace(record.Title) ? "新对话" : record.Title;
     }
 
     public SessionRecord Record { get; }
@@ -53,7 +54,7 @@ public sealed class SidebarSessionViewModel : INotifyPropertyChanged
     public void UpdateRecord(SessionRecord record)
     {
         // Refresh the underlying record (title sync, etc.) without changing identity.
-        Title = record.Title;
+        Title = string.IsNullOrWhiteSpace(record.Title) ? "新对话" : record.Title;
         OnPropertyChanged(nameof(DisplayRelativeTime));
     }
 
