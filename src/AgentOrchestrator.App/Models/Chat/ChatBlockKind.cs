@@ -5,5 +5,6 @@ public enum ChatBlockKind
     Text,
     Thought,
     Image,
-    Tool
+    Tool,
+    Task
 }

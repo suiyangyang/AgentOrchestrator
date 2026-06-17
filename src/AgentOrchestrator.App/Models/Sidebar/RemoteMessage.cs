@@ -16,6 +16,7 @@ public sealed record RemoteMessage(
 
 public sealed record RemoteBlock(
     ChatBlockKind Kind,
+    string? PartId = null,
     string? Text = null,
     string? ToolName = null,
     ToolState? ToolState = null,
