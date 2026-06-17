@@ -30,8 +30,8 @@
 - `ChatWorkspaceViewModel` manages messages, attachments, permissions,
   draft input, header title, subagent activity, and the full session lifecycle (new / open / send /
   stream) via `IAgentGateway` and `ISidebarRepository`
-- 输入区主按钮会根据当前草稿状态在“发送”和“停止”之间切换：
-  有草稿时继续发送，无草稿且正在流式回复时取消本次发送
+- 输入区主按钮会根据当前草稿状态在“发送”和“停止”之间切换；
+  发送过程中按钮仍保持可用，这样既能取消当前回复，也能继续把新草稿加入队列
 - 当流式回复尚未结束时，新的发送请求会先进入输入区上方的可见队列，
   当前回复完成后按顺序自动续发；队列项支持回填到输入框继续编辑或直接移除
 - Assistant 流式消息在收尾同步远端历史时，必须以按 `partId`
@@ -40,8 +40,16 @@
   折叠块，而重新打开会话后又恢复
 - `OpenCodeAgentGateway.SendMessageAsync` 必须在触发
   `prompt_async` 后立即持续消费 SSE 事件，不能等待 HTTP 调用完整结束后再开始读流；
-  文本 part 的 `<think>` / `</think>` 需要按累计文本渐进拆块，这样 UI 才能在
+  `OpenCode.Client` 还必须识别 `message.part.delta`，因为
+  `message.part.updated` 只保证快照更新，真正驱动正文 / thinking /
+  tool 输入流式刷新的增量事件是 `message.part.delta`
+  文本 part 的 `<think>` / `</think>` 以及 `<thinking>` / `</thinking>` 需要按累计文本渐进拆块，这样 UI 才能在
   thinking 打开时先创建折叠块，并继续向其中追加内容
+- OpenCode 的 thinking 还可能直接以 `reasoning` part 流出；
+  这类 delta 不能再走普通文本拆块，否则会被误归到正文 `Text`，必须稳定映射到 `Thought`
+- OpenCode 父会话里的任务活动当前真实表现为 `tool = "task"` 的 `ToolPart`，
+  不是独立的 `subtask` 可视块；聊天区需要把它映射成专门的 `Task` 折叠块，
+  否则实时流和历史加载都会把任务内容埋进普通 Tool 文本
 - `SidebarViewModel` owns the project + session tree, the search
   overlay state, search result list, current-project focus, and the
   per-row "..." actions
@@ -49,6 +57,12 @@
   right sidebars; the center column contains a fixed header area that
   spans the workspace and right sidebar top edge, plus the active
   workspace body
+- 右侧 `Subagent` 区域使用固定高度卡片展示子会话活动；卡片正文按
+  Markdown 渲染并支持内部滚动，默认高度为 `400`，展示该子会话的完整信息汇总，
+  而不是仅显示最后一条消息；底部显示 `Agent 名称 · Model 名称 · 耗时`；
+  卡片整体字体族使用 `Consolas, Microsoft YaHei UI, Microsoft YaHei, SimHei`，
+  卡片标题 / 状态 / 正文 / 底部元信息基础字号为 `12`，Markdown 标题保留分级字号；
+  当 subagent 内容字段刷新时，卡片内部滚动条会自动贴到底部
 - `ChatWorkspaceControl` adds a fixed header strip inside the chat
   workspace for task orchestration and subagent activity
 - `SettingsWindow.axaml` is a fixed-size settings dialog

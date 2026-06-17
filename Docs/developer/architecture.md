@@ -36,18 +36,27 @@
   filters the current sessions by title; selecting a result opens that
   session and closes the overlay
 - `ChatWorkspaceControl` is the main chat surface (fixed top header strip + message list + composer)
+- 右侧 `Subagent` 卡片是双层滚动结构：外层面板负责整个右栏滚动，
+  卡片内部 `ScrollViewer` 负责 400px 固定高度正文的 Markdown 浏览；
+  子会话内容由消息序列聚合成完整 Markdown 摘要，不再只取最后一条预览；
+  卡片不显示标题或运行状态文本；当 `Content` 更新时卡片内部自动滚动到底部
 - Assistant messages show a left-side loading placeholder immediately
   after send; the placeholder is replaced by normal blocks when the first
   streamed block arrives
 - The composer primary button switches between send and stop based on
-  whether the draft box currently has content; when a response is still
-  streaming and the draft box is empty, the same button cancels the send
+  whether the draft box currently has content; it stays enabled while a
+  response is streaming so the same control can cancel the send or queue
+  the next draft
 - While a response is streaming, additional composer submissions are
   added to a visible queue above the input and are sent automatically in
   order after the current response finishes
 - Streamed chat blocks are created as soon as the first block header is
   detected, then their text/tool body is updated in place as later stream
   chunks arrive
+- OpenCode part 到聊天块的当前映射规则包含三条特殊路径：
+  `text` part 中的 `<think>` / `<thinking>` 标签拆成 `Thought` 块，
+  `reasoning` part 直接映射成 `Thought` 块，
+  `tool = "task"` 的 `ToolPart` 映射成 `Task` 块而不是普通 `Tool`
 - `TaskGraphWorkspaceControl` is a placeholder until the TaskGraph plan
   ships; v1 shows a fixed "coming soon" page
 - `SettingsWindow` is a separate dialog
@@ -106,6 +115,10 @@ View ── ViewModel ── IAgentGateway / ISidebarRepository
   ToolState into the chat-block vocabulary, routes SSE events into
   streaming `ChatStreamChunk` envelopes, and queries child sessions plus
   session status for subagent activity snapshots
+- 流式正文 / Thinking 的真实来源不是只看 `message.part.updated`
+  快照；`OpenCode.Client` 需要把 `message.part.delta` 也反序列化出来，
+  `OpenCodeAgentGateway` 再按 `partID` 将 delta 追加到现有块，
+  否则聊天区会退化成“整块完成后才一起出现”
 - `ChatWorkspaceViewModel` does a final `GetMessagesAsync` reconciliation
   after a send stream completes so tool blocks reflect the server's
   terminal state even when the last SSE tool update was only `running`
