@@ -29,6 +29,7 @@
                                                     <controls:MarkdownBlockControl IsVisible="{Binding IsText}" DataContext="{Binding}" />
                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsThought}" DataContext="{Binding}" />
                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsTool}" DataContext="{Binding}" />
+                                                    <controls:CollapsibleBlockControl IsVisible="{Binding IsTask}" DataContext="{Binding}" />
                                                     <Border Classes="inline-attachment"
                                                             IsVisible="{Binding IsImage}">
                                                         <StackPanel Orientation="Horizontal" Spacing="10">
@@ -56,6 +57,10 @@
                                                    Classes="assistant-loading-text"
                                                    VerticalAlignment="Center" />
                                     </StackPanel>
+                                    <TextBlock Text="{Binding StreamingStatusText}"
+                                               IsVisible="{Binding StreamingStatusText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
+                                               Classes="assistant-loading-text"
+                                               VerticalAlignment="Center" />
                                     <ItemsControl ItemsSource="{Binding Blocks}">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
@@ -68,6 +73,7 @@
                                                     <controls:MarkdownBlockControl IsVisible="{Binding IsText}" DataContext="{Binding}" />
                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsThought}" DataContext="{Binding}" />
                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsTool}" DataContext="{Binding}" />
+                                                    <controls:CollapsibleBlockControl IsVisible="{Binding IsTask}" DataContext="{Binding}" />
                                                     <Border Classes="inline-attachment"
                                                             IsVisible="{Binding IsImage}">
                                                         <StackPanel Orientation="Horizontal" Spacing="10">
@@ -266,7 +272,7 @@
                     </Popup>
 
                     <Button Grid.Column="5" Classes="send-circle-button" Command="{Binding PrimaryActionCommand}">
-                        <Grid Width="34" Height="34">
+                        <Grid Width="30" Height="30">
                             <Path Classes="composer-send-icon"
                                   IsVisible="{Binding ShowSendButton}" />
                             <Border Classes="composer-stop-icon"
@@ -275,13 +281,6 @@
                     </Button>
                 </Grid>
 
-                <TextBlock Grid.Row="4"
-                           Text="{Binding StatusMessage}"
-                           IsVisible="{Binding StatusMessage, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
-                           FontSize="12"
-                           Foreground="#8A1F1F"
-                           Margin="4,8,4,0"
-                           TextWrapping="Wrap" />
             </Grid>
         </Border>
     </Grid>

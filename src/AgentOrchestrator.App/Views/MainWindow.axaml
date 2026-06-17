@@ -66,12 +66,18 @@
             </Border>
 
             <Border Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Classes="workspace-header">
-                <Grid ColumnDefinitions="*,Auto">
+                <Grid ColumnDefinitions="*,Auto,Auto">
                     <TextBlock Grid.Column="0"
                                Text="{Binding ActiveWorkspaceTitle}"
                                Classes="workspace-header-title"
                                TextTrimming="CharacterEllipsis" />
-                    <Button Grid.Column="1"
+                    <ToggleButton Grid.Column="1"
+                                  Classes="workspace-header-action task-orchestration-toggle"
+                                  ToolTip.Tip="显示/隐藏任务编排"
+                                  IsChecked="{Binding IsTaskOrchestrationVisible, Mode=TwoWay}"
+                                  Content="编"
+                                  Margin="0,0,8,0" />
+                    <Button Grid.Column="2"
                             Classes="workspace-header-action"
                             Click="OnRightSidebarToggleButtonClick"
                             ToolTip.Tip="显示/隐藏右侧边栏"
@@ -83,17 +89,44 @@
 
             <Grid Grid.Row="1" Grid.Column="2" Background="#FBFBFC" IsVisible="{Binding IsRightSidebarVisible}">
                 <Border BorderBrush="#E2E5EA" BorderThickness="1,0,0,0" />
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
-                    <TextBlock Text="右侧边栏"
-                               Foreground="#6E727A"
-                               FontSize="13"
-                               FontWeight="SemiBold"
-                               HorizontalAlignment="Center" />
-                    <TextBlock Text="暂未添加内容"
-                               Foreground="#9096A0"
-                               FontSize="11"
-                               HorizontalAlignment="Center" />
-                </StackPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="16,16,24,16" Spacing="14">
+                        <StackPanel Spacing="10"
+                                    IsVisible="{Binding IsTaskOrchestrationVisible}">
+                            <TextBlock Text="任务编排"
+                                       Classes="right-panel-title" />
+
+                            <Border Classes="right-panel-placeholder">
+                                <TextBlock Text="占位中"
+                                           Classes="right-panel-placeholder-text"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Border>
+                        </StackPanel>
+
+                        <TextBlock Text="Subagent"
+                                   Classes="right-panel-section-title" />
+
+                        <ItemsControl ItemsSource="{Binding Chat.SubagentActivities}"
+                                      IsVisible="{Binding Chat.HasSubagentActivities}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="8" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:SubagentActivityViewModel">
+                                    <controls:SubagentActivityCardControl />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="当前对话还没有 subagent 消息"
+                                   Classes="right-panel-empty"
+                                   IsVisible="{Binding !Chat.HasSubagentActivities}" />
+                    </StackPanel>
+                </ScrollViewer>
             </Grid>
 
             <GridSplitter Grid.RowSpan="2"
