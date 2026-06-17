@@ -118,6 +118,7 @@ namespace OpenCode.Client.Internal.Json;
 [JsonSerializable(typeof(EventPtyExited))]
 [JsonSerializable(typeof(EventPtyDeleted))]
 [JsonSerializable(typeof(EventServerConnected))]
+[JsonSerializable(typeof(EventUnknown))]
 
 // Other models
 [JsonSerializable(typeof(Todo[]))]

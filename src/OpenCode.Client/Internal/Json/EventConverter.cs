@@ -55,7 +55,7 @@ public sealed class EventConverter : JsonConverter<ServerEvent>
             EventTypeConstants.PtyExited => typeof(EventPtyExited),
             EventTypeConstants.PtyDeleted => typeof(EventPtyDeleted),
             EventTypeConstants.ServerConnected => typeof(EventServerConnected),
-            _ => throw new JsonException($"Unknown event type: {type}"),
+            _ => typeof(EventUnknown),
         };
 
         return (ServerEvent?)JsonSerializer.Deserialize(json, targetType, options);

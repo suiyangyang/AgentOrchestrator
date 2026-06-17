@@ -377,3 +377,14 @@ public sealed record EventServerConnected : ServerEvent
     public override string Type { get; init; } = EventTypeConstants.ServerConnected;
     public required IReadOnlyDictionary<string, JsonElement> Properties { get; init; }
 }
+
+/// <summary>
+/// Fallback for events whose discriminator is not in the whitelist. Keeps the
+/// SSE stream alive when the server emits new event types we don't classify.
+/// The raw payload is preserved in <see cref="Properties"/> for diagnostics.
+/// </summary>
+public sealed record EventUnknown : ServerEvent
+{
+    public override string Type { get; init; } = "";
+    public required IReadOnlyDictionary<string, JsonElement> Properties { get; init; }
+}
