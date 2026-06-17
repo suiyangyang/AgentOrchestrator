@@ -24,12 +24,19 @@
   It is also the only place that knows about dialogs (folder picker,
   rename, remove-confirm) — the sidebar raises events and the shell
   handles them.
+- `MainWindowViewModel` also owns left/right sidebar visible state and
+  widths, so the shell can toggle and resize both sidebars without
+  leaking layout state into child workspaces
 - `ChatWorkspaceViewModel` manages messages, attachments, permissions,
-  draft input, and the full session lifecycle (new / open / send /
+  draft input, header title, and the full session lifecycle (new / open / send /
   stream) via `IAgentGateway` and `ISidebarRepository`
 - `SidebarViewModel` owns the project + session tree, the search
-  filter, the current-project focus, and the per-row "..." actions
-- `MainWindow.axaml` hosts a 2-column grid (sidebar | active workspace)
+  overlay state, search result list, current-project focus, and the
+  per-row "..." actions
+- `MainWindow.axaml` hosts a 3-column shell with resizable left and
+  right sidebars; the center column contains a fixed header area that
+  spans the workspace and right sidebar top edge, plus the active
+  workspace body
 - `SettingsWindow.axaml` is a fixed-size settings dialog
 
 ## Binding And Styling

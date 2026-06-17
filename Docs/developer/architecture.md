@@ -17,16 +17,24 @@
 ## UI
 
 - `MainWindow` is the shell
-- `MainWindow` hosts a 2-column grid: `SidebarControl` (240px) + a
-  `ContentControl` bound to `MainWindowViewModel.ActiveWorkspace`
+- `MainWindow` hosts a 3-column grid: left sidebar (resizable, can be
+  hidden) + center workspace + right sidebar (resizable, can be hidden)
+- The center workspace header spans the chat area and the right sidebar
+  top edge; it shows the active workspace title and a toggle for the
+  right sidebar
 - `ActiveWorkspace` switches between `ChatWorkspaceViewModel` and
   `TaskGraphWorkspaceViewModel`. Workspace VMs are resolved to their
   control via **explicit DataTemplates** in `App.axaml` — the
   `ViewLocator`'s "ViewModel" → "View" rename does not match the
   project's "Control" naming convention, so the templates are
   declared by hand to keep the rule out of the way.
-- `SidebarControl` is the project + session tree, the search box, the
-  新对话 / 任务编排 buttons, and the per-row hover-revealed actions
+- `SidebarControl` is the project + session tree, the icon+text
+  新对话 / 搜索 / 插件 buttons, and the per-row hover-revealed actions
+- The left sidebar toggle sits in the custom title bar, and the right
+  sidebar toggle sits in the center workspace header
+- Search opens as a centered modal overlay with a dimmed backdrop and
+  filters the current sessions by title; selecting a result opens that
+  session and closes the overlay
 - `ChatWorkspaceControl` is the main chat surface (message list + composer)
 - `TaskGraphWorkspaceControl` is a placeholder until the TaskGraph plan
   ships; v1 shows a fixed "coming soon" page
