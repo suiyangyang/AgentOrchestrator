@@ -1,0 +1,98 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Styles.Resources>
+        <SolidColorBrush x:Key="TextPrimaryBrush">#1C1C1E</SolidColorBrush>
+        <SolidColorBrush x:Key="TextSecondaryBrush">#6E6E73</SolidColorBrush>
+        <SolidColorBrush x:Key="AccentBrush">#007AFF</SolidColorBrush>
+        <SolidColorBrush x:Key="DangerBrush">#FF3B30</SolidColorBrush>
+        <SolidColorBrush x:Key="DividerBrush">#E5E7EB</SolidColorBrush>
+    </Styles.Resources>
+
+    <!-- ===== Custom Title Bar (NoChrome) ===== -->
+
+    <!-- Title bar container: native-like, subtle depth, bottom divider -->
+    <Style Selector="Border.custom-title-bar">
+        <Setter Property="Background" Value="#F9F9FB" />
+        <Setter Property="Padding" Value="12,0,0,0" />
+        <Setter Property="BorderBrush" Value="#D8D8DE" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+    </Style>
+
+    <!-- Title text on the left side -->
+    <Style Selector="TextBlock.title-bar-text">
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Standard title bar button (settings, minimize, maximize/restore) -->
+    <Style Selector="Button.title-bar-btn">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+        <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="Width" Value="44" />
+        <Setter Property="Height" Value="30" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0" />
+    </Style>
+
+    <Style Selector="Button.title-bar-btn:pointerover">
+        <Setter Property="Background" Value="#EEF0F4" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="Button.title-bar-btn:pressed">
+        <Setter Property="Background" Value="#DEE0E6" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="Button.title-bar-btn:focus-visible">
+        <Setter Property="Background" Value="#EEF0F4" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+        <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+
+    <!-- Close button: vivid red on hover (Win11-style), full-height flush button -->
+    <Style Selector="Button.title-bar-btn-close">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+        <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="Width" Value="44" />
+        <Setter Property="Height" Value="30" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0" />
+    </Style>
+
+    <Style Selector="Button.title-bar-btn-close:pointerover">
+        <Setter Property="Background" Value="#FF1717" />
+        <Setter Property="Foreground" Value="White" />
+    </Style>
+
+    <Style Selector="Button.title-bar-btn-close:pressed">
+        <Setter Property="Background" Value="#DC2626" />
+        <Setter Property="Foreground" Value="White" />
+    </Style>
+
+    <Style Selector="Button.title-bar-btn-close:focus-visible">
+        <Setter Property="Background" Value="#FF1717" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="BorderBrush" Value="{StaticResource DangerBrush}" />
+        <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+
+</Styles>

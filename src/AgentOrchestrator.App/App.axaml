@@ -11,10 +11,7 @@
     </Application.Resources>
 
     <Application.DataTemplates>
-        <local:ViewLocator />
-        <!-- Explicit DataTemplates: the ViewLocator's "ViewModel" -> "View" rule
-             doesn't match the project's "Control" naming convention, so map
-             the workspace VMs to their concrete controls here. -->
+        <!-- Explicit DataTemplates: the workspace VMs mapped to their concrete controls. -->
         <DataTemplate DataType="vm:ChatWorkspaceViewModel">
             <controls:ChatWorkspaceControl />
         </DataTemplate>
@@ -25,6 +22,8 @@
 
     <Application.Styles>
         <FluentTheme />
+        <StyleInclude Source="avares://AgentOrchestrator.App/Styles/IosTitleBar.axaml" />
+        <StyleInclude Source="avares://AgentOrchestrator.App/Styles/IosTitleBar.axaml" />
 
         <!-- ============================================================ -->
         <!-- Typography tokens                                             -->
@@ -307,7 +306,7 @@
         <Style Selector="ToggleButton.collapsible-block">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Padding" Value="6,5" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="HorizontalAlignment" Value="Left" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
@@ -357,16 +356,21 @@
         </Style>
         <Style Selector="Path.collapsible-block-icon">
             <Setter Property="Stroke" Value="#7B8088" />
-            <Setter Property="StrokeThickness" Value="1.25" />
+            <Setter Property="StrokeThickness" Value="1.1" />
+            <Setter Property="Fill" Value="Transparent" />
             <Setter Property="StrokeLineCap" Value="Round" />
             <Setter Property="StrokeJoin" Value="Round" />
             <Setter Property="Width" Value="14" />
-            <Setter Property="Height" Value="14" />
+            <Setter Property="Height" Value="16" />
             <Setter Property="Stretch" Value="Uniform" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style Selector="Path.collapsible-block-icon-thought">
-            <Setter Property="Data" Value="M 7,2.5 C 4.5,2.5 2.5,4.5 2.5,7 C 2.5,8.6 3.3,10 4.6,10.8 L 4.6,12.5 C 4.6,12.8 4.8,13 5.1,13 L 8.9,13 C 9.2,13 9.4,12.8 9.4,12.5 L 9.4,10.8 C 10.7,10 11.5,8.6 11.5,7 C 11.5,4.5 9.5,2.5 7,2.5 Z M 5.6,14 L 8.4,14" />
+            <Setter Property="StrokeThickness" Value="0" />
+            <Setter Property="Fill" Value="#7B8088" />
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="Data" Value="M14.949 6.547a3.94 3.94 0 0 0-.348-3.273 4.11 4.11 0 0 0-4.4-1.934A4.1 4.1 0 0 0 8.423.2 4.15 4.15 0 0 0 6.305.086a4.1 4.1 0 0 0-1.891.948 4.04 4.04 0 0 0-1.158 1.753 4.1 4.1 0 0 0-1.563.679A4 4 0 0 0 .554 4.72a3.99 3.99 0 0 0 .502 4.731 3.94 3.94 0 0 0 .346 3.274 4.11 4.11 0 0 0 4.402 1.933c.382.425.852.764 1.377.995.526.231 1.095.35 1.67.346 1.78.002 3.358-1.132 3.901-2.804a4.1 4.1 0 0 0 1.563-.68 4 4 0 0 0 1.14-1.253 3.99 3.99 0 0 0-.506-4.716m-6.097 8.406a3.05 3.05 0 0 1-1.945-.694l.096-.054 3.23-1.838a.53.53 0 0 0 .265-.455v-4.49l1.366.778q.02.011.025.035v3.722c-.003 1.653-1.361 2.992-3.037 2.996m-6.53-2.75a2.95 2.95 0 0 1-.36-2.01l.095.057L5.29 12.09a.53.53 0 0 0 .527 0l3.949-2.246v1.555a.05.05 0 0 1-.022.041L6.473 13.3c-1.454.826-3.311.335-4.15-1.098m-.85-6.94A3.02 3.02 0 0 1 3.07 3.949v3.785a.51.51 0 0 0 .262.451l3.93 2.237-1.366.779a.05.05 0 0 1-.048 0L2.585 9.342a2.98 2.98 0 0 1-1.113-4.094zm11.216 2.571L8.747 5.576l1.362-.776a.05.05 0 0 1 .048 0l3.265 1.86a3 3 0 0 1 1.173 1.207 2.96 2.96 0 0 1-.27 3.2 3.05 3.05 0 0 1-1.36.997V8.279a.52.52 0 0 0-.276-.445m1.36-2.015-.097-.057-3.226-1.855a.53.53 0 0 0-.53 0L6.249 6.153V4.598a.04.04 0 0 1 .019-.04L9.533 2.7a3.07 3.07 0 0 1 3.257.139c.474.325.843.778 1.066 1.303.223.526.289 1.103.191 1.664zM5.503 8.575 4.139 7.8a.05.05 0 0 1-.026-.037V4.049c0-.57.166-1.127.476-1.607s.752-.864 1.275-1.105a3.08 3.08 0 0 1 3.234.41l-.096.054-3.23 1.838a.53.53 0 0 0-.265.455zm.742-1.577 1.758-1 1.762 1v2l-1.755 1-1.762-1z" />
         </Style>
         <Style Selector="Path.collapsible-block-icon-tool">
             <Setter Property="Data" Value="M 12.7,2 C 11.2,2 9.8,2.7 9,3.9 C 8.2,5.1 8.2,6.6 8.8,7.8 L 2.7,13.9 C 2.3,14.3 2.3,14.9 2.7,15.3 L 4,16.6 C 4.4,17 5,17 5.4,16.6 L 11.4,10.5 C 12.6,11.1 14.1,11.1 15.3,10.3 C 16.5,9.5 17.2,8.1 17.2,6.6 C 17.2,6 17.1,5.4 16.8,4.9 L 14.6,7.1 C 14.2,7.5 13.5,7.5 13.1,7.1 L 12.2,6.2 C 11.8,5.8 11.8,5.1 12.2,4.7 L 14.4,2.5 C 13.9,2.2 13.3,2 12.7,2 Z" />
@@ -379,78 +383,23 @@
         <Style Selector="Border.collapsible-block-body">
             <Setter Property="Background" Value="#F5F6F8" />
             <Setter Property="CornerRadius" Value="10" />
-            <Setter Property="Padding" Value="12,10" />
-            <Setter Property="Margin" Value="0,6,0,0" />
+            <Setter Property="Padding" Value="14,12" />
+            <Setter Property="Margin" Value="0,10,0,0" />
             <Setter Property="BorderBrush" Value="#E2E5EA" />
             <Setter Property="BorderThickness" Value="1" />
         </Style>
-
-        <!-- ============================================================ -->
-        <!-- Custom Window Title Bar (chrome-less MainWindow)              -->
-        <!-- ============================================================ -->
-        <Style Selector="Border.custom-title-bar">
-            <Setter Property="Background" Value="#F9F9FB" />
-            <Setter Property="Padding" Value="12,0,0,0" />
-            <Setter Property="BorderBrush" Value="#D8D8DE" />
-            <Setter Property="BorderThickness" Value="0,0,0,1" />
-        </Style>
-
-        <Style Selector="TextBlock.title-bar-text">
-            <Setter Property="Foreground" Value="#1F2328" />
+        <Style Selector="TextBlock.collapsible-block-state">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="#9096A0" />
+            <Setter Property="Margin" Value="12,0,0,0" />
             <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Margin" Value="8,0,0,0" />
-        </Style>
-
-        <Style Selector="Button.title-bar-btn">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="Transparent" />
-            <Setter Property="Foreground" Value="#6E727A" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="CornerRadius" Value="0" />
-            <Setter Property="Width" Value="44" />
-            <Setter Property="Height" Value="36" />
-            <Setter Property="HorizontalContentAlignment" Value="Center" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
-        </Style>
-
-        <Style Selector="Button.title-bar-btn:pointerover">
-            <Setter Property="Background" Value="#EEF0F4" />
-            <Setter Property="Foreground" Value="#1F2328" />
-        </Style>
-
-        <Style Selector="Button.title-bar-btn:pressed">
-            <Setter Property="Background" Value="#DEE0E6" />
-            <Setter Property="Foreground" Value="#1F2328" />
-        </Style>
-
-        <Style Selector="Button.title-bar-btn:focus-visible">
-            <Setter Property="Background" Value="#EEF0F4" />
-            <Setter Property="Foreground" Value="#1F2328" />
-            <Setter Property="BorderBrush" Value="#FF6A00" />
-            <Setter Property="BorderThickness" Value="1.5" />
-        </Style>
-
-        <Style Selector="Button.title-bar-btn-close:pointerover">
-            <Setter Property="Background" Value="#FF1717" />
-            <Setter Property="Foreground" Value="White" />
-        </Style>
-
-        <Style Selector="Button.title-bar-btn-close:pressed">
-            <Setter Property="Background" Value="#DC2626" />
-            <Setter Property="Foreground" Value="White" />
-        </Style>
-
-        <Style Selector="Path.title-bar-icon">
-            <Setter Property="Fill" Value="{Binding $parent[Button].Foreground}" />
-            <Setter Property="Width" Value="14" />
-            <Setter Property="Height" Value="14" />
-            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="TextAlignment" Value="Right" />
         </Style>
 
         <!-- ============================================================ -->
         <!-- Settings Dialog Buttons                                       -->
+        <!--   (Title bar styles moved to Styles/IosTitleBar.axaml         -->
+        <!--    — see that file for the chrome-less custom title bar.)    -->
         <!-- ============================================================ -->
         <Style Selector="Button.settings-dialog-btn">
             <Setter Property="Background" Value="White" />
@@ -506,6 +455,29 @@
             <Setter Property="BorderBrush" Value="#DCE1E8" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="6" />
+        </Style>
+
+        <Style Selector="Button.sidebar-nav-entry">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="CornerRadius" Value="6" />
+        </Style>
+        <Style Selector="Button.sidebar-nav-entry:pointerover">
+            <Setter Property="Background" Value="#EEF0F3" />
+        </Style>
+        <Style Selector="TextBlock.sidebar-nav-icon">
+            <Setter Property="Foreground" Value="#40444B" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Width" Value="16" />
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.sidebar-nav-text">
+            <Setter Property="Foreground" Value="#1F2328" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
 
         <Style Selector="Button.sidebar-task-graph">
@@ -597,6 +569,8 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Foreground" Value="#6E727A" />
             <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style Selector="Button.sidebar-section-action-btn:pointerover">
             <Setter Property="Background" Value="#DDE0E4" />
@@ -678,6 +652,58 @@
             <Setter Property="FontStyle" Value="Italic" />
             <Setter Property="Foreground" Value="#9096A0" />
             <Setter Property="Margin" Value="20,4,0,4" />
+        </Style>
+
+        <Style Selector="Button.search-result-row">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="10" />
+        </Style>
+        <Style Selector="Button.search-result-row:pointerover">
+            <Setter Property="Background" Value="#F2F3F5" />
+        </Style>
+
+        <Style Selector="Border.workspace-header">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#E5E7EB" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Padding" Value="20,12" />
+            <Setter Property="Grid.ColumnSpan" Value="2" />
+        </Style>
+        <Style Selector="TextBlock.workspace-header-title">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#1F2328" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.workspace-header-action">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="#DCE1E8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#6E727A" />
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="15" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.workspace-header-action:pointerover">
+            <Setter Property="Background" Value="#F3F4F6" />
+            <Setter Property="BorderBrush" Value="#C5C8CE" />
+            <Setter Property="Foreground" Value="#1F2328" />
+        </Style>
+        <Style Selector="GridSplitter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="GridSplitter:pointerover">
+            <Setter Property="Background" Value="#DCE1E8" />
+        </Style>
+        <Style Selector="GridSplitter:pressed">
+            <Setter Property="Background" Value="#C5C8CE" />
         </Style>
 
         <!-- TaskGraph placeholder -->
