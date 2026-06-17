@@ -5,28 +5,34 @@ namespace AgentOrchestrator.App.ViewModels;
 
 public partial class ChatBlockViewModel : ObservableObject, IChatBlock
 {
-    public ChatBlockViewModel(ChatBlockKind kind, string? text = null, string? assetPath = null, bool isExpanded = false)
+    public ChatBlockViewModel(ChatBlockKind kind, string? partId, string? text = null, string? assetPath = null, bool isExpanded = false)
     {
         Kind = kind;
-        Text = text;
-        AssetPath = assetPath;
+        PartId = partId;
+        _text = text;
+        _assetPath = assetPath;
         _isExpanded = isExpanded;
     }
 
-    public ChatBlockViewModel(string toolName, ToolState toolState, string? toolOutput, bool isExpanded = false)
+    public ChatBlockViewModel(ChatBlockKind kind, string? partId, string title, ToolState toolState, string? toolOutput, bool isExpanded = false)
     {
-        Kind = ChatBlockKind.Tool;
-        ToolName = toolName;
+        Kind = kind;
+        PartId = partId;
+        _toolName = title;
         _toolState = toolState;
-        ToolOutput = toolOutput;
+        _toolOutput = toolOutput;
         _isExpanded = isExpanded;
     }
 
     public ChatBlockKind Kind { get; }
 
-    public string? Text { get; }
+    public string? PartId { get; }
 
-    public string? AssetPath { get; }
+    [ObservableProperty]
+    private string? _text;
+
+    [ObservableProperty]
+    private string? _assetPath;
 
     public bool IsText => Kind == ChatBlockKind.Text;
 
@@ -36,15 +42,31 @@ public partial class ChatBlockViewModel : ObservableObject, IChatBlock
 
     public bool IsTool => Kind == ChatBlockKind.Tool;
 
+    public bool IsTask => Kind == ChatBlockKind.Task;
+
+    public bool ShowStateText => IsTool || IsTask;
+
     [ObservableProperty]
     private bool _isExpanded;
 
-    public string? ToolName { get; }
+    [ObservableProperty]
+    private string? _toolName;
 
     [ObservableProperty]
     private ToolState _toolState;
 
-    public string? ToolOutput { get; }
+    [ObservableProperty]
+    private string? _toolOutput;
+
+    partial void OnToolStateChanged(ToolState value)
+    {
+        OnPropertyChanged(nameof(ToolStateText));
+    }
+
+    partial void OnToolNameChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HeaderText));
+    }
 
     public string ToolStateText => ToolState switch
     {
@@ -57,14 +79,15 @@ public partial class ChatBlockViewModel : ObservableObject, IChatBlock
     public string HeaderText => Kind switch
     {
         ChatBlockKind.Tool => ToolName ?? string.Empty,
+        ChatBlockKind.Task => ToolName ?? "Task",
         ChatBlockKind.Thought => "Thinking",
         _ => string.Empty
     };
 
     public string IconKind => Kind == ChatBlockKind.Thought
         ? "thought"
-        : (Kind == ChatBlockKind.Tool ? "tool" : string.Empty);
+        : ((Kind == ChatBlockKind.Tool || Kind == ChatBlockKind.Task) ? "tool" : string.Empty);
 
     public bool ShowThoughtIcon => Kind == ChatBlockKind.Thought;
-    public bool ShowToolIcon => Kind == ChatBlockKind.Tool;
+    public bool ShowToolIcon => Kind == ChatBlockKind.Tool || Kind == ChatBlockKind.Task;
 }

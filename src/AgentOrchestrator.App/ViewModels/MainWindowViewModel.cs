@@ -90,6 +90,9 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isRightSidebarVisible = true;
 
+    [ObservableProperty]
+    private bool _isTaskOrchestrationVisible = true;
+
     /// <summary>The MainWindow sets this on Opened so dialogs and pickers can find it.</summary>
     public IStorageProvider? Storage { get; set; }
 

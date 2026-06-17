@@ -149,7 +149,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         Messages.Clear();
         ClearPendingQueue();
         await RefreshSubagentActivitiesAsync(record.AgentSessionId, ct).ConfigureAwait(true);
-        StatusMessage = "正在加载历史…";
+        StatusMessage = null;
 
         try
         {
@@ -213,7 +213,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         await RunSendQueueAsync(request).ConfigureAwait(true);
     }
 
-    [RelayCommand]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task PrimaryActionAsync()
     {
         if (ShowStopButton)
@@ -254,10 +254,10 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         var assistantMessage = new ChatMessageViewModel(assistantId, ChatRole.Assistant, "Codex")
         {
             IsStreaming = true,
+            StreamingStatusText = "正在发送…",
         };
         Messages.Add(assistantMessage);
         IsStreaming = true;
-        StatusMessage = "正在发送…";
 
         _sendCts = new CancellationTokenSource();
         var ct = _sendCts.Token;
@@ -286,21 +286,22 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                 .SendMessageAsync(CurrentAgentSessionId!, chatRequest, ct)
                 .ConfigureAwait(true))
             {
+                assistantMessage.StreamingStatusText = null;
                 ApplyChunk(assistantMessage, chunk);
             }
 
             await SyncFinalAssistantStateAsync(assistantMessage, ct).ConfigureAwait(true);
             await RefreshSubagentActivitiesAsync(CurrentAgentSessionId!, ct).ConfigureAwait(true);
             await TrySyncTitleAsync(ct).ConfigureAwait(true);
-            StatusMessage = null;
+            assistantMessage.StreamingStatusText = null;
         }
         catch (OperationCanceledException)
         {
-            StatusMessage = "已取消";
+            assistantMessage.StreamingStatusText = null;
         }
         catch (Exception ex)
         {
-            StatusMessage = $"发送失败:{ex.Message}";
+            assistantMessage.StreamingStatusText = $"发送失败:{ex.Message}";
         }
         finally
         {
@@ -538,6 +539,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                 break;
 
             case ChatBlockKind.Tool:
+            case ChatBlockKind.Task:
                 {
                     var (toolName, toolState, toolOutput) = ParseToolChunk(block, chunk);
                     block.ToolName = toolName;
@@ -554,7 +556,8 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         {
             ChatBlockKind.Text => new ChatBlockViewModel(ChatBlockKind.Text, chunk.PartId, string.Empty),
             ChatBlockKind.Thought => new ChatBlockViewModel(ChatBlockKind.Thought, chunk.PartId, string.Empty, isExpanded: false),
-            ChatBlockKind.Tool => new ChatBlockViewModel(chunk.PartId, ExtractToolNameFromChunk(chunk.Content), ToolState.Running, string.Empty, isExpanded: false),
+            ChatBlockKind.Tool => new ChatBlockViewModel(ChatBlockKind.Tool, chunk.PartId, ExtractToolNameFromChunk(chunk.Content), ToolState.Running, string.Empty, isExpanded: false),
+            ChatBlockKind.Task => new ChatBlockViewModel(ChatBlockKind.Task, chunk.PartId, ExtractToolNameFromChunk(chunk.Content), ToolState.Running, string.Empty, isExpanded: false),
             ChatBlockKind.Image => new ChatBlockViewModel(ChatBlockKind.Image, chunk.PartId, chunk.Content),
             _ => null,
         };
@@ -577,7 +580,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             return null;
         }
 
-        if (chunk.Kind != ChatBlockKind.Tool)
+        if (chunk.Kind is not (ChatBlockKind.Tool or ChatBlockKind.Task))
         {
             return last;
         }
@@ -667,8 +670,18 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                     break;
                 case ChatBlockKind.Tool:
                     vm.Blocks.Add(new ChatBlockViewModel(
+                        ChatBlockKind.Tool,
                         b.PartId,
                         b.ToolName ?? "tool",
+                        b.ToolState ?? ToolState.Completed,
+                        b.ToolOutput,
+                        isExpanded: false));
+                    break;
+                case ChatBlockKind.Task:
+                    vm.Blocks.Add(new ChatBlockViewModel(
+                        ChatBlockKind.Task,
+                        b.PartId,
+                        b.ToolName ?? "Task",
                         b.ToolState ?? ToolState.Completed,
                         b.ToolOutput,
                         isExpanded: false));
@@ -715,7 +728,8 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             ChatBlockKind.Text => new ChatBlockViewModel(ChatBlockKind.Text, block.PartId, block.Text),
             ChatBlockKind.Thought => new ChatBlockViewModel(ChatBlockKind.Thought, block.PartId, block.Text, isExpanded: false),
             ChatBlockKind.Image => new ChatBlockViewModel(ChatBlockKind.Image, block.PartId, block.Text),
-            ChatBlockKind.Tool => new ChatBlockViewModel(block.PartId, block.ToolName ?? "tool", block.ToolState ?? ToolState.Completed, block.ToolOutput, isExpanded: false),
+            ChatBlockKind.Tool => new ChatBlockViewModel(ChatBlockKind.Tool, block.PartId, block.ToolName ?? "tool", block.ToolState ?? ToolState.Completed, block.ToolOutput, isExpanded: false),
+            ChatBlockKind.Task => new ChatBlockViewModel(ChatBlockKind.Task, block.PartId, block.ToolName ?? "Task", block.ToolState ?? ToolState.Completed, block.ToolOutput, isExpanded: false),
             _ => new ChatBlockViewModel(ChatBlockKind.Text, block.PartId, block.Text)
         };
 
