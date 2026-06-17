@@ -94,6 +94,7 @@ namespace OpenCode.Client.Internal.Json;
 [JsonSerializable(typeof(EventMessageUpdated))]
 [JsonSerializable(typeof(EventMessageRemoved))]
 [JsonSerializable(typeof(EventMessagePartUpdated))]
+[JsonSerializable(typeof(EventMessagePartDelta))]
 [JsonSerializable(typeof(EventMessagePartRemoved))]
 [JsonSerializable(typeof(EventPermissionUpdated))]
 [JsonSerializable(typeof(EventPermissionReplied))]

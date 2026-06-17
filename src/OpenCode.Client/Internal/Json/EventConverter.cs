@@ -31,6 +31,7 @@ public sealed class EventConverter : JsonConverter<ServerEvent>
             EventTypeConstants.MessageUpdated => typeof(EventMessageUpdated),
             EventTypeConstants.MessageRemoved => typeof(EventMessageRemoved),
             EventTypeConstants.MessagePartUpdated => typeof(EventMessagePartUpdated),
+            EventTypeConstants.MessagePartDelta => typeof(EventMessagePartDelta),
             EventTypeConstants.MessagePartRemoved => typeof(EventMessagePartRemoved),
             EventTypeConstants.PermissionUpdated => typeof(EventPermissionUpdated),
             EventTypeConstants.PermissionReplied => typeof(EventPermissionReplied),

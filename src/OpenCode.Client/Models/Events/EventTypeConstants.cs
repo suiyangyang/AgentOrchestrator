@@ -13,6 +13,7 @@ public static class EventTypeConstants
     public const string MessageUpdated = "message.updated";
     public const string MessageRemoved = "message.removed";
     public const string MessagePartUpdated = "message.part.updated";
+    public const string MessagePartDelta = "message.part.delta";
     public const string MessagePartRemoved = "message.part.removed";
     public const string PermissionUpdated = "permission.updated";
     public const string PermissionReplied = "permission.replied";

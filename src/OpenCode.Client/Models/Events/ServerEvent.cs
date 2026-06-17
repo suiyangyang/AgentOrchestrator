@@ -107,6 +107,21 @@ public sealed record EventMessagePartUpdatedPayload
     public string? Delta { get; init; }
 }
 
+public sealed record EventMessagePartDelta : ServerEvent
+{
+    public override string Type { get; init; } = EventTypeConstants.MessagePartDelta;
+    public required EventMessagePartDeltaPayload Properties { get; init; }
+}
+
+public sealed record EventMessagePartDeltaPayload
+{
+    public required string SessionID { get; init; }
+    public required string MessageID { get; init; }
+    public required string PartID { get; init; }
+    public required string Field { get; init; }
+    public required string Delta { get; init; }
+}
+
 public sealed record EventMessagePartRemoved : ServerEvent
 {
     public override string Type { get; init; } = EventTypeConstants.MessagePartRemoved;
