@@ -10,6 +10,7 @@ using Markdig;
 using Markdig.Extensions.Tables;
 using Markdig.Extensions.TaskLists;
 using Markdig.Syntax;
+using Markdig.Syntax.Inlines;
 
 namespace AgentOrchestrator.App.Services;
 
@@ -64,7 +65,7 @@ public static class MarkdownRenderer
                     Margin = new Thickness(0, 8, 0, 4),
                     Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x23, 0x28))
                 };
-                tb.Inlines!.AddRange(ParseInlines(GetBlockText(heading)));
+                tb.Inlines!.AddRange(RenderInlines(heading.Inline));
                 return tb;
             }
 
@@ -76,7 +77,7 @@ public static class MarkdownRenderer
                     LineHeight = 18,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x23, 0x28))
                 };
-                tb.Inlines!.AddRange(ParseInlines(GetBlockText(paragraph)));
+                tb.Inlines!.AddRange(RenderInlines(paragraph.Inline));
                 return tb;
             }
 
@@ -101,8 +102,8 @@ public static class MarkdownRenderer
                     // in the first paragraph. (Markdig 0.38 stores the checked
                     // state as a Markdig.Extensions.TaskLists.TaskList LeafInline.)
                     bool? isChecked = null;
-                    if (item.Count > 0 && item[0] is ParagraphBlock firstPara
-                        && firstPara.Inline?.FirstChild is TaskList tl)
+                    ParagraphBlock? firstParagraph = item.Count > 0 ? item[0] as ParagraphBlock : null;
+                    if (firstParagraph?.Inline?.FirstChild is TaskList tl)
                     {
                         isChecked = tl.Checked;
                     }
@@ -135,16 +136,13 @@ public static class MarkdownRenderer
                         {
                             // Strip the task-list marker prefix ("[ ] " / "[x] ")
                             // from the raw text so we don't render it twice.
-                            var text = GetBlockText(leaf);
-                            if (text.Length >= 4 && text[0] == '[' && text[2] == ']' && text[3] == ' ')
-                                text = text.Substring(4);
                             var tb = new TextBlock
                             {
                                 TextWrapping = TextWrapping.Wrap,
                                 LineHeight = 18,
                                 Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x23, 0x28))
                             };
-                            tb.Inlines!.AddRange(ParseInlines(text));
+                            tb.Inlines!.AddRange(RenderInlines(firstParagraph?.Inline, stripTaskListMarker: true));
                             rendered = tb;
                         }
                         else
@@ -391,167 +389,118 @@ public static class MarkdownRenderer
 
     // ── Inline parser ─────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Parses a markdown text string into a list of Avalonia <see cref="Inline"/> elements,
-    /// supporting bold (**text** or __text__), italic (*text* or _text_), inline code (`text`),
-    /// links ([text](url)), and line breaks (\n).
-    /// </summary>
-    private static List<Inline> ParseInlines(string text)
+    private static List<Avalonia.Controls.Documents.Inline> RenderInlines(ContainerInline? container, bool stripTaskListMarker = false)
     {
-        var inlines = new List<Inline>();
-        if (string.IsNullOrEmpty(text)) return inlines;
-
-        var len = text.Length;
-        var i = 0;
-
-        while (i < len)
+        if (container is null)
         {
-            // ── Inline code: `text` ────────────────────────────────────────
-            if (text[i] == '`')
+            return [];
+        }
+
+        var inlines = new List<Avalonia.Controls.Documents.Inline>();
+        var skipTaskMarker = stripTaskListMarker;
+
+        for (var current = container.FirstChild; current is not null; current = current.NextSibling)
+        {
+            switch (current)
             {
-                var end = text.IndexOf('`', i + 1);
-                if (end > i)
+                case LiteralInline literal:
                 {
-                    var code = end > i + 1 ? text.Substring(i + 1, end - i - 1) : string.Empty;
-                    inlines.Add(new Run(code)
+                    var text = literal.Content.ToString() ?? string.Empty;
+                    if (skipTaskMarker && text.Length >= 4 && text[0] == '[' && text[2] == ']' && text[3] == ' ')
                     {
+                        text = text[4..];
+                    }
+
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        inlines.Add(new Run(text));
+                    }
+
+                    skipTaskMarker = false;
+                    break;
+                }
+
+                case CodeInline code:
+                    inlines.Add(new Run(code.Content) {
                         FontFamily = new FontFamily("Cascadia Code, Consolas, Menlo, monospace"),
                         Background = new SolidColorBrush(Color.FromRgb(0xF5, 0xF6, 0xF8)),
                         Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x23, 0x28))
                     });
-                    i = end + 1;
-                    continue;
-                }
-            }
+                    skipTaskMarker = false;
+                    break;
 
-            // ── Bold: **text** or __text__ ─────────────────────────────────
-            if (i + 1 < len)
-            {
-                if (text[i] == '*' && text[i + 1] == '*')
+                case LineBreakInline:
+                    inlines.Add(new LineBreak());
+                    skipTaskMarker = false;
+                    break;
+
+                case EmphasisInline emphasis:
                 {
-                    var end = text.IndexOf("**", i + 2);
-                    if (end > i)
+                    Span span = emphasis.DelimiterChar switch
                     {
-                        var inner = text.Substring(i + 2, end - i - 2);
-                        var bold = new Bold();
-                        bold.Inlines.AddRange(ParseInlines(inner));
-                        inlines.Add(bold);
-                        i = end + 2;
-                        continue;
-                    }
-                }
-                if (text[i] == '_' && text[i + 1] == '_')
-                {
-                    var end = text.IndexOf("__", i + 2);
-                    if (end > i)
-                    {
-                        var inner = text.Substring(i + 2, end - i - 2);
-                        var bold = new Bold();
-                        bold.Inlines.AddRange(ParseInlines(inner));
-                        inlines.Add(bold);
-                        i = end + 2;
-                        continue;
-                    }
-                }
-            }
-
-            // ── Italic: *text* or _text_ (single char, not adjacent to same char)
-            if (text[i] == '*' && (i + 1 >= len || text[i + 1] != '*'))
-            {
-                var end = text.IndexOf('*', i + 1);
-                if (end > i && (end + 1 >= len || text[end + 1] != '*'))
-                {
-                    var inner = text.Substring(i + 1, end - i - 1);
-                    var italic = new Italic();
-                    italic.Inlines.AddRange(ParseInlines(inner));
-                    inlines.Add(italic);
-                    i = end + 1;
-                    continue;
-                }
-            }
-            if (text[i] == '_' && (i + 1 >= len || text[i + 1] != '_'))
-            {
-                var end = text.IndexOf('_', i + 1);
-                if (end > i && (end + 1 >= len || text[end + 1] != '_'))
-                {
-                    var inner = text.Substring(i + 1, end - i - 1);
-                    var italic = new Italic();
-                    italic.Inlines.AddRange(ParseInlines(inner));
-                    inlines.Add(italic);
-                    i = end + 1;
-                    continue;
-                }
-            }
-
-            // ── Strikethrough: ~~text~~ ──────────────────────────────────────
-            if (i + 1 < len && text[i] == '~' && text[i + 1] == '~')
-            {
-                var end = text.IndexOf("~~", i + 2);
-                if (end > i)
-                {
-                    var inner = text.Substring(i + 2, end - i - 2);
-                    var strike = new Span { TextDecorations = TextDecorations.Strikethrough };
-                    strike.Inlines.AddRange(ParseInlines(inner));
-                    inlines.Add(strike);
-                    i = end + 2;
-                    continue;
-                }
-            }
-
-            // ── Link: [text](url) ──────────────────────────────────────────
-            if (text[i] == '[')
-            {
-                var closeBracket = text.IndexOf(']', i + 1);
-                if (closeBracket > i
-                    && closeBracket + 1 < len
-                    && text[closeBracket + 1] == '(')
-                {
-                    var closeParen = text.IndexOf(')', closeBracket + 2);
-                    if (closeParen > closeBracket)
-                    {
-                        var linkText = text.Substring(i + 1, closeBracket - i - 1);
-                        var url = text.Substring(closeBracket + 2, closeParen - closeBracket - 2);
-                        // Avalonia 12 has no Documents.Hyperlink — use an
-                        // InlineUIContainer wrapping a HyperlinkButton instead.
-                        var linkBtn = new HyperlinkButton
-                        {
-                            Content = linkText
-                        };
-                        var capturedUrl = url;
-                        linkBtn.Click += (_, _) => OpenUrl(capturedUrl);
-                        inlines.Add(new InlineUIContainer(linkBtn));
-                        i = closeParen + 1;
-                        continue;
-                    }
-                }
-            }
-
-            // ── Line break ─────────────────────────────────────────────────
-            if (text[i] == '\n')
-            {
-                inlines.Add(new LineBreak());
-                i++;
-                continue;
-            }
-
-            // ── Plain text (collect until next special character) ──────────
-            var next = len;
-            for (var j = i + 1; j < len; j++)
-            {
-                var ch = text[j];
-                if (ch is '*' or '_' or '`' or '[' or '~' or '\n')
-                {
-                    next = j;
+                        '~' => new Span { TextDecorations = TextDecorations.Strikethrough },
+                        '*' or '_' when emphasis.DelimiterCount >= 2 => new Bold(),
+                        '*' or '_' => new Italic(),
+                        _ => new Span()
+                    };
+                    span.Inlines.AddRange(RenderInlines(emphasis));
+                    inlines.Add(span);
+                    skipTaskMarker = false;
                     break;
                 }
+
+                case LinkInline link:
+                {
+                    var linkText = GetInlinePlainText(link);
+                    if (string.IsNullOrWhiteSpace(linkText))
+                    {
+                        linkText = link.Url ?? string.Empty;
+                    }
+
+                    var linkBtn = new HyperlinkButton
+                    {
+                        Content = linkText
+                    };
+                    var capturedUrl = link.Url ?? link.GetDynamicUrl?.Invoke() ?? string.Empty;
+                    linkBtn.Click += (_, _) => OpenUrl(capturedUrl);
+                    inlines.Add(new InlineUIContainer(linkBtn));
+                    skipTaskMarker = false;
+                    break;
+                }
+
+                case ContainerInline nested:
+                    inlines.AddRange(RenderInlines(nested));
+                    skipTaskMarker = false;
+                    break;
             }
-            var plain = text.Substring(i, next - i);
-            if (plain.Length > 0)
-                inlines.Add(new Run(plain));
-            i = next;
         }
 
         return inlines;
+    }
+
+    private static string GetInlinePlainText(ContainerInline container)
+    {
+        var parts = new List<string>();
+        for (var current = container.FirstChild; current is not null; current = current.NextSibling)
+        {
+            switch (current)
+            {
+                case LiteralInline literal:
+                    parts.Add(literal.Content.ToString() ?? string.Empty);
+                    break;
+                case CodeInline code:
+                    parts.Add(code.Content);
+                    break;
+                case LineBreakInline:
+                    parts.Add("\n");
+                    break;
+                case ContainerInline nested:
+                    parts.Add(GetInlinePlainText(nested));
+                    break;
+            }
+        }
+
+        return string.Concat(parts);
     }
 
     private static void OpenUrl(string url)
