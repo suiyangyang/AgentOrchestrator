@@ -33,6 +33,12 @@ bld/
 [Ll]og/
 [Ll]ogs/
 
+# Alternative MSBuild output directories (the "2" suffix is a per-repo
+# convention used alongside Directory.Build.props to keep these folders
+# out of both the IDE's default item set and source control).
+[Bb]in2/
+[Oo]bj2/
+
 # Visual Studio 2015/2017 cache/options directory
 .vs/
 # Uncomment if you have tasks that create the project's static files in wwwroot
