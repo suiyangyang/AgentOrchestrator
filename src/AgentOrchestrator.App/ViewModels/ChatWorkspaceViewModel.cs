@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOrchestrator.App.Models.Chat;
@@ -93,6 +94,9 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     private string _headerTitle = "新对话";
 
     [ObservableProperty]
+    private string? _currentWorkingDirectory;
+
+    [ObservableProperty]
     private PendingQuestion? _pendingQuestion;
 
     [ObservableProperty]
@@ -163,6 +167,8 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         CurrentSessionId = record.SessionId;
         CurrentAgentSessionId = record.AgentSessionId;
         HeaderTitle = string.IsNullOrWhiteSpace(record.Title) ? "新对话" : record.Title;
+        CurrentWorkingDirectory = await ResolveWorkingDirectoryForSessionAsync(record, ct).ConfigureAwait(true);
+        ProjectsTracker.CurrentWorkingDirectory = CurrentWorkingDirectory;
         Messages.Clear();
         ClearPendingQueue();
         PendingQuestion = null;
@@ -207,6 +213,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         PendingQuestion = null;
         PendingQuestionStatus = null;
         StatusMessage = null;
+        CurrentWorkingDirectory = workingDirectory ?? SidebarWorkingDirectoryOrTracked();
 
         if (!string.IsNullOrEmpty(workingDirectory))
         {
@@ -294,6 +301,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                 var record = await CreateSessionForFirstMessageAsync(workingDir, ct).ConfigureAwait(true);
                 CurrentSessionId = record.SessionId;
                 CurrentAgentSessionId = record.AgentSessionId;
+                CurrentWorkingDirectory = workingDir;
                 HeaderTitle = record.Title;
                 _sidebar.AddOrUpdateSession(record);
                 OnPropertyChanged(nameof(IsBlankPage));
@@ -574,9 +582,12 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     {
         // If the user has a "current project" selected, use its directory;
         // otherwise default to the app's base directory.
-        var current = ProjectsTracker.CurrentWorkingDirectory;
+        var current = CurrentWorkingDirectory ?? SidebarWorkingDirectoryOrTracked();
         return current ?? AppContext.BaseDirectory;
     }
+
+    private string? SidebarWorkingDirectoryOrTracked()
+        => _sidebar.CurrentWorkingDirectory ?? ProjectsTracker.CurrentWorkingDirectory;
 
     private async Task<SessionRecord> CreateSessionForFirstMessageAsync(string workingDir, CancellationToken ct)
     {
@@ -677,14 +688,14 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         }
     }
 
-    private static ChatBlockViewModel? CreateBlockForChunk(ChatStreamChunk chunk)
+    private ChatBlockViewModel? CreateBlockForChunk(ChatStreamChunk chunk)
     {
         return chunk.Kind switch
         {
             ChatBlockKind.Text => new ChatBlockViewModel(ChatBlockKind.Text, chunk.PartId, string.Empty),
             ChatBlockKind.Thought => new ChatBlockViewModel(ChatBlockKind.Thought, chunk.PartId, string.Empty, isExpanded: false),
-            ChatBlockKind.Tool => new ChatBlockViewModel(ChatBlockKind.Tool, chunk.PartId, ExtractToolNameFromChunk(chunk.Content), ToolState.Running, string.Empty, isExpanded: false),
-            ChatBlockKind.Task => new ChatBlockViewModel(ChatBlockKind.Task, chunk.PartId, ExtractToolNameFromChunk(chunk.Content), ToolState.Running, string.Empty, isExpanded: false),
+            ChatBlockKind.Tool => CreateToolBlock(ChatBlockKind.Tool, chunk.PartId, ExtractToolNameFromChunk(chunk.Content), ToolState.Running, string.Empty),
+            ChatBlockKind.Task => CreateToolBlock(ChatBlockKind.Task, chunk.PartId, ExtractToolNameFromChunk(chunk.Content), ToolState.Running, string.Empty),
             ChatBlockKind.Image => new ChatBlockViewModel(ChatBlockKind.Image, chunk.PartId, chunk.Content),
             _ => null,
         };
@@ -778,7 +789,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         return string.IsNullOrWhiteSpace(fallback) ? "tool" : fallback;
     }
 
-    private static ChatMessageViewModel MapRemoteMessage(RemoteMessage msg)
+    private ChatMessageViewModel MapRemoteMessage(RemoteMessage msg)
     {
         var author = msg.Role == ChatRole.User ? "你" : "Codex";
         var vm = new ChatMessageViewModel(msg.Id, msg.Role, author);
@@ -797,26 +808,26 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                     break;
                 case ChatBlockKind.Tool:
                 {
-                    var block = new ChatBlockViewModel(
+                    var block = CreateToolBlock(
                         ChatBlockKind.Tool,
                         b.PartId,
                         b.ToolName ?? "tool",
                         b.ToolState ?? ToolState.Completed,
                         b.ToolOutput,
-                        isExpanded: false);
+                        b.ToolInput);
                     block.ToolQuestion = b.Question;
                     vm.Blocks.Add(block);
                     break;
                 }
                 case ChatBlockKind.Task:
                 {
-                    var block = new ChatBlockViewModel(
+                    var block = CreateToolBlock(
                         ChatBlockKind.Task,
                         b.PartId,
                         b.ToolName ?? "Task",
                         b.ToolState ?? ToolState.Completed,
                         b.ToolOutput,
-                        isExpanded: false);
+                        b.ToolInput);
                     block.ToolQuestion = b.Question;
                     vm.Blocks.Add(block);
                     break;
@@ -849,6 +860,8 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                 current.ToolName = block.ToolName;
                 current.ToolState = block.ToolState ?? current.ToolState;
                 current.ToolOutput = block.ToolOutput;
+                current.ToolInput = block.ToolInput;
+                current.ToolWorkingDirectory = CurrentWorkingDirectory;
                 current.ToolQuestion = block.Question;
             }
             else
@@ -858,7 +871,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         }
     }
 
-    private static ChatBlockViewModel CreateRemoteBlock(RemoteBlock block) =>
+    private ChatBlockViewModel CreateRemoteBlock(RemoteBlock block) =>
         block.Kind switch
         {
             ChatBlockKind.Text => new ChatBlockViewModel(ChatBlockKind.Text, block.PartId, block.Text),
@@ -869,17 +882,46 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             _ => new ChatBlockViewModel(ChatBlockKind.Text, block.PartId, block.Text)
         };
 
-    private static ChatBlockViewModel CreateQuestionAwareToolBlock(ChatBlockKind kind, RemoteBlock block)
+    private ChatBlockViewModel CreateQuestionAwareToolBlock(ChatBlockKind kind, RemoteBlock block)
     {
-        var vm = new ChatBlockViewModel(
+        var vm = CreateToolBlock(
             kind,
             block.PartId,
             kind == ChatBlockKind.Task ? block.ToolName ?? "Task" : block.ToolName ?? "tool",
             block.ToolState ?? ToolState.Completed,
             block.ToolOutput,
-            isExpanded: false);
+            block.ToolInput);
         vm.ToolQuestion = block.Question;
         return vm;
+    }
+
+    private ChatBlockViewModel CreateToolBlock(
+        ChatBlockKind kind,
+        string? partId,
+        string title,
+        ToolState toolState,
+        string? toolOutput,
+        IReadOnlyDictionary<string, JsonElement>? toolInput = null)
+    {
+        return new ChatBlockViewModel(kind, partId, title, toolState, toolOutput, isExpanded: false)
+        {
+            ToolWorkingDirectory = CurrentWorkingDirectory,
+            ToolInput = toolInput
+        };
+    }
+
+    private async Task<string?> ResolveWorkingDirectoryForSessionAsync(SessionRecord record, CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(record.ProjectId))
+        {
+            var project = await _repo.GetProjectAsync(record.ProjectId, ct).ConfigureAwait(true);
+            if (!string.IsNullOrWhiteSpace(project?.Directory))
+            {
+                return project.Directory;
+            }
+        }
+
+        return SidebarWorkingDirectoryOrTracked();
     }
 
     private async Task RefreshSubagentActivitiesAsync(string agentSessionId, CancellationToken ct)

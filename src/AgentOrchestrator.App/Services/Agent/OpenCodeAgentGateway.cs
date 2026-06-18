@@ -413,6 +413,7 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
                     ToolName: resolved.Name,
                     ToolState: resolved.State,
                     ToolOutput: resolved.Output,
+                    ToolInput: resolved.Input,
                     Question: TryBuildRemoteQuestion(tool))
                 ];
                 return true;
@@ -863,21 +864,31 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         return bestLength;
     }
 
-    private static (string Name, ChatToolState State, string? Output) ResolveTool(ToolPart tool)
+    private static (string Name, ChatToolState State, string? Output, IReadOnlyDictionary<string, JsonElement>? Input) ResolveTool(ToolPart tool)
     {
+        var input = tool.State switch
+        {
+            ToolStatePending p => p.Input,
+            ToolStateRunning r => r.Input,
+            ToolStateCompleted completed => completed.Input,
+            ToolStateError err => err.Input,
+            _ => null
+        };
+
         if (IsQuestionTool(tool))
         {
-            return ("Question", MapToolState(tool.State), BuildQuestionSummary(tool));
+            return ("Question", MapToolState(tool.State), BuildQuestionSummary(tool), input);
         }
 
         if (tool.State is ToolStateUnknown unknown)
         {
-            return (ResolveUnknownToolName(tool, unknown), ChatToolState.Running, ResolveUnknownToolOutput(tool, unknown));
+            return (ResolveUnknownToolName(tool, unknown), ChatToolState.Running, ResolveUnknownToolOutput(tool, unknown), input);
         }
 
         if (IsTaskTool(tool))
         {
-            return ResolveTaskTool(tool);
+            var (taskName, taskState, taskOutput) = ResolveTaskTool(tool);
+            return (taskName, taskState, taskOutput, input);
         }
 
         var state = tool.State switch
@@ -901,7 +912,7 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         {
             output = r.Title;
         }
-        return (tool.Tool, state, output);
+        return (tool.Tool, state, output, input);
     }
 
     private static (string Name, ChatToolState State, string? Output) ResolveTaskTool(ToolPart tool)

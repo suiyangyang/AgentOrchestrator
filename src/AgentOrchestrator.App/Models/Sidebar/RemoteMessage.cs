@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json;
 using AgentOrchestrator.App.Models.Chat;
 
 namespace AgentOrchestrator.App.Models.Sidebar;
@@ -21,6 +22,7 @@ public sealed record RemoteBlock(
     string? ToolName = null,
     ToolState? ToolState = null,
     string? ToolOutput = null,
+    IReadOnlyDictionary<string, JsonElement>? ToolInput = null,
     RemoteQuestion? Question = null
 );
 

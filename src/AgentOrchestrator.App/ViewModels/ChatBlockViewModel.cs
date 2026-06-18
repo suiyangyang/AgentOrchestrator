@@ -1,5 +1,8 @@
+using System.Collections.Generic;
+using System.Text.Json;
 using AgentOrchestrator.App.Models.Chat;
 using AgentOrchestrator.App.Models.Sidebar;
+using AgentOrchestrator.App.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace AgentOrchestrator.App.ViewModels;
@@ -60,6 +63,12 @@ public partial class ChatBlockViewModel : ObservableObject, IChatBlock
     private string? _toolOutput;
 
     [ObservableProperty]
+    private IReadOnlyDictionary<string, JsonElement>? _toolInput;
+
+    [ObservableProperty]
+    private string? _toolWorkingDirectory;
+
+    [ObservableProperty]
     private RemoteQuestion? _toolQuestion;
 
     partial void OnToolStateChanged(ToolState value)
@@ -74,12 +83,42 @@ public partial class ChatBlockViewModel : ObservableObject, IChatBlock
     {
         OnPropertyChanged(nameof(HeaderText));
         OnPropertyChanged(nameof(ShowHeaderText));
+        NotifyToolHeaderPropertiesChanged();
     }
+
+    partial void OnToolOutputChanged(string? value)
+        => NotifyToolHeaderPropertiesChanged();
+
+    partial void OnToolWorkingDirectoryChanged(string? value)
+        => NotifyToolHeaderPropertiesChanged();
+
+    partial void OnToolInputChanged(IReadOnlyDictionary<string, JsonElement>? value)
+        => NotifyToolHeaderPropertiesChanged();
+
+    public ToolDisplayInfo ToolDisplay => ToolDisplayParser.Parse(ToolName, ToolName, ToolOutput, ToolWorkingDirectory, input: ToolInput);
+
+    public string ToolHeaderActionText => ToolDisplay.PrimaryText;
+
+    public string? ToolHeaderFilePathText => ToolDisplay.FilePath;
+
+    public string? ToolHeaderLineRangeText => ToolDisplay.LineRangeText;
+
+    public string? ToolHeaderLineRangeDisplayText => HasToolHeaderFilePath
+        ? $", {ToolHeaderLineRangeText}"
+        : ToolHeaderLineRangeText;
+
+    public bool HasToolHeaderFilePath => !string.IsNullOrWhiteSpace(ToolHeaderFilePathText);
+
+    public bool HasToolHeaderLineRange => !string.IsNullOrWhiteSpace(ToolHeaderLineRangeText);
+
+    public bool ShowToolHeader => (IsTool || IsTask) && ShowHeaderText;
+
+    public bool ShowPlainHeader => !(IsTool || IsTask) && ShowHeaderText;
 
     public string HeaderText => Kind switch
     {
-        ChatBlockKind.Tool => ToolName ?? string.Empty,
-        ChatBlockKind.Task => ToolName ?? "Task",
+        ChatBlockKind.Tool => ToolDisplay.DisplayTitle,
+        ChatBlockKind.Task => ToolDisplay.DisplayTitle,
         ChatBlockKind.Thought => "Thinking",
         _ => string.Empty
     };
@@ -96,4 +135,17 @@ public partial class ChatBlockViewModel : ObservableObject, IChatBlock
 
     public bool ShowThoughtIcon => Kind == ChatBlockKind.Thought;
     public bool ShowToolIcon => Kind == ChatBlockKind.Tool || Kind == ChatBlockKind.Task;
+
+    private void NotifyToolHeaderPropertiesChanged()
+    {
+        OnPropertyChanged(nameof(ToolDisplay));
+        OnPropertyChanged(nameof(HeaderText));
+        OnPropertyChanged(nameof(ToolHeaderActionText));
+        OnPropertyChanged(nameof(ToolHeaderFilePathText));
+        OnPropertyChanged(nameof(ToolHeaderLineRangeText));
+        OnPropertyChanged(nameof(ToolHeaderLineRangeDisplayText));
+        OnPropertyChanged(nameof(HasToolHeaderFilePath));
+        OnPropertyChanged(nameof(HasToolHeaderLineRange));
+        OnPropertyChanged(nameof(ShowToolHeader));
+    }
 }

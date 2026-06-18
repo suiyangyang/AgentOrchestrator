@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Text.Json;
+
 namespace AgentOrchestrator.App.Models.Chat;
 
 public enum ToolState
@@ -17,4 +20,5 @@ public interface IChatBlock
     string? ToolName { get; }
     ToolState ToolState { get; }
     string? ToolOutput { get; }
+    IReadOnlyDictionary<string, JsonElement>? ToolInput { get; }
 }
