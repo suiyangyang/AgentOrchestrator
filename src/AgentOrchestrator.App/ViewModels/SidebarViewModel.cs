@@ -62,6 +62,12 @@ public sealed partial class SidebarViewModel : ViewModelBase
     [ObservableProperty]
     private SidebarProjectViewModel? _currentProject;
 
+    [ObservableProperty]
+    private bool _areProjectsExpanded = true;
+
+    [ObservableProperty]
+    private bool _isOrphansExpanded = true;
+
     /// <summary>Working directory used when creating a new session on the blank page.</summary>
     public string? CurrentWorkingDirectory => CurrentProject?.Directory;
 
@@ -104,6 +110,7 @@ public sealed partial class SidebarViewModel : ViewModelBase
             AddSessionToTree(new SidebarSessionViewModel(s));
         }
 
+        SyncProjectsExpandedState();
         RefreshSearchResults();
     }
 
@@ -281,6 +288,27 @@ public sealed partial class SidebarViewModel : ViewModelBase
     private void RequestSessionAction(SessionActionRequest request)
         => SessionActionRequested?.Invoke(this, request);
 
+    public void ToggleProjectsExpanded()
+    {
+        var expandAll = Projects.Any(p => !p.IsExpanded);
+        foreach (var project in Projects)
+        {
+            project.IsExpanded = expandAll;
+        }
+
+        AreProjectsExpanded = expandAll;
+    }
+
+    public void SyncProjectsExpandedState()
+    {
+        AreProjectsExpanded = Projects.Count == 0 || Projects.All(p => p.IsExpanded);
+    }
+
+    public void ToggleOrphansExpanded()
+    {
+        IsOrphansExpanded = !IsOrphansExpanded;
+    }
+
     [RelayCommand]
     private void ToggleProjectExpanded(string? projectId)
     {
@@ -288,6 +316,7 @@ public sealed partial class SidebarViewModel : ViewModelBase
         if (_projectsById.TryGetValue(projectId, out var p))
         {
             p.IsExpanded = !p.IsExpanded;
+            SyncProjectsExpandedState();
         }
     }
 

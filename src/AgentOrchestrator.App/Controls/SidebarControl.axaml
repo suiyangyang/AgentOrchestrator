@@ -13,7 +13,7 @@
                         HorizontalContentAlignment="Left"
                         Command="{Binding RequestNewSessionCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                        <TextBlock Text="✎" Classes="sidebar-nav-icon" />
+                        <Path Classes="sidebar-nav-icon-path sidebar-new-chat-icon" />
                         <TextBlock Text="新对话" Classes="sidebar-nav-text" />
                     </StackPanel>
                 </Button>
@@ -22,7 +22,7 @@
                         HorizontalContentAlignment="Left"
                         Command="{Binding OpenSearchOverlayCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                        <TextBlock Text="⌕" Classes="sidebar-nav-icon" />
+                        <Path Classes="sidebar-nav-icon-path sidebar-search-icon" />
                         <TextBlock Text="搜索" Classes="sidebar-nav-text" />
                     </StackPanel>
                 </Button>
@@ -31,7 +31,14 @@
                         HorizontalContentAlignment="Left"
                         Command="{Binding RequestTaskGraphCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                        <TextBlock Text="◌" Classes="sidebar-nav-icon" />
+                        <Grid Classes="sidebar-plugin-icon-grid"
+                              RowDefinitions="Auto,Auto"
+                              ColumnDefinitions="Auto,Auto">
+                            <Ellipse Classes="sidebar-plugin-dot" Grid.Row="0" Grid.Column="0" />
+                            <Ellipse Classes="sidebar-plugin-dot" Grid.Row="0" Grid.Column="1" />
+                            <Ellipse Classes="sidebar-plugin-dot" Grid.Row="1" Grid.Column="0" />
+                            <Ellipse Classes="sidebar-plugin-dot" Grid.Row="1" Grid.Column="1" />
+                        </Grid>
                         <TextBlock Text="插件" Classes="sidebar-nav-text" />
                     </StackPanel>
                 </Button>
@@ -48,9 +55,11 @@
                                 HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Stretch"
                                 Click="OnProjectsHeaderClick">
-                            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                                <TextBlock Grid.Column="0" Text="▾" Classes="sidebar-section-caret" />
-                                <TextBlock Grid.Column="1" Text="项目" Classes="sidebar-section-label" />
+                            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                                <TextBlock Grid.Column="0" Text="项目" Classes="sidebar-section-label" />
+                                <Path Grid.Column="1"
+                                      Classes="sidebar-chevron sidebar-section-caret"
+                                      Classes.sidebar-chevron-expanded="{Binding AreProjectsExpanded}" />
                                 <Button Grid.Column="2"
                                         Classes="sidebar-section-action-btn"
                                         Content="..."
@@ -58,9 +67,10 @@
                                         IsVisible="{Binding #ProjectsHeader.IsPointerOver}" />
                                 <Button Grid.Column="3"
                                         Classes="sidebar-section-action-btn"
-                                        Content="+"
                                         Command="{Binding RequestAddProjectCommand}"
-                                        IsVisible="{Binding #ProjectsHeader.IsPointerOver}" />
+                                        IsVisible="{Binding #ProjectsHeader.IsPointerOver}">
+                                    <Path Classes="sidebar-action-icon sidebar-new-chat-icon" />
+                                </Button>
                             </Grid>
                         </Button>
                         <ItemsControl ItemsSource="{Binding Projects}">
@@ -73,10 +83,12 @@
                                                 HorizontalAlignment="Stretch"
                                                 HorizontalContentAlignment="Stretch"
                                                 Click="OnProjectRowClick">
-                                            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
-                                                <TextBlock Grid.Column="0" Text="📁" Classes="sidebar-project-icon" />
-                                                <TextBlock Grid.Column="1" Text="▾" Classes="sidebar-project-caret" />
-                                                <TextBlock Grid.Column="2" Text="{Binding Name}" Classes="sidebar-project-name" />
+                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+                                                <Path Grid.Column="0" Classes="sidebar-project-icon sidebar-folder-icon" />
+                                                <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="sidebar-project-name" />
+                                                <Path Grid.Column="2"
+                                                      Classes="sidebar-chevron sidebar-project-caret"
+                                                      Classes.sidebar-chevron-expanded="{Binding IsExpanded}" />
                                                 <Button Grid.Column="3"
                                                         Classes="sidebar-row-action-btn"
                                                         Content="..."
@@ -85,10 +97,11 @@
                                                         IsVisible="{Binding #ProjectRow.IsPointerOver}" />
                                                 <Button Grid.Column="4"
                                                         Classes="sidebar-row-action-btn"
-                                                        Content="+"
                                                         Click="OnProjectRowAddClick"
                                                         Tag="{Binding Id}"
-                                                        IsVisible="{Binding #ProjectRow.IsPointerOver}" />
+                                                        IsVisible="{Binding #ProjectRow.IsPointerOver}">
+                                                    <Path Classes="sidebar-action-icon sidebar-new-chat-icon" />
+                                                </Button>
                                             </Grid>
                                         </Button>
                                         <StackPanel IsVisible="{Binding IsExpanded}" Margin="20,0,0,0">
@@ -137,17 +150,21 @@
                                 HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Stretch"
                                 Click="OnOrphansHeaderClick">
-                            <Grid ColumnDefinitions="Auto,*,Auto">
-                                <TextBlock Grid.Column="0" Text="▾" Classes="sidebar-section-caret" />
-                                <TextBlock Grid.Column="1" Text="对话" Classes="sidebar-section-label" />
+                            <Grid ColumnDefinitions="*,Auto,Auto">
+                                <TextBlock Grid.Column="0" Text="对话" Classes="sidebar-section-label" />
+                                <Path Grid.Column="1"
+                                      Classes="sidebar-chevron sidebar-section-caret"
+                                      Classes.sidebar-chevron-expanded="{Binding IsOrphansExpanded}" />
                                 <Button Grid.Column="2"
                                         Classes="sidebar-section-action-btn"
-                                        Content="+"
                                         Command="{Binding RequestNewSessionCommand}"
-                                        IsVisible="{Binding #OrphansHeader.IsPointerOver}" />
+                                        IsVisible="{Binding #OrphansHeader.IsPointerOver}">
+                                    <Path Classes="sidebar-action-icon sidebar-new-chat-icon" />
+                                </Button>
                             </Grid>
                         </Button>
-                        <ItemsControl ItemsSource="{Binding OrphanSessions}">
+                        <ItemsControl ItemsSource="{Binding OrphanSessions}"
+                                      IsVisible="{Binding IsOrphansExpanded}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vm:SidebarSessionViewModel">
                                     <Button x:Name="OrphanSessionRow"
@@ -174,7 +191,8 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                         <TextBlock Text="暂无未归属的对话"
-                                   Classes="sidebar-empty" />
+                                   Classes="sidebar-empty"
+                                   IsVisible="{Binding IsOrphansExpanded}" />
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>

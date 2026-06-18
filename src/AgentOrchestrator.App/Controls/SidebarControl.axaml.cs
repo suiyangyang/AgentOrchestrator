@@ -15,16 +15,7 @@ public partial class SidebarControl : UserControl
     {
         if (DataContext is SidebarViewModel vm)
         {
-            // Toggle: if any project is collapsed, expand all; otherwise collapse all.
-            var anyCollapsed = false;
-            foreach (var p in vm.Projects)
-            {
-                if (!p.IsExpanded) { anyCollapsed = true; break; }
-            }
-            foreach (var p in vm.Projects)
-            {
-                p.IsExpanded = anyCollapsed;
-            }
+            vm.ToggleProjectsExpanded();
         }
     }
 
@@ -48,6 +39,7 @@ public partial class SidebarControl : UserControl
             && DataContext is SidebarViewModel vm)
         {
             p.IsExpanded = !p.IsExpanded;
+            vm.SyncProjectsExpandedState();
             vm.SelectProjectCommand.Execute(p.Id);
         }
     }
@@ -192,6 +184,9 @@ public partial class SidebarControl : UserControl
 
     private void OnOrphansHeaderClick(object? sender, RoutedEventArgs e)
     {
-        // Orphan group is always expanded (no children of its own).
+        if (DataContext is SidebarViewModel vm)
+        {
+            vm.ToggleOrphansExpanded();
+        }
     }
 }
