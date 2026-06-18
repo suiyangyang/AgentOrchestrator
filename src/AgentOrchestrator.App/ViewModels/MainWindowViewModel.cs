@@ -63,10 +63,20 @@ public partial class MainWindowViewModel : ViewModelBase
             }
         };
 
+        Settings.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(SettingsViewModel.OpenCodeEnabled)
+                or nameof(SettingsViewModel.IsOpenCodeConnected))
+            {
+                UpdateConnectedServiceCount();
+            }
+        };
+
         Chat.PropertyChanged += OnWorkspacePropertyChanged;
         TaskGraph.PropertyChanged += OnWorkspacePropertyChanged;
 
         ActiveWorkspace = Chat;
+        UpdateConnectedServiceCount();
         _ = InitializeAsync();
     }
 
@@ -93,12 +103,17 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isTaskOrchestrationVisible = true;
 
+    [ObservableProperty]
+    private int _connectedServiceCount;
+
+    public bool HasConnectedServices => ConnectedServiceCount > 0;
+
     /// <summary>The MainWindow sets this on Opened so dialogs and pickers can find it.</summary>
     public IStorageProvider? Storage { get; set; }
 
     private AppSettings BuildSettingsSnapshot() => new()
     {
-        OpenCodeCliPath = Settings.OpenCodeCliPath,
+        OpenCodeEnabled = Settings.OpenCodeEnabled,
         Host = Settings.Host,
         Port = Settings.Port,
         Username = Settings.Username,
@@ -109,6 +124,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task InitializeAsync()
     {
         await Sidebar.LoadAsync();
+        await Settings.InitializeAsync();
+        UpdateConnectedServiceCount();
 
         // Restore last focused project so the blank page uses the same
         // working directory as the previous session.
@@ -175,12 +192,22 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(ActiveWorkspaceTitle));
     }
 
+    partial void OnConnectedServiceCountChanged(int value)
+    {
+        OnPropertyChanged(nameof(HasConnectedServices));
+    }
+
     private void OnWorkspacePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (sender == Chat && e.PropertyName == nameof(ChatWorkspaceViewModel.HeaderTitle))
         {
             OnPropertyChanged(nameof(ActiveWorkspaceTitle));
         }
+    }
+
+    private void UpdateConnectedServiceCount()
+    {
+        ConnectedServiceCount = Settings.OpenCodeEnabled && Settings.IsOpenCodeConnected ? 1 : 0;
     }
 
     // ── Sidebar event handlers ─────────────────────────────────────────

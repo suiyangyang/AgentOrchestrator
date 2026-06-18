@@ -45,15 +45,18 @@ public partial class App : Application
         services.AddSingleton(sp =>
         {
             var settings = sp.GetRequiredService<IAppSettingsService>().Load();
-            var options = new OpenCodeClientOptions
+            return new OpenCodeClient(new OpenCodeClientOptions
             {
                 BaseUrl = new Uri($"http://{settings.Host}:{settings.Port}"),
                 Auth = string.IsNullOrEmpty(settings.Password)
                     ? null
                     : new OpenCodeAuth { Username = settings.Username, Password = settings.Password },
-            };
-            var client = new OpenCodeClient(options);
-            return new OpenCodeAgentGateway(client, ownsClient: true);
+            });
+        });
+        services.AddSingleton(sp =>
+        {
+            var client = sp.GetRequiredService<OpenCodeClient>();
+            return new OpenCodeAgentGateway(client, ownsClient: false);
         });
         services.AddSingleton<IAgentGateway>(sp => sp.GetRequiredService<OpenCodeAgentGateway>());
 

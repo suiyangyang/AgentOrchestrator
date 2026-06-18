@@ -74,6 +74,19 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void OnServicesButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm && vm.Settings is { } settingsVm)
+        {
+            settingsVm.OpenServicesPage();
+            var settingsWindow = new SettingsWindow
+            {
+                DataContext = settingsVm
+            };
+            await settingsWindow.ShowDialog<bool>(this);
+        }
+    }
+
     private void OnSidebarToggleButtonClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is MainWindowViewModel vm)
