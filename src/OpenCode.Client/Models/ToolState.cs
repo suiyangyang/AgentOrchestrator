@@ -41,6 +41,12 @@ public sealed record ToolStateError : ToolState
     public required ToolStateErrorTime Time { get; init; }
 }
 
+public sealed record ToolStateUnknown : ToolState
+{
+    public required string Status { get; init; }
+    public JsonElement Raw { get; init; }
+}
+
 public sealed record ToolStateRunningTime
 {
     public long Start { get; init; }

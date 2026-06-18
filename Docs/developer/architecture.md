@@ -43,6 +43,11 @@
 - Assistant messages show a left-side loading placeholder immediately
   after send; the placeholder is replaced by normal blocks when the first
   streamed block arrives
+- Thinking / Tool / Task blocks keep the spinner on the leading icon slot
+  while running, then fall back to the static header once completed
+- ChatWorkspaceControl only auto-scrolls when the viewport is already near
+  the bottom, so manual upward scrolling is respected while fresh output
+  still follows live updates
 - The composer primary button switches between send and stop based on
   whether the draft box currently has content; it stays enabled while a
   response is streaming so the same control can cancel the send or queue
@@ -57,6 +62,11 @@
   `text` part 中的 `<think>` / `<thinking>` 标签拆成 `Thought` 块，
   `reasoning` part 直接映射成 `Thought` 块，
   `tool = "task"` 的 `ToolPart` 映射成 `Task` 块而不是普通 `Tool`
+- `tool.state` 若出现未知枚举值，`OpenCode.Client` 需要保底反序列化，
+  `OpenCodeAgentGateway` 再按普通 Tool 运行态渲染，避免 SSE 流因单个工具状态退出
+- 结构化 question 交互走单独的数据流：`OpenCode.Client` 负责读取会话挂起问题列表并提交
+  `answers[][]`，`ChatWorkspaceViewModel` 维护当前挂起问题状态，`MainWindow` 在标题栏下方渲染
+  顶部确认面板，而不是把它塞进消息流或权限菜单
 - `TaskGraphWorkspaceControl` is a placeholder until the TaskGraph plan
   ships; v1 shows a fixed "coming soon" page
 - `SettingsWindow` is a separate dialog

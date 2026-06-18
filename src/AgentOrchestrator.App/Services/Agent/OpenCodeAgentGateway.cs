@@ -140,6 +140,54 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         return result;
     }
 
+    public async Task<IReadOnlyList<AgentQuestionRequest>> GetPendingQuestionsAsync(
+        string agentSessionId,
+        CancellationToken ct = default)
+    {
+        var session = await _client.Sessions
+            .GetAsync(agentSessionId, directory: null, ct: ct)
+            .ConfigureAwait(false);
+        var questions = await _client.Sessions
+            .QuestionsAsync(agentSessionId, directory: session.Directory, ct: ct)
+            .ConfigureAwait(false);
+
+        var result = new List<AgentQuestionRequest>(questions.Count);
+        foreach (var question in questions)
+        {
+            result.Add(new AgentQuestionRequest(
+                question.Id,
+                question.Title,
+                question.Questions.Select(q => new AgentQuestionItem(
+                    q.Id,
+                    q.Header,
+                    q.Question,
+                    q.Multiple,
+                    q.Custom,
+                    q.Options.Select(o => new AgentQuestionOption(
+                        o.Label,
+                        o.Description,
+                        o.Value?.ToString())).ToArray()
+                )).ToArray()));
+        }
+
+        return result;
+    }
+
+    public async Task SubmitQuestionAnswerAsync(
+        string agentSessionId,
+        string requestId,
+        IReadOnlyList<IReadOnlyList<string>> answers,
+        CancellationToken ct = default)
+    {
+        var session = await _client.Sessions
+            .GetAsync(agentSessionId, directory: null, ct: ct)
+            .ConfigureAwait(false);
+
+        await _client.Sessions
+            .ReplyQuestionAsync(agentSessionId, requestId, new QuestionReplyRequest { Answers = answers }, directory: session.Directory, ct: ct)
+            .ConfigureAwait(false);
+    }
+
     public async Task<IReadOnlyList<RemoteMessage>> GetMessagesAsync(
         string agentSessionId,
         CancellationToken ct = default)
@@ -364,7 +412,8 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
                     Text: null,
                     ToolName: resolved.Name,
                     ToolState: resolved.State,
-                    ToolOutput: resolved.Output)
+                    ToolOutput: resolved.Output,
+                    Question: TryBuildRemoteQuestion(tool))
                 ];
                 return true;
             }
@@ -816,6 +865,16 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
 
     private static (string Name, ChatToolState State, string? Output) ResolveTool(ToolPart tool)
     {
+        if (IsQuestionTool(tool))
+        {
+            return ("Question", MapToolState(tool.State), BuildQuestionSummary(tool));
+        }
+
+        if (tool.State is ToolStateUnknown unknown)
+        {
+            return (ResolveUnknownToolName(tool, unknown), ChatToolState.Running, ResolveUnknownToolOutput(tool, unknown));
+        }
+
         if (IsTaskTool(tool))
         {
             return ResolveTaskTool(tool);
@@ -855,6 +914,7 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
 
     private static ChatToolState MapToolState(OcToolState state) => state switch
     {
+        ToolStateUnknown => ChatToolState.Running,
         ToolStatePending => ChatToolState.Pending,
         ToolStateRunning => ChatToolState.Running,
         ToolStateCompleted => ChatToolState.Completed,
@@ -864,6 +924,9 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
 
     private static bool IsTaskTool(ToolPart tool)
         => string.Equals(tool.Tool, "task", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsQuestionTool(ToolPart tool)
+        => string.Equals(tool.Tool, "question", StringComparison.OrdinalIgnoreCase);
 
     private static string ResolveTaskTitle(ToolPart tool)
     {
@@ -892,6 +955,11 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
 
     private static string? ResolveTaskOutput(ToolPart tool)
     {
+        if (tool.State is ToolStateUnknown)
+        {
+            return null;
+        }
+
         if (tool.State is ToolStateCompleted completed && !string.IsNullOrWhiteSpace(completed.Output))
         {
             return completed.Output.Trim();
@@ -914,6 +982,12 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
 
         return null;
     }
+
+    private static string ResolveUnknownToolName(ToolPart tool, ToolStateUnknown unknown)
+        => !string.IsNullOrWhiteSpace(tool.Tool) ? tool.Tool.Trim() : (string.IsNullOrWhiteSpace(unknown.Status) ? "tool" : unknown.Status.Trim());
+
+    private static string ResolveUnknownToolOutput(ToolPart tool, ToolStateUnknown unknown)
+        => string.IsNullOrWhiteSpace(tool.Tool) ? $"[{unknown.Status}] tool" : $"[{unknown.Status}] {tool.Tool}";
 
     private static bool TryGetJsonString(IReadOnlyDictionary<string, JsonElement>? values, string key, out string value)
     {
@@ -1085,6 +1159,11 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
 
     private static string BuildToolContent(RemoteBlock block)
     {
+        if (block.Question is not null)
+        {
+            return block.ToolOutput ?? "Question";
+        }
+
         var name = block.ToolName ?? "tool";
         var state = block.ToolState?.ToString() ?? "Pending";
         var output = block.ToolOutput ?? string.Empty;
@@ -1093,6 +1172,11 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
 
     private static string BuildToolMarkdown(ToolPart tool)
     {
+        if (IsQuestionTool(tool))
+        {
+            return BuildQuestionMarkdown(tool);
+        }
+
         var state = tool.State switch
         {
             ToolStatePending => "Pending",
@@ -1114,6 +1198,167 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
             ? $"**Tool** `{tool.Tool}` [{state}]"
             : $"**Tool** `{tool.Tool}` [{state}]\n\n```text\n{detail}\n```";
     }
+
+    private static string BuildQuestionSummary(ToolPart tool)
+        => string.IsNullOrWhiteSpace(BuildQuestionMarkdown(tool)) ? "Question" : BuildQuestionMarkdown(tool);
+
+    private static RemoteQuestion? TryBuildRemoteQuestion(ToolPart tool)
+    {
+        if (!IsQuestionTool(tool))
+        {
+            return null;
+        }
+
+        var items = TryGetQuestionItems(tool.State);
+        if (items.Count == 0)
+        {
+            return null;
+        }
+
+        var title = ResolveQuestionTitle(tool);
+        return new RemoteQuestion(
+            tool.CallID,
+            title,
+            items.Select((item, index) => new RemoteQuestionItem(
+                $"{tool.CallID}:{index}",
+                item.Header,
+                item.Question,
+                item.Multiple,
+                item.Custom,
+                item.Options.Select(option => new RemoteQuestionOption(
+                    option.Label,
+                    option.Description,
+                    option.Value)).ToArray())).ToArray());
+    }
+
+    private static string ResolveQuestionTitle(ToolPart tool)
+    {
+        if (tool.State is ToolStateRunning running && !string.IsNullOrWhiteSpace(running.Title))
+        {
+            return running.Title.Trim();
+        }
+
+        return "等待回答的问题";
+    }
+
+    private static string BuildQuestionMarkdown(ToolPart tool)
+    {
+        var state = tool.State switch
+        {
+            ToolStatePending => "Pending",
+            ToolStateRunning => "Running",
+            ToolStateCompleted => "Completed",
+            ToolStateError => "Error",
+            _ => "Unknown"
+        };
+
+        var lines = new List<string> { $"**Question** [{state}]" };
+        var questions = TryGetQuestionItems(tool.State);
+        if (questions.Count == 0)
+        {
+            return lines[0];
+        }
+
+        for (var i = 0; i < questions.Count; i++)
+        {
+            var q = questions[i];
+            lines.Add(string.Empty);
+            lines.Add($"{i + 1}. {q.Header}");
+            if (!string.IsNullOrWhiteSpace(q.Question))
+            {
+                lines.Add(q.Question);
+            }
+
+            foreach (var option in q.Options)
+            {
+                var description = string.IsNullOrWhiteSpace(option.Description) ? string.Empty : $" - {option.Description}";
+                lines.Add($"- {option.Label}{description}");
+            }
+
+            if (q.Custom)
+            {
+                lines.Add("- 自定义答案");
+            }
+        }
+
+        return string.Join("\n", lines);
+    }
+
+    private static IReadOnlyList<QuestionSnapshot> TryGetQuestionItems(OcToolState state)
+    {
+        if (state is not ToolStatePending pending)
+        {
+            if (state is not ToolStateRunning running)
+            {
+                return [];
+            }
+
+            return ParseQuestionItems(running.Input);
+        }
+
+        return ParseQuestionItems(pending.Input);
+    }
+
+    private static IReadOnlyList<QuestionSnapshot> ParseQuestionItems(IReadOnlyDictionary<string, JsonElement> input)
+    {
+        if (!input.TryGetValue("questions", out var questionsElement) || questionsElement.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var result = new List<QuestionSnapshot>();
+        foreach (var questionElement in questionsElement.EnumerateArray())
+        {
+            var header = GetJsonString(questionElement, "header") ?? "Question";
+            var question = GetJsonString(questionElement, "question") ?? string.Empty;
+            var multiple = GetJsonBool(questionElement, "multiple");
+            var custom = !GetJsonBool(questionElement, "custom", defaultValue: true) ? false : true;
+            var options = new List<QuestionOptionSnapshot>();
+
+            if (questionElement.TryGetProperty("options", out var optionsElement) && optionsElement.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var optionElement in optionsElement.EnumerateArray())
+                {
+                    options.Add(new QuestionOptionSnapshot(
+                        GetJsonString(optionElement, "label") ?? string.Empty,
+                        GetJsonString(optionElement, "description"),
+                        GetJsonString(optionElement, "value") ?? GetJsonString(optionElement, "label") ?? string.Empty));
+                }
+            }
+
+            result.Add(new QuestionSnapshot(header, question, multiple, custom, options));
+        }
+
+        return result;
+    }
+
+    private static string? GetJsonString(JsonElement element, string propertyName)
+        => element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
+
+    private static bool GetJsonBool(JsonElement element, string propertyName, bool defaultValue = false)
+        => element.TryGetProperty(propertyName, out var property)
+            ? property.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                JsonValueKind.String when bool.TryParse(property.GetString(), out var value) => value,
+                _ => defaultValue,
+            }
+            : defaultValue;
+
+    private sealed record QuestionSnapshot(
+        string Header,
+        string Question,
+        bool Multiple,
+        bool Custom,
+        IReadOnlyList<QuestionOptionSnapshot> Options);
+
+    private sealed record QuestionOptionSnapshot(
+        string Label,
+        string? Description,
+        string Value);
 
     private sealed record SubagentDetails(
         string AgentName,

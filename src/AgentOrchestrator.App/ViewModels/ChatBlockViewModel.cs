@@ -1,4 +1,5 @@
 using AgentOrchestrator.App.Models.Chat;
+using AgentOrchestrator.App.Models.Sidebar;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace AgentOrchestrator.App.ViewModels;
@@ -44,7 +45,7 @@ public partial class ChatBlockViewModel : ObservableObject, IChatBlock
 
     public bool IsTask => Kind == ChatBlockKind.Task;
 
-    public bool ShowStateText => IsTool || IsTask;
+    public bool IsRunning => (IsTool || IsTask) && ToolState == ToolState.Running;
 
     [ObservableProperty]
     private bool _isExpanded;
@@ -58,23 +59,22 @@ public partial class ChatBlockViewModel : ObservableObject, IChatBlock
     [ObservableProperty]
     private string? _toolOutput;
 
+    [ObservableProperty]
+    private RemoteQuestion? _toolQuestion;
+
     partial void OnToolStateChanged(ToolState value)
     {
-        OnPropertyChanged(nameof(ToolStateText));
+        OnPropertyChanged(nameof(IsRunning));
+        OnPropertyChanged(nameof(ShowHeaderText));
+        OnPropertyChanged(nameof(ShowThoughtLeadingIcon));
+        OnPropertyChanged(nameof(ShowToolLeadingIcon));
     }
 
     partial void OnToolNameChanged(string? value)
     {
         OnPropertyChanged(nameof(HeaderText));
+        OnPropertyChanged(nameof(ShowHeaderText));
     }
-
-    public string ToolStateText => ToolState switch
-    {
-        ToolState.Running => "Running…",
-        ToolState.Completed => "Completed",
-        ToolState.Failed => "Failed",
-        _ => "Pending"
-    };
 
     public string HeaderText => Kind switch
     {
@@ -83,6 +83,12 @@ public partial class ChatBlockViewModel : ObservableObject, IChatBlock
         ChatBlockKind.Thought => "Thinking",
         _ => string.Empty
     };
+
+    public bool ShowHeaderText => !(IsThought && IsRunning) && !string.IsNullOrWhiteSpace(HeaderText);
+
+    public bool ShowThoughtLeadingIcon => ShowThoughtIcon && !IsRunning;
+
+    public bool ShowToolLeadingIcon => ShowToolIcon && !IsRunning;
 
     public string IconKind => Kind == ChatBlockKind.Thought
         ? "thought"

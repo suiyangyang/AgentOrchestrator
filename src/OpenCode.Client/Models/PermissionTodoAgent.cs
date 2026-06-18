@@ -25,7 +25,6 @@ public sealed record Todo
     public required string Content { get; init; }
     public required string Status { get; init; }
     public required string Priority { get; init; }
-    public required string Id { get; init; }
 }
 
 public sealed record Command

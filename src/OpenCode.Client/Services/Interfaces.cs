@@ -66,6 +66,8 @@ public interface ISessionService
     Task<MessageWithParts> PromptAsync(string id, SessionPromptRequest body, string? directory = null, CancellationToken ct = default);
     Task<MessageWithParts> GetMessageAsync(string id, string messageID, string? directory = null, CancellationToken ct = default);
     Task PromptAsyncAsync(string id, SessionPromptRequest body, string? directory = null, CancellationToken ct = default);
+    Task<IReadOnlyList<QuestionRequest>> QuestionsAsync(string id, string? directory = null, CancellationToken ct = default);
+    Task<bool> ReplyQuestionAsync(string id, string requestID, QuestionReplyRequest body, string? directory = null, CancellationToken ct = default);
     Task<MessageWithParts> CommandAsync(string id, SessionCommandRequest body, string? directory = null, CancellationToken ct = default);
     Task<MessageWithParts> ShellAsync(string id, SessionShellRequest body, string? directory = null, CancellationToken ct = default);
     Task<Session> RevertAsync(string id, SessionRevertRequest body, string? directory = null, CancellationToken ct = default);

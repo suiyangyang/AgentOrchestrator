@@ -70,6 +70,12 @@ namespace OpenCode.Client.Internal.Json;
 [JsonSerializable(typeof(ToolStateRunning))]
 [JsonSerializable(typeof(ToolStateCompleted))]
 [JsonSerializable(typeof(ToolStateError))]
+[JsonSerializable(typeof(ToolStateUnknown))]
+// Question
+[JsonSerializable(typeof(QuestionRequest))]
+[JsonSerializable(typeof(QuestionItem))]
+[JsonSerializable(typeof(QuestionOption))]
+[JsonSerializable(typeof(QuestionTime))]
 
 // FilePartSource
 [JsonSerializable(typeof(FilePartSource))]

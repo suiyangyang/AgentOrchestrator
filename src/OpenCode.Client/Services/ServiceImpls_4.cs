@@ -90,6 +90,19 @@ internal sealed class SessionService : HttpServiceBase, ISessionService
         await PostNoContentAsync($"/session/{Uri.EscapeDataString(id)}/prompt_async", body, QueryHelpers.WithDirectory(directory), ct).ConfigureAwait(false);
     }
 
+    public Task<IReadOnlyList<QuestionRequest>> QuestionsAsync(string id, string? directory = null, CancellationToken ct = default)
+        => GetAsync<IReadOnlyList<QuestionRequest>>($"/session/{Uri.EscapeDataString(id)}/question", QueryHelpers.WithDirectory(directory), ct)!;
+
+    public async Task<bool> ReplyQuestionAsync(string id, string requestID, QuestionReplyRequest body, string? directory = null, CancellationToken ct = default)
+    {
+        var result = await PostAsync<QuestionReplyRequest, bool>(
+            $"/session/{Uri.EscapeDataString(id)}/question/{Uri.EscapeDataString(requestID)}/reply",
+            body,
+            QueryHelpers.WithDirectory(directory),
+            ct).ConfigureAwait(false);
+        return result;
+    }
+
     public Task<MessageWithParts> CommandAsync(string id, SessionCommandRequest body, string? directory = null, CancellationToken ct = default)
         => PostAsync<SessionCommandRequest, MessageWithParts>($"/session/{Uri.EscapeDataString(id)}/command", body, QueryHelpers.WithDirectory(directory), ct)!;
 

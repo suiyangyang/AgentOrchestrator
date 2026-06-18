@@ -49,6 +49,18 @@ public sealed class NotImplementedAgentGateway : IAgentGateway
         CancellationToken ct = default)
         => throw new NotImplementedException();
 
+    public Task<IReadOnlyList<AgentQuestionRequest>> GetPendingQuestionsAsync(
+        string agentSessionId,
+        CancellationToken ct = default)
+        => throw new NotImplementedException();
+
+    public Task SubmitQuestionAnswerAsync(
+        string agentSessionId,
+        string requestId,
+        IReadOnlyList<IReadOnlyList<string>> answers,
+        CancellationToken ct = default)
+        => throw new NotImplementedException();
+
     public async IAsyncEnumerable<ChatStreamChunk> SendMessageAsync(
         string agentSessionId,
         ChatRequest request,

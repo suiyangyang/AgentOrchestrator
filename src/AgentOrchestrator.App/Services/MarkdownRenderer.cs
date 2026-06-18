@@ -60,7 +60,7 @@ public static class MarkdownRenderer
                 {
                     FontWeight = FontWeight.Bold,
                     FontSize = fontSize,
-                    LineHeight = 22,
+                    LineHeight = 30,
                     TextWrapping = TextWrapping.Wrap,
                     Margin = new Thickness(0, 8, 0, 4),
                     Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x23, 0x28))
@@ -74,7 +74,7 @@ public static class MarkdownRenderer
                 var tb = new TextBlock
                 {
                     TextWrapping = TextWrapping.Wrap,
-                    LineHeight = 18,
+                    LineHeight = 28,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x23, 0x28))
                 };
                 tb.Inlines!.AddRange(RenderInlines(paragraph.Inline));

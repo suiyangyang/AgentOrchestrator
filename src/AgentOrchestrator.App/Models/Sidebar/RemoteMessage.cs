@@ -20,5 +20,24 @@ public sealed record RemoteBlock(
     string? Text = null,
     string? ToolName = null,
     ToolState? ToolState = null,
-    string? ToolOutput = null
+    string? ToolOutput = null,
+    RemoteQuestion? Question = null
 );
+
+public sealed record RemoteQuestion(
+    string RequestId,
+    string Title,
+    IReadOnlyList<RemoteQuestionItem> Questions);
+
+public sealed record RemoteQuestionItem(
+    string Id,
+    string Header,
+    string Question,
+    bool Multiple,
+    bool Custom,
+    IReadOnlyList<RemoteQuestionOption> Options);
+
+public sealed record RemoteQuestionOption(
+    string Label,
+    string? Description,
+    string Value);

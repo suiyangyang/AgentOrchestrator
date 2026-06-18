@@ -122,6 +122,96 @@
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="BoxShadow" Value="0 6 18 0 #22000000" />
         </Style>
+        <Style Selector="Border.question-banner-shell">
+            <Setter Property="Background" Value="#F6F8FB" />
+            <Setter Property="BorderBrush" Value="#DDE3EA" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+        </Style>
+        <Style Selector="Border.question-banner-card">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="BorderBrush" Value="#DCE2E8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BoxShadow" Value="0 8 20 0 #20000000" />
+        </Style>
+        <Style Selector="TextBlock.question-banner-title">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#1F2328" />
+        </Style>
+        <Style Selector="TextBlock.question-banner-subtitle">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="#60656D" />
+        </Style>
+        <Style Selector="TextBlock.question-item-header">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#3A4048" />
+        </Style>
+        <Style Selector="TextBlock.question-item-question">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="#5E646C" />
+        </Style>
+        <Style Selector="Button.question-option-button">
+            <Setter Property="Background" Value="#FAFBFC" />
+            <Setter Property="BorderBrush" Value="#E4E8EE" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button.question-option-button:pointerover">
+            <Setter Property="Background" Value="#F1F4F8" />
+        </Style>
+        <Style Selector="Border.question-option-indicator">
+            <Setter Property="Width" Value="22" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="CornerRadius" Value="11" />
+            <Setter Property="Background" Value="#E7EBF0" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.question-option-label">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="#1F2328" />
+        </Style>
+        <Style Selector="TextBlock.question-option-description">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="#6C7178" />
+        </Style>
+        <Style Selector="TextBlock.question-option-indicator-mark">
+            <Setter Property="Foreground" Value="#1F2328" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.question-banner-status">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="#8B9098" />
+        </Style>
+        <Style Selector="Button.question-confirm-button">
+            <Setter Property="Background" Value="#1F2328" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="14,8" />
+        </Style>
+        <Style Selector="Button.question-banner-close-button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="#7B8088" />
+            <Setter Property="FontSize" Value="18" />
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.question-banner-close-button:pointerover">
+            <Setter Property="Background" Value="#EEF1F4" />
+            <Setter Property="Foreground" Value="#1F2328" />
+        </Style>
         <Style Selector="Border.edit-icon-shell">
             <Setter Property="Width" Value="42" />
             <Setter Property="Height" Value="42" />
@@ -478,21 +568,13 @@
             <Setter Property="Background" Value="#F5F6F8" />
             <Setter Property="CornerRadius" Value="10" />
             <Setter Property="Padding" Value="14,12" />
-            <Setter Property="Margin" Value="0,12,0,0" />
+            <Setter Property="Margin" Value="0,14,0,0" />
             <Setter Property="BorderBrush" Value="#E2E5EA" />
             <Setter Property="BorderThickness" Value="1" />
         </Style>
         <Style Selector="Border.collapsible-block-body TextBlock">
             <Setter Property="FontFamily" Value="Consolas, Cascadia Code, Menlo, monospace" />
         </Style>
-        <Style Selector="TextBlock.collapsible-block-state">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="Foreground" Value="#9096A0" />
-            <Setter Property="Margin" Value="12,0,0,0" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="TextAlignment" Value="Right" />
-        </Style>
-
         <!-- ============================================================ -->
         <!-- Settings Dialog Buttons                                       -->
         <!--   (Title bar styles moved to Styles/IosTitleBar.axaml         -->

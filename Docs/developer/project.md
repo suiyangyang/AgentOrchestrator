@@ -30,6 +30,10 @@
 - `ChatWorkspaceViewModel` manages messages, attachments, permissions,
   draft input, header title, subagent activity, and the full session lifecycle (new / open / send /
   stream) via `IAgentGateway` and `ISidebarRepository`
+- Thinking / Tool / Task 折叠块在运行态只显示前置转圈状态图标，
+  不再在标题后追加文字状态标识；完成后恢复静态标题样式
+- 聊天区消息列表在滚动条接近底部时会自动跟随最新消息；
+  用户主动上拉后不会强制拉回底部，只有接近底部时才继续贴底
 - 输入区主按钮会根据当前草稿状态在“发送”和“停止”之间切换；
   发送过程中按钮仍保持可用，这样既能取消当前回复，也能继续把新草稿加入队列
 - 当流式回复尚未结束时，新的发送请求会先进入输入区上方的可见队列，
@@ -50,6 +54,11 @@
 - OpenCode 父会话里的任务活动当前真实表现为 `tool = "task"` 的 `ToolPart`，
   不是独立的 `subtask` 可视块；聊天区需要把它映射成专门的 `Task` 折叠块，
   否则实时流和历史加载都会把任务内容埋进普通 Tool 文本
+- `ToolPart` 的 `tool.state` 可能出现当前客户端不认识的状态；
+  这种情况必须降级显示为普通 Tool 运行态，不能让聊天流异常退出
+- OpenCode 的结构化提问不是普通 permission 弹窗，而是会返回带
+  `questions / options / custom` 的挂起 question 列表；当前 UI 需要从窗口顶部下拉
+  固定确认面板，让用户勾选或输入答案后再统一提交
 - `SidebarViewModel` owns the project + session tree, the search
   overlay state, search result list, current-project focus, and the
   per-row "..." actions

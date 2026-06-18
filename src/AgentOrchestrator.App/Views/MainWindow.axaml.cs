@@ -98,6 +98,14 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnQuestionBannerPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm && e.Source == sender)
+        {
+            vm.Chat.ClosePendingQuestionCommand.Execute(null);
+        }
+    }
+
     private void OnSearchResultClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Control { DataContext: SidebarSessionViewModel session }

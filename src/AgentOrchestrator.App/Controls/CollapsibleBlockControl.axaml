@@ -1,31 +1,32 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:AgentOrchestrator.App.ViewModels"
+             xmlns:controls="using:AgentOrchestrator.App.Controls"
              x:Class="AgentOrchestrator.App.Controls.CollapsibleBlockControl"
              x:DataType="vm:ChatBlockViewModel">
     <Grid RowDefinitions="Auto,Auto">
         <ToggleButton Grid.Row="0"
                       Classes="collapsible-block"
                       IsChecked="{Binding IsExpanded, Mode=TwoWay}">
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto" VerticalAlignment="Center">
                 <Panel Width="18" Height="18" VerticalAlignment="Center" HorizontalAlignment="Center">
                     <Path Classes="collapsible-block-icon collapsible-block-icon-thought"
-                          IsVisible="{Binding ShowThoughtIcon}" />
+                          IsVisible="{Binding ShowThoughtLeadingIcon}" />
                     <Path Classes="collapsible-block-icon collapsible-block-icon-tool"
-                          IsVisible="{Binding ShowToolIcon}" />
+                          IsVisible="{Binding ShowToolLeadingIcon}" />
+                    <controls:SpinnerControl IsVisible="{Binding IsRunning}"
+                                             VerticalAlignment="Center"
+                                             HorizontalAlignment="Center" />
                 </Panel>
                 <TextBlock Grid.Column="1"
                            Text="{Binding HeaderText}"
                            Classes="collapsible-block-label"
+                           IsVisible="{Binding ShowHeaderText}"
                            Margin="8,0,0,0" />
-                <TextBlock Text="{Binding ToolStateText}"
-                           Grid.Column="2"
-                           IsVisible="{Binding ShowStateText}"
-                           Classes="collapsible-block-state" />
                 <Panel Grid.Column="3"
                        Width="16"
                        Height="16"
-                       Margin="8,0,0,0"
+                       Margin="10,0,0,0"
                        VerticalAlignment="Center">
                     <Path Classes="collapsible-block-chevron" />
                 </Panel>

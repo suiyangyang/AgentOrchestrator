@@ -20,14 +20,23 @@ public sealed class ToolStateConverter : JsonConverter<ToolState>
         var status = statusProp.GetString() ?? throw new JsonException("'status' property is null");
         var json = root.GetRawText();
 
-        Type targetType = status switch
+        Type? targetType = status switch
         {
             "pending" => typeof(ToolStatePending),
             "running" => typeof(ToolStateRunning),
             "completed" => typeof(ToolStateCompleted),
             "error" => typeof(ToolStateError),
-            _ => throw new JsonException($"Unknown tool state status: {status}"),
+            _ => null,
         };
+
+        if (targetType is null)
+        {
+            return new ToolStateUnknown
+            {
+                Status = status,
+                Raw = root.Clone(),
+            };
+        }
 
         return (ToolState?)JsonSerializer.Deserialize(json, targetType, options);
     }

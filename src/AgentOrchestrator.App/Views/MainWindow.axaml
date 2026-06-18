@@ -2,12 +2,15 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:AgentOrchestrator.App.ViewModels"
         xmlns:controls="using:AgentOrchestrator.App.Controls"
+        xmlns:chat="using:AgentOrchestrator.App.Models.Chat"
+        xmlns:conv="using:Avalonia.Data.Converters"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         d:DesignWidth="1100"
         d:DesignHeight="820"
         x:Class="AgentOrchestrator.App.Views.MainWindow"
+        x:Name="Root"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
         Title="Agent Orchestrator"
@@ -22,7 +25,7 @@
         <vm:MainWindowViewModel />
     </Design.DataContext>
 
-    <Grid RowDefinitions="Auto,*">
+    <Grid RowDefinitions="Auto,Auto,*">
         <!-- Title Bar (drag-to-move via PointerPressed + BeginMoveDrag) -->
         <Border Grid.Row="0" Classes="custom-title-bar"
                 PointerPressed="OnTitleBarPointerPressed"
@@ -53,8 +56,92 @@
             </Grid>
         </Border>
 
+        <Border Grid.Row="1"
+                Classes="question-banner-shell"
+                IsVisible="{Binding Chat.HasPendingQuestion}"
+                PointerPressed="OnQuestionBannerPointerPressed">
+            <Border Classes="question-banner-card"
+                    MaxWidth="920"
+                    HorizontalAlignment="Center"
+                    Margin="20,12,20,10">
+                <Grid RowDefinitions="Auto,*" ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
+                        <TextBlock Text="{Binding Chat.PendingQuestion.Title}"
+                                   Classes="question-banner-title" />
+                        <TextBlock Text="{Binding Chat.PendingQuestion.PromptText}"
+                                   Classes="question-banner-subtitle"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Button Grid.Row="0"
+                            Grid.Column="1"
+                            Classes="question-banner-close-button"
+                            Command="{Binding Chat.ClosePendingQuestionCommand}"
+                            Content="×" />
+
+                    <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Spacing="12" Margin="0,12,0,0">
+                        <ItemsControl ItemsSource="{Binding Chat.PendingQuestion.Questions}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="chat:PendingQuestionItem">
+                                <StackPanel Spacing="8" Margin="0,6,0,0">
+                                    <TextBlock Text="{Binding Header}" Classes="question-item-header" />
+                                    <TextBlock Text="{Binding Question}" Classes="question-item-question" TextWrapping="Wrap" />
+                                    <ItemsControl ItemsSource="{Binding Options}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Spacing="8" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="chat:PendingQuestionOption">
+                                                    <Button Classes="question-option-button"
+                                                        HorizontalAlignment="Stretch"
+                                                        Command="{Binding DataContext.Chat.SelectPendingQuestionOptionCommand, ElementName=Root}"
+                                                        CommandParameter="{Binding}">
+                                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                                        <Border Classes="question-option-indicator">
+                                                            <TextBlock Text="✓"
+                                                                       Classes="question-option-indicator-mark"
+                                                                       IsVisible="{Binding IsSelected}" />
+                                                        </Border>
+                                                        <StackPanel Grid.Column="1" Spacing="2">
+                                                            <TextBlock Text="{Binding Label}" Classes="question-option-label" />
+                                                            <TextBlock Text="{Binding Description}"
+                                                                       Classes="question-option-description"
+                                                                       IsVisible="{Binding Description, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
+                                                                       TextWrapping="Wrap" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                        <TextBox Text="{Binding Chat.PendingQuestion.CustomAnswer, Mode=TwoWay}"
+                                 IsVisible="{Binding Chat.PendingQuestion.AllowCustomAnswer}"
+                                 PlaceholderText="输入自定义答案"
+                                 MinHeight="40" />
+
+                        <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Chat.PendingQuestionStatus}"
+                                       Classes="question-banner-status"
+                                       IsVisible="{Binding Chat.PendingQuestionStatus, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}" />
+                            <Button Grid.Column="1"
+                                    Classes="question-confirm-button"
+                                    Command="{Binding Chat.SubmitPendingQuestionCommand}">
+                                <TextBlock Text="确认" />
+                            </Button>
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Border>
+
         <!-- Main Content: 3 columns (Sidebar | Chat/Workspace | Right Sidebar) -->
-        <Grid Grid.Row="1" RowDefinitions="Auto,*">
+        <Grid Grid.Row="2" RowDefinitions="Auto,*">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="{Binding LeftSidebarWidth}" />
                 <ColumnDefinition Width="*" />

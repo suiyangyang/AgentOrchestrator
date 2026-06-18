@@ -36,6 +36,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     private readonly Queue<QueuedSendRequest> _pendingSendQueue = new();
     private CancellationTokenSource? _sendCts;
     private CancellationTokenSource? _subagentRefreshCts;
+    private CancellationTokenSource? _pendingQuestionCts;
 
     public ChatWorkspaceViewModel(
         IAgentGateway agent,
@@ -91,9 +92,16 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     [ObservableProperty]
     private string _headerTitle = "新对话";
 
+    [ObservableProperty]
+    private PendingQuestion? _pendingQuestion;
+
+    [ObservableProperty]
+    private string? _pendingQuestionStatus;
+
     public bool HasAttachments => Attachments.Count > 0;
     public bool HasSubagentActivities => SubagentActivities.Count > 0;
     public bool HasQueuedDrafts => QueuedDrafts.Count > 0;
+    public bool HasPendingQuestion => PendingQuestion is not null;
     public bool IsBlankPage => CurrentSessionId is null && Messages.Count == 0;
     public bool CanQueueCurrentDraft => !string.IsNullOrWhiteSpace(DraftText.Trim()) || Attachments.Count > 0;
     public bool ShowSendButton => !ShowStopButton;
@@ -130,6 +138,15 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanQueueCurrentDraft));
         OnPropertyChanged(nameof(ShowSendButton));
         OnPropertyChanged(nameof(ShowStopButton));
+        OnPropertyChanged(nameof(HasPendingQuestion));
+    }
+
+    [RelayCommand]
+    private void ClosePendingQuestion()
+    {
+        PendingQuestion = null;
+        PendingQuestionStatus = null;
+        OnPropertyChanged(nameof(HasPendingQuestion));
     }
 
     // ── Public session lifecycle (called by MainWindowViewModel) ─────────
@@ -148,7 +165,10 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         HeaderTitle = string.IsNullOrWhiteSpace(record.Title) ? "新对话" : record.Title;
         Messages.Clear();
         ClearPendingQueue();
+        PendingQuestion = null;
+        PendingQuestionStatus = null;
         await RefreshSubagentActivitiesAsync(record.AgentSessionId, ct).ConfigureAwait(true);
+        await RefreshPendingQuestionAsync(record.AgentSessionId, ct).ConfigureAwait(true);
         StatusMessage = null;
 
         try
@@ -184,6 +204,8 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         Messages.Clear();
         SubagentActivities.Clear();
         ClearPendingQueue();
+        PendingQuestion = null;
+        PendingQuestionStatus = null;
         StatusMessage = null;
 
         if (!string.IsNullOrEmpty(workingDirectory))
@@ -262,6 +284,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         _sendCts = new CancellationTokenSource();
         var ct = _sendCts.Token;
         StartSubagentRefreshLoop(ct);
+        StartPendingQuestionRefreshLoop(ct);
 
         try
         {
@@ -308,6 +331,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             assistantMessage.IsStreaming = false;
             IsStreaming = false;
             StopSubagentRefreshLoop();
+            StopPendingQuestionRefreshLoop();
             SendCancellationCleanup();
         }
     }
@@ -374,6 +398,20 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         _subagentRefreshCts = null;
     }
 
+    private void StartPendingQuestionRefreshLoop(CancellationToken ct)
+    {
+        StopPendingQuestionRefreshLoop();
+        _pendingQuestionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _ = RefreshPendingQuestionLoopAsync(_pendingQuestionCts.Token);
+    }
+
+    private void StopPendingQuestionRefreshLoop()
+    {
+        _pendingQuestionCts?.Cancel();
+        _pendingQuestionCts?.Dispose();
+        _pendingQuestionCts = null;
+    }
+
     private async Task RefreshSubagentActivitiesLoopAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
@@ -395,6 +433,32 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             catch
             {
                 await Task.Delay(TimeSpan.FromSeconds(2), ct).ConfigureAwait(true);
+            }
+        }
+    }
+
+    private async Task RefreshPendingQuestionLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                if (CurrentAgentSessionId is null)
+                {
+                    PendingQuestion = null;
+                    return;
+                }
+
+                await RefreshPendingQuestionAsync(CurrentAgentSessionId, ct).ConfigureAwait(true);
+                await Task.Delay(TimeSpan.FromSeconds(0.8), ct).ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1.5), ct).ConfigureAwait(true);
             }
         }
     }
@@ -439,6 +503,69 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         {
             Attachments.Add(attachment);
         }
+    }
+
+    [RelayCommand]
+    private void SelectPendingQuestionOption(PendingQuestionOption option)
+    {
+        if (PendingQuestion is null || option is null)
+        {
+            return;
+        }
+
+        if (!PendingQuestion.MultipleSelection)
+        {
+            foreach (var item in PendingQuestion.Questions)
+            {
+                foreach (var candidate in item.Options)
+                {
+                    candidate.IsSelected = ReferenceEquals(candidate, option);
+                }
+            }
+            return;
+        }
+
+        option.IsSelected = !option.IsSelected;
+    }
+
+    [RelayCommand]
+    private async Task SubmitPendingQuestionAsync()
+    {
+        if (PendingQuestion is null || CurrentAgentSessionId is null)
+        {
+            return;
+        }
+
+        var answers = BuildQuestionAnswers(PendingQuestion);
+        if (answers.Count == 0)
+        {
+            PendingQuestionStatus = "请先选择答案";
+            return;
+        }
+
+        try
+        {
+            PendingQuestionStatus = "正在提交…";
+            await _agent.SubmitQuestionAnswerAsync(
+                CurrentAgentSessionId,
+                PendingQuestion.RequestId,
+                answers,
+                _sendCts?.Token ?? CancellationToken.None).ConfigureAwait(true);
+            PendingQuestionStatus = null;
+            PendingQuestion = null;
+            await RefreshPendingQuestionAsync(CurrentAgentSessionId, CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            PendingQuestionStatus = $"提交失败:{ex.Message}";
+        }
+    }
+
+    public void RestorePendingQuestion(RemoteQuestion question)
+    {
+        PendingQuestion = MapPendingQuestion(question);
+        PendingQuestionStatus = null;
+        OnPropertyChanged(nameof(HasPendingQuestion));
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
@@ -669,23 +796,31 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                     vm.Blocks.Add(new ChatBlockViewModel(ChatBlockKind.Image, b.PartId, b.Text));
                     break;
                 case ChatBlockKind.Tool:
-                    vm.Blocks.Add(new ChatBlockViewModel(
+                {
+                    var block = new ChatBlockViewModel(
                         ChatBlockKind.Tool,
                         b.PartId,
                         b.ToolName ?? "tool",
                         b.ToolState ?? ToolState.Completed,
                         b.ToolOutput,
-                        isExpanded: false));
+                        isExpanded: false);
+                    block.ToolQuestion = b.Question;
+                    vm.Blocks.Add(block);
                     break;
+                }
                 case ChatBlockKind.Task:
-                    vm.Blocks.Add(new ChatBlockViewModel(
+                {
+                    var block = new ChatBlockViewModel(
                         ChatBlockKind.Task,
                         b.PartId,
                         b.ToolName ?? "Task",
                         b.ToolState ?? ToolState.Completed,
                         b.ToolOutput,
-                        isExpanded: false));
+                        isExpanded: false);
+                    block.ToolQuestion = b.Question;
+                    vm.Blocks.Add(block);
                     break;
+                }
             }
         }
         return vm;
@@ -714,6 +849,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                 current.ToolName = block.ToolName;
                 current.ToolState = block.ToolState ?? current.ToolState;
                 current.ToolOutput = block.ToolOutput;
+                current.ToolQuestion = block.Question;
             }
             else
             {
@@ -728,10 +864,23 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             ChatBlockKind.Text => new ChatBlockViewModel(ChatBlockKind.Text, block.PartId, block.Text),
             ChatBlockKind.Thought => new ChatBlockViewModel(ChatBlockKind.Thought, block.PartId, block.Text, isExpanded: false),
             ChatBlockKind.Image => new ChatBlockViewModel(ChatBlockKind.Image, block.PartId, block.Text),
-            ChatBlockKind.Tool => new ChatBlockViewModel(ChatBlockKind.Tool, block.PartId, block.ToolName ?? "tool", block.ToolState ?? ToolState.Completed, block.ToolOutput, isExpanded: false),
-            ChatBlockKind.Task => new ChatBlockViewModel(ChatBlockKind.Task, block.PartId, block.ToolName ?? "Task", block.ToolState ?? ToolState.Completed, block.ToolOutput, isExpanded: false),
+            ChatBlockKind.Tool => CreateQuestionAwareToolBlock(ChatBlockKind.Tool, block),
+            ChatBlockKind.Task => CreateQuestionAwareToolBlock(ChatBlockKind.Task, block),
             _ => new ChatBlockViewModel(ChatBlockKind.Text, block.PartId, block.Text)
         };
+
+    private static ChatBlockViewModel CreateQuestionAwareToolBlock(ChatBlockKind kind, RemoteBlock block)
+    {
+        var vm = new ChatBlockViewModel(
+            kind,
+            block.PartId,
+            kind == ChatBlockKind.Task ? block.ToolName ?? "Task" : block.ToolName ?? "tool",
+            block.ToolState ?? ToolState.Completed,
+            block.ToolOutput,
+            isExpanded: false);
+        vm.ToolQuestion = block.Question;
+        return vm;
+    }
 
     private async Task RefreshSubagentActivitiesAsync(string agentSessionId, CancellationToken ct)
     {
@@ -750,6 +899,111 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         {
             // Best-effort only.
         }
+    }
+
+    private async Task RefreshPendingQuestionAsync(string agentSessionId, CancellationToken ct)
+    {
+        try
+        {
+            var requests = await _agent.GetPendingQuestionsAsync(agentSessionId, ct).ConfigureAwait(true);
+            var request = requests.FirstOrDefault();
+            if (request is not null)
+            {
+                PendingQuestion = MapPendingQuestion(request);
+                OnPropertyChanged(nameof(HasPendingQuestion));
+                return;
+            }
+
+            PendingQuestion = TryRestorePendingQuestionFromMessages();
+            OnPropertyChanged(nameof(HasPendingQuestion));
+        }
+        catch
+        {
+            // Best-effort only.
+        }
+    }
+
+    private static PendingQuestion MapPendingQuestion(AgentQuestionRequest request)
+    {
+        var vm = new PendingQuestion(request.RequestId, request.Title)
+        {
+            PromptText = request.Title,
+            MultipleSelection = request.Questions.Any(x => x.Multiple),
+            AllowCustomAnswer = request.Questions.Any(x => x.Custom),
+        };
+
+        foreach (var question in request.Questions)
+        {
+            var item = new PendingQuestionItem(question.Id, question.Header, question.Question);
+            foreach (var option in question.Options)
+            {
+                item.Options.Add(new PendingQuestionOption(
+                    option.Label,
+                    option.Description,
+                    string.IsNullOrWhiteSpace(option.Value) ? option.Label : option.Value));
+            }
+            vm.Questions.Add(item);
+        }
+
+        return vm;
+    }
+
+    private PendingQuestion? TryRestorePendingQuestionFromMessages()
+    {
+        var block = Messages
+            .Where(m => m.IsAssistant)
+            .SelectMany(m => m.Blocks)
+            .LastOrDefault(b => b.ToolQuestion is not null && b.ToolState is not ToolState.Completed and not ToolState.Failed);
+
+        return block?.ToolQuestion is null ? null : MapPendingQuestion(block.ToolQuestion);
+    }
+
+    private static PendingQuestion MapPendingQuestion(RemoteQuestion question)
+    {
+        var vm = new PendingQuestion(question.RequestId, question.Title)
+        {
+            PromptText = question.Title,
+            MultipleSelection = question.Questions.Any(x => x.Multiple),
+            AllowCustomAnswer = question.Questions.Any(x => x.Custom),
+        };
+
+        foreach (var item in question.Questions)
+        {
+            var questionItem = new PendingQuestionItem(item.Id, item.Header, item.Question);
+            foreach (var option in item.Options)
+            {
+                questionItem.Options.Add(new PendingQuestionOption(option.Label, option.Description, option.Value));
+            }
+            vm.Questions.Add(questionItem);
+        }
+
+        return vm;
+    }
+
+    private static IReadOnlyList<IReadOnlyList<string>> BuildQuestionAnswers(PendingQuestion question)
+    {
+        var result = new List<IReadOnlyList<string>>(question.Questions.Count);
+        foreach (var item in question.Questions)
+        {
+            var selected = item.Options
+                .Where(x => x.IsSelected)
+                .Select(x => x.Value ?? x.Label)
+                .ToList();
+
+            if (selected.Count == 0 && question.AllowCustomAnswer && !string.IsNullOrWhiteSpace(question.CustomAnswer))
+            {
+                selected.Add(question.CustomAnswer.Trim());
+            }
+
+            if (selected.Count == 0)
+            {
+                return [];
+            }
+
+            result.Add(selected);
+        }
+
+        return result;
     }
 
     // ── Attachment commands (kept for XAML compat) ──────────────────────

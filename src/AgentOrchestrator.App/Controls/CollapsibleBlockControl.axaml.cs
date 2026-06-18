@@ -1,8 +1,10 @@
 using System;
 using System.ComponentModel;
+using AgentOrchestrator.App.Models.Sidebar;
 using AgentOrchestrator.App.Services;
 using AgentOrchestrator.App.ViewModels;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 
 namespace AgentOrchestrator.App.Controls;
 
@@ -54,6 +56,10 @@ public partial class CollapsibleBlockControl : UserControl
         {
             Body.Content = MarkdownRenderer.RenderInline(_viewModel.Text ?? string.Empty);
         }
+        else if ((_viewModel.IsTool || _viewModel.IsTask) && _viewModel.ToolQuestion is not null)
+        {
+            Body.Content = BuildQuestionBody(_viewModel.ToolQuestion);
+        }
         else if (_viewModel.IsTool || _viewModel.IsTask)
         {
             Body.Content = MarkdownRenderer.RenderInline(_viewModel.ToolOutput ?? string.Empty);
@@ -61,6 +67,59 @@ public partial class CollapsibleBlockControl : UserControl
         else
         {
             Body.Content = null;
+        }
+    }
+
+    private Control BuildQuestionBody(RemoteQuestion question)
+    {
+        var layout = new StackPanel { Spacing = 10 };
+
+        foreach (var item in question.Questions)
+        {
+            layout.Children.Add(new TextBlock { Text = item.Header, Classes = { "question-item-header" } });
+            if (!string.IsNullOrWhiteSpace(item.Question))
+            {
+                layout.Children.Add(new TextBlock { Text = item.Question, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Classes = { "question-item-question" } });
+            }
+
+            foreach (var option in item.Options)
+            {
+                var text = string.IsNullOrWhiteSpace(option.Description)
+                    ? option.Label
+                    : $"{option.Label} - {option.Description}";
+                layout.Children.Add(new TextBlock { Text = $"• {text}", TextWrapping = Avalonia.Media.TextWrapping.Wrap, Classes = { "question-option-description" } });
+            }
+
+            if (item.Custom)
+            {
+                layout.Children.Add(new TextBlock { Text = "• 自定义答案", Classes = { "question-option-description" } });
+            }
+        }
+
+        var button = new Button
+        {
+            Content = "继续回答",
+            Classes = { "question-confirm-button" },
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left
+        };
+        button.Click += OnContinueQuestionClick;
+        button.Tag = question;
+        layout.Children.Add(button);
+
+        return layout;
+    }
+
+    private void OnContinueQuestionClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: RemoteQuestion question })
+        {
+            return;
+        }
+
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel?.DataContext is MainWindowViewModel mainWindowViewModel)
+        {
+            mainWindowViewModel.Chat.RestorePendingQuestion(question);
         }
     }
 }

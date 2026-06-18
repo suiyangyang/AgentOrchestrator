@@ -4,11 +4,11 @@ namespace OpenCode.Client.Models;
 
 public sealed record FileDiff
 {
-    public required string File { get; init; }
-    public required string Before { get; init; }
-    public required string After { get; init; }
+    public string? File { get; init; }
+    public string? Patch { get; init; }
     public long Additions { get; init; }
     public long Deletions { get; init; }
+    public string? Status { get; init; }
 }
 
 public sealed record UserMessage

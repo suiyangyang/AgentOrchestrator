@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
@@ -15,6 +16,8 @@ namespace AgentOrchestrator.App.Controls;
 
 public partial class ChatWorkspaceControl : UserControl
 {
+    private const double AutoScrollThreshold = 48d;
+
     private ViewModels.ChatWorkspaceViewModel? _attachedVm;
     private ViewModels.ChatMessageViewModel? _subscribedTail;
     private readonly NotifyCollectionChangedEventHandler _blocksHandler;
@@ -105,7 +108,7 @@ public partial class ChatWorkspaceControl : UserControl
 
     private void OnMessagesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        ScrollToEnd();
+        MaybeScrollToEnd();
 
         // The tail may have shifted (or been removed/reset); re-attach.
         if (_attachedVm is not null)
@@ -116,14 +119,30 @@ public partial class ChatWorkspaceControl : UserControl
 
     private void OnBlocksCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        ScrollToEnd();
+        MaybeScrollToEnd();
     }
 
-    private void ScrollToEnd()
+    private void MaybeScrollToEnd()
     {
         Dispatcher.UIThread.Post(
-            () => MessagesScrollViewer.ScrollToEnd(),
+            () =>
+            {
+                if (ShouldAutoScroll())
+                {
+                    MessagesScrollViewer.ScrollToEnd();
+                }
+            },
             DispatcherPriority.Background);
+    }
+
+    private bool ShouldAutoScroll()
+    {
+        if (MessagesScrollViewer.Extent.Height <= MessagesScrollViewer.Viewport.Height)
+        {
+            return true;
+        }
+
+        return MessagesScrollViewer.Extent.Height - (MessagesScrollViewer.Offset.Y + MessagesScrollViewer.Viewport.Height) <= AutoScrollThreshold;
     }
 
     // ── Popup handlers ──────────────────────────────────────────────────
