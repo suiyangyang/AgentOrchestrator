@@ -18,11 +18,36 @@
                                              VerticalAlignment="Center"
                                              HorizontalAlignment="Center" />
                 </Panel>
-                <TextBlock Grid.Column="1"
-                           Text="{Binding HeaderText}"
-                           Classes="collapsible-block-label"
-                           IsVisible="{Binding ShowHeaderText}"
-                           Margin="8,0,0,0" />
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="6"
+                            VerticalAlignment="Center"
+                            Margin="8,0,0,0"
+                            IsVisible="{Binding ShowHeaderText}">
+                    <!-- Plain header (Thought etc.) -->
+                    <TextBlock Text="{Binding HeaderText}"
+                               Classes="collapsible-block-label"
+                               IsVisible="{Binding ShowPlainHeader}" />
+                    <!-- Tool/Task header: action -->
+                    <TextBlock Classes="collapsible-block-label"
+                               IsVisible="{Binding ShowToolHeader}">
+                        <TextBlock.Text>
+                            <MultiBinding StringFormat="{}{0}">
+                                <Binding Path="ToolHeaderActionText" />
+                            </MultiBinding>
+                        </TextBlock.Text>
+                    </TextBlock>
+                    <!-- Tool/Task header: file path -->
+                    <TextBlock Text="{Binding ToolHeaderFilePathText}"
+                               Classes="collapsible-block-label collapsible-block-label-path"
+                               IsVisible="{Binding HasToolHeaderFilePath}"
+                               TextTrimming="CharacterEllipsis"
+                               MaxWidth="380" />
+                    <!-- Tool/Task header: line range -->
+                    <TextBlock Text="{Binding ToolHeaderLineRangeDisplayText}"
+                               Classes="collapsible-block-label collapsible-block-label-meta"
+                               IsVisible="{Binding HasToolHeaderLineRange}" />
+                </StackPanel>
                 <Panel Grid.Column="3"
                        Width="16"
                        Height="16"

@@ -4,7 +4,9 @@ using AgentOrchestrator.App.Models.Sidebar;
 using AgentOrchestrator.App.Services;
 using AgentOrchestrator.App.ViewModels;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 
 namespace AgentOrchestrator.App.Controls;
 
@@ -54,7 +56,14 @@ public partial class CollapsibleBlockControl : UserControl
 
         if (_viewModel.IsThought)
         {
-            Body.Content = MarkdownRenderer.RenderInline(_viewModel.Text ?? string.Empty);
+            var thoughtContent = MarkdownRenderer.RenderInline(_viewModel.Text ?? string.Empty);
+            Body.Content = new ScrollViewer
+            {
+                MaxHeight = 300,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = thoughtContent
+            };
         }
         else if ((_viewModel.IsTool || _viewModel.IsTask) && _viewModel.ToolQuestion is not null)
         {
@@ -62,12 +71,27 @@ public partial class CollapsibleBlockControl : UserControl
         }
         else if (_viewModel.IsTool || _viewModel.IsTask)
         {
-            Body.Content = MarkdownRenderer.RenderInline(_viewModel.ToolOutput ?? string.Empty);
+            Body.Content = BuildToolBody(_viewModel);
         }
         else
         {
             Body.Content = null;
         }
+    }
+
+    private static Control BuildToolBody(ChatBlockViewModel viewModel)
+    {
+        var display = viewModel.ToolDisplay;
+        if (!string.IsNullOrWhiteSpace(display.CodeText))
+        {
+            return new ReadOnlyCodeBlock
+            {
+                Text = display.CodeText,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+        }
+
+        return MarkdownRenderer.RenderInline(viewModel.ToolOutput ?? string.Empty);
     }
 
     private Control BuildQuestionBody(RemoteQuestion question)
