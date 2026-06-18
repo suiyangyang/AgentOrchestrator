@@ -60,6 +60,93 @@
         <Setter Property="BorderThickness" Value="1.5" />
     </Style>
 
+    <Style Selector="Button.title-bar-outline-btn">
+        <Setter Property="Width" Value="34" />
+        <Setter Property="Height" Value="30" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="CornerRadius" Value="0" />
+    </Style>
+
+    <Style Selector="Button.title-bar-outline-btn:pointerover">
+        <Setter Property="Background" Value="#F3F4F6" />
+    </Style>
+
+    <Style Selector="Button.title-bar-outline-btn:pressed">
+        <Setter Property="Background" Value="#E9EBEF" />
+    </Style>
+
+    <Style Selector="Border.title-bar-outline-icon-box">
+        <Setter Property="Width" Value="14" />
+        <Setter Property="Height" Value="14" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="BorderBrush" Value="#7A7F87" />
+        <Setter Property="BorderThickness" Value="1.2" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="BoxShadow" Value="inset 0 0 0 0 transparent" />
+    </Style>
+
+    <Style Selector="Border.title-bar-outline-icon-divider-left">
+        <Setter Property="Width" Value="1.2" />
+        <Setter Property="Height" Value="8" />
+        <Setter Property="Background" Value="#7A7F87" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="4.2,0,0,0" />
+        <Setter Property="CornerRadius" Value="1" />
+    </Style>
+
+    <Style Selector="Button.title-bar-service-btn">
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="FontFamily" Value="Inter, Segoe UI, Microsoft YaHei UI" />
+    </Style>
+
+    <Style Selector="Path.title-bar-service-icon">
+        <Setter Property="Width" Value="18" />
+        <Setter Property="Height" Value="18" />
+        <Setter Property="Stretch" Value="Uniform" />
+        <Setter Property="Fill" Value="{StaticResource TextSecondaryBrush}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0,2,4,0" />
+    </Style>
+
+    <Style Selector="Button.title-bar-service-btn:pointerover Path.title-bar-service-icon">
+        <Setter Property="Fill" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="Button.title-bar-service-btn:pressed Path.title-bar-service-icon">
+        <Setter Property="Fill" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="Button.title-bar-service-btn:focus-visible Path.title-bar-service-icon">
+        <Setter Property="Fill" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="Border.title-bar-service-badge">
+        <Setter Property="MinWidth" Value="16" />
+        <Setter Property="Height" Value="16" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Background" Value="#2F3138" />
+        <Setter Property="BorderBrush" Value="#F9F9FB" />
+        <Setter Property="BorderThickness" Value="1.5" />
+        <Setter Property="Padding" Value="3,0" />
+        <Setter Property="Margin" Value="0,1,1,0" />
+    </Style>
+
+    <Style Selector="TextBlock.title-bar-service-badge-text">
+        <Setter Property="Foreground" Value="#FFFFFF" />
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
     <!-- Close button: vivid red on hover (Win11-style), full-height flush button -->
     <Style Selector="Button.title-bar-btn-close">
         <Setter Property="Background" Value="Transparent" />

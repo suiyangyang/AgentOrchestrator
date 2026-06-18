@@ -6,10 +6,9 @@
         x:DataType="vm:SettingsViewModel"
         Title="设置"
         Width="1000" Height="800"
-        MinWidth="1000" MinHeight="800"
-        MaxWidth="1000" MaxHeight="800"
+        MinWidth="900" MinHeight="680"
         WindowStartupLocation="CenterOwner"
-        CanResize="False"
+        CanResize="True"
         Background="#F5F5F7">
 
     <Window.Resources>
@@ -17,77 +16,237 @@
     </Window.Resources>
 
     <Grid RowDefinitions="*,Auto">
+        <Grid Grid.Row="0" ColumnDefinitions="240,*">
+            <Border Grid.Column="0"
+                    Background="#F9F9FB"
+                    BorderBrush="#E2E5EA"
+                    BorderThickness="0,0,1,0">
+                <StackPanel Margin="0,12,0,0" Spacing="8">
+                    <StackPanel>
+                        <Button Classes="sidebar-section-header"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Grid.Column="0" Text="▾" Classes="sidebar-section-caret" />
+                                <TextBlock Grid.Column="1" Text="个人" Classes="sidebar-section-label" />
+                            </Grid>
+                        </Button>
+                        <Button Classes="sidebar-session-item"
+                                Classes.sidebar-settings-item-selected="{Binding IsGeneralSelected}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch"
+                                Margin="20,0,8,0"
+                                Command="{Binding SelectPageCommand}"
+                                CommandParameter="{x:Static vm:SettingsPage.General}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                <TextBlock Grid.Column="0" Text="◌" Classes="sidebar-nav-icon" />
+                                <TextBlock Grid.Column="1" Text="常规" Classes="sidebar-session-title" />
+                            </Grid>
+                        </Button>
+                    </StackPanel>
 
-        <!-- Top: Scrollable content -->
-        <ScrollViewer Grid.Row="0" Padding="24">
-            <StackPanel Spacing="16">
+                    <StackPanel>
+                        <Button Classes="sidebar-section-header"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Grid.Column="0" Text="▾" Classes="sidebar-section-caret" />
+                                <TextBlock Grid.Column="1" Text="集成" Classes="sidebar-section-label" />
+                            </Grid>
+                        </Button>
+                        <Button Classes="sidebar-session-item"
+                                Classes.sidebar-settings-item-selected="{Binding IsServicesSelected}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch"
+                                Margin="20,0,8,0"
+                                Command="{Binding SelectPageCommand}"
+                                CommandParameter="{x:Static vm:SettingsPage.Services}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                <TextBlock Grid.Column="0" Text="◌" Classes="sidebar-nav-icon" />
+                                <TextBlock Grid.Column="1" Text="服务" Classes="sidebar-session-title" />
+                            </Grid>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
 
-                <!-- Card 1: OpenCode CLI Path -->
-                <Border Background="White" CornerRadius="12" Padding="20" BorderBrush="#E3E5E9" BorderThickness="1">
-                    <StackPanel Spacing="0">
-                        <TextBlock Text="OpenCode CLI Path" FontSize="14" FontWeight="SemiBold" Foreground="#1F2328" />
-                        <TextBlock Text="Path" FontSize="12" Foreground="#6E727A" Margin="0,12,0,4" />
-                        <Grid ColumnDefinitions="*,Auto">
-                            <TextBox Grid.Column="0"
-                                     Text="{Binding OpenCodeCliPath}"
-                                     Background="#F0F1F3" CornerRadius="6" Padding="12,8"
-                                     BorderThickness="0" FontSize="13" Foreground="#1F2328" />
-                            <Button Grid.Column="1"
-                                    Content="Browse…"
-                                    Background="#1F78FF" Foreground="White"
-                                    Padding="14,8" CornerRadius="6" FontSize="13"
-                                    VerticalAlignment="Center" Margin="8,0,0,0"
-                                    Click="OnBrowseOpenCodeClick" />
+            <Grid Grid.Column="1">
+                <Border IsVisible="{Binding IsGeneralSelected}"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        Padding="24">
+                    <Border Background="White"
+                            CornerRadius="12"
+                            Padding="20"
+                            BorderBrush="#E3E5E9"
+                            BorderThickness="1"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Top">
+                        <Grid MinHeight="180">
+                            <TextBlock Text="占位页面"
+                                       Foreground="#9096A0"
+                                       FontSize="13"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
                         </Grid>
-                    </StackPanel>
+                    </Border>
                 </Border>
 
-                <!-- Card 2: Network -->
-                <Border Background="White" CornerRadius="12" Padding="20" BorderBrush="#E3E5E9" BorderThickness="1">
-                    <StackPanel Spacing="0">
-                        <TextBlock Text="Network" FontSize="14" FontWeight="SemiBold" Foreground="#1F2328" />
-                        <TextBlock Text="Host" FontSize="12" Foreground="#6E727A" Margin="0,12,0,4" />
-                        <TextBox Text="{Binding Host}"
-                                 Background="#F0F1F3" CornerRadius="6" Padding="12,8"
-                                 BorderThickness="0" FontSize="13" Foreground="#1F2328" />
-                        <TextBlock Text="Port" FontSize="12" Foreground="#6E727A" Margin="0,12,0,4" />
-                        <TextBox Text="{Binding Port}"
-                                 Background="#F0F1F3" CornerRadius="6" Padding="12,8"
-                                 BorderThickness="0" FontSize="13" Foreground="#1F2328" />
+                <ScrollViewer IsVisible="{Binding IsServicesSelected}"
+                              Padding="24">
+                    <StackPanel Spacing="15">
+                        <TextBlock Text="服务"
+                                   Classes="settings-page-title" />
+
+                        <TextBlock Text="OpenCode"
+                                   Classes="settings-service-group-title" />
+
+                        <Border Classes="settings-service-card" Padding="10">
+                            <Grid RowDefinitions="Auto,Auto,Auto,Auto">
+                                <Grid Grid.Row="0"
+                                      Classes="settings-service-row settings-service-row-first"
+                                      ColumnDefinitions="Auto,*,Auto,Auto"
+                                      ColumnSpacing="14">
+                                    <Image Grid.Column="0"
+                                           Width="34"
+                                           Height="34"
+                                           Margin="0,0,2,0"
+                                           Source="/Assets/opencode_round.png" />
+                                    <StackPanel Grid.Column="1"
+                                                Spacing="2"
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="OpenCode"
+                                                   Classes="settings-service-name" />
+                                        <TextBlock Text="打开服务后自动连接并复用当前客户端"
+                                                   Classes="settings-service-description" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding OpenCodeStatusText}"
+                                               Classes="settings-service-status"
+                                               Classes.settings-service-status-connected="{Binding IsOpenCodeConnected}"
+                                               Classes.settings-service-status-disconnected="{Binding !IsOpenCodeConnected}"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,8,0" />
+                                    <ToggleSwitch Grid.Column="3"
+                                                  IsChecked="{Binding OpenCodeEnabled, Mode=TwoWay}"
+                                                  VerticalAlignment="Center" />
+                                </Grid>
+
+                                <Border Grid.Row="1"
+                                        Classes="settings-service-row"
+                                        BorderBrush="#ECEEF2"
+                                        BorderThickness="0,0,0,1">
+                                    <Grid ColumnDefinitions="*,280"
+                                          ColumnSpacing="24"
+                                          Margin="18,5">
+                                        <StackPanel Grid.Column="0"
+                                                    Spacing="3">
+                                            <TextBlock Text="url"
+                                                       Classes="settings-service-label" />
+                                            <TextBlock Text="当前连接地址"
+                                                       Classes="settings-service-description" />
+                                        </StackPanel>
+                                        <Border Grid.Column="1"
+                                                Classes="settings-service-field-shell">
+                                            <TextBlock Text="{Binding OpenCodeUrl}"
+                                                       Classes="settings-service-field-text" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border Grid.Row="2"
+                                        Classes="settings-service-row"
+                                        BorderBrush="#ECEEF2"
+                                        BorderThickness="0,0,0,1">
+                                    <Grid ColumnDefinitions="*,280"
+                                          ColumnSpacing="24"
+                                          Margin="18,16">
+                                        <StackPanel Grid.Column="0"
+                                                    Spacing="3">
+                                            <TextBlock Text="username"
+                                                       Classes="settings-service-label" />
+                                            <TextBlock Text="连接服务时使用的账号"
+                                                       Classes="settings-service-description" />
+                                        </StackPanel>
+                                        <Border Grid.Column="1"
+                                                Classes="settings-service-field-shell">
+                                            <TextBox Text="{Binding Username}"
+                                                     Watermark="username"
+                                                     Classes="settings-service-input" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border Grid.Row="3"
+                                        Classes="settings-service-row settings-service-row-last">
+                                    <Grid ColumnDefinitions="*,280"
+                                          ColumnSpacing="24"
+                                          Margin="18,16">
+                                        <StackPanel Grid.Column="0"
+                                                    Spacing="3">
+                                            <TextBlock Text="password"
+                                                       Classes="settings-service-label" />
+                                            <TextBlock Text="连接服务时使用的密码"
+                                                       Classes="settings-service-description" />
+                                        </StackPanel>
+                                        <Border Grid.Column="1"
+                                                Classes="settings-service-field-shell">
+                                            <Grid ColumnDefinitions="*,Auto"
+                                                  ColumnSpacing="8">
+                                                <TextBox Grid.Column="0"
+                                                         Text="{Binding Password}"
+                                                         Watermark="password"
+                                                         PasswordChar="{Binding IsPasswordVisible, Converter={StaticResource BoolToPasswordCharConverter}}"
+                                                         Classes="settings-service-input" />
+                                                <Button Grid.Column="1"
+                                                        Command="{Binding TogglePasswordVisibilityCommand}"
+                                                        Classes="settings-service-icon-button"
+                                                        ToolTip.Tip="显示/隐藏密码">
+                                                    <Path Width="16" Height="16" Stretch="Uniform" Fill="#6E727A"
+                                                          Data="M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5ZM12,17.5C9.24,17.5 7,15.26 7,12.5C7,9.74 9.24,7.5 12,7.5C14.76,7.5 17,9.74 17,12.5C17,15.26 14.76,17.5 12,17.5ZM12,9.5C10.34,9.5 9,10.84 9,12.5C9,14.16 10.34,15.5 12,15.5C13.66,15.5 15,14.16 15,12.5C15,10.84 13.66,9.5 12,9.5Z" />
+                                                </Button>
+                                            </Grid>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Text="codex"
+                                   Classes="settings-service-group-title" />
+
+                        <Border Classes="settings-service-card">
+                            <Grid Classes="settings-service-row settings-service-row-first settings-service-row-last"
+                                  ColumnDefinitions="Auto,*,Auto"
+                                  ColumnSpacing="14"
+								  Margin="18,10">
+                                <Image Grid.Column="0"
+                                       Width="34"
+                                       Height="34"
+                                       Margin="0,0,2,0"
+                                       Source="/Assets/codex-icon.png"
+                                       Opacity="0.55" />
+                                <StackPanel Grid.Column="1"
+                                            Spacing="2"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Text="codex"
+                                               Classes="settings-service-name"
+                                               Opacity="0.72" />
+                                    <TextBlock Text="该服务入口已预留，当前版本暂不支持"
+                                               Classes="settings-service-description"
+                                               Opacity="0.82" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="2"
+                                           Text="暂不支持"
+                                           Classes="settings-service-status-disabled"
+                                           VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
                     </StackPanel>
-                </Border>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
 
-                <!-- Card 3: Authentication -->
-                <Border Background="White" CornerRadius="12" Padding="20" BorderBrush="#E3E5E9" BorderThickness="1">
-                    <StackPanel Spacing="0">
-                        <TextBlock Text="Authentication" FontSize="14" FontWeight="SemiBold" Foreground="#1F2328" />
-                        <TextBlock Text="Username" FontSize="12" Foreground="#6E727A" Margin="0,12,0,4" />
-                        <TextBox Text="{Binding Username}"
-                                 Background="#F0F1F3" CornerRadius="6" Padding="12,8"
-                                 BorderThickness="0" FontSize="13" Foreground="#1F2328" />
-                        <TextBlock Text="Password" FontSize="12" Foreground="#6E727A" Margin="0,12,0,4" />
-                        <Grid ColumnDefinitions="*,Auto">
-                            <TextBox Grid.Column="0"
-                                     Text="{Binding Password}"
-                                     PasswordChar="{Binding IsPasswordVisible, Converter={StaticResource BoolToPasswordCharConverter}}"
-                                     Background="#F0F1F3" CornerRadius="6" Padding="12,8"
-                                     BorderThickness="0" FontSize="13" Foreground="#1F2328" />
-                            <Button Grid.Column="1"
-                                    Command="{Binding TogglePasswordVisibilityCommand}"
-                                    ToolTip.Tip="显示/隐藏密码"
-                                    VerticalAlignment="Center" Margin="8,0,0,0"
-                                    Background="Transparent" BorderThickness="0" Padding="4">
-                                <Path Width="18" Height="18" Stretch="Uniform" Fill="#6E727A"
-                                      Data="M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5ZM12,17.5C9.24,17.5 7,15.26 7,12.5C7,9.74 9.24,7.5 12,7.5C14.76,7.5 17,9.74 17,12.5C17,15.26 14.76,17.5 12,17.5ZM12,9.5C10.34,9.5 9,10.84 9,12.5C9,14.16 10.34,15.5 12,15.5C13.66,15.5 15,14.16 15,12.5C15,10.84 13.66,9.5 12,9.5Z" />
-                            </Button>
-                        </Grid>
-                    </StackPanel>
-                </Border>
-
-            </StackPanel>
-        </ScrollViewer>
-
-        <!-- Bottom: OK / Cancel buttons (fixed) -->
         <Border Grid.Row="1" Background="White" BorderBrush="#E3E5E9" BorderThickness="0,1,0,0" Padding="24,16">
             <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right">
                 <Button Content="取消" Classes="settings-dialog-btn" Command="{Binding CancelCommand}" />

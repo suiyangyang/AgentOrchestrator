@@ -1,17 +1,26 @@
 using System;
+using System.Threading.Tasks;
 using AgentOrchestrator.App.Services.Settings;
 using Avalonia.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using OpenCode.Client;
 
 namespace AgentOrchestrator.App.ViewModels;
 
 public partial class SettingsViewModel : ViewModelBase
 {
     private readonly IAppSettingsService _settingsService;
+    private readonly OpenCodeClient _openCodeClient;
 
     [ObservableProperty]
-    private string _openCodeCliPath = "";
+    private SettingsPage _selectedPage = SettingsPage.General;
+
+    public bool IsGeneralSelected => SelectedPage == SettingsPage.General;
+    public bool IsServicesSelected => SelectedPage == SettingsPage.Services;
+
+    [ObservableProperty]
+    private bool _openCodeEnabled = true;
 
     [ObservableProperty]
     private string _host = "0.0.0.0";
@@ -28,24 +37,43 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isPasswordVisible = false;
 
+    [ObservableProperty]
+    private bool _isOpenCodeConnected;
+
+    [ObservableProperty]
+    private string _openCodeStatusText = "断开";
+
+    [ObservableProperty]
+    private string _openCodeUrl = "http://0.0.0.0:8908";
+
     public Window? HostWindow { get; set; }
 
-    public SettingsViewModel() : this(new JsonAppSettingsService()) { }
+    public SettingsViewModel() : this(
+        new JsonAppSettingsService(),
+        new OpenCodeClient(new OpenCodeClientOptions
+        {
+            BaseUrl = new Uri("http://0.0.0.0:8908"),
+        }))
+    {
+    }
 
-    public SettingsViewModel(IAppSettingsService settingsService)
+    public SettingsViewModel(IAppSettingsService settingsService, OpenCodeClient openCodeClient)
     {
         _settingsService = settingsService;
+        _openCodeClient = openCodeClient;
         LoadSettings();
     }
 
     private void LoadSettings()
     {
         var s = _settingsService.Load();
-        OpenCodeCliPath = s.OpenCodeCliPath;
+        OpenCodeEnabled = s.OpenCodeEnabled;
         Host = s.Host;
         Port = s.Port;
         Username = s.Username;
         Password = s.Password;
+        OpenCodeUrl = BuildOpenCodeUrl();
+        UpdateOpenCodeStatus(false);
     }
 
     [RelayCommand]
@@ -53,7 +81,7 @@ public partial class SettingsViewModel : ViewModelBase
     {
         var s = new AppSettings
         {
-            OpenCodeCliPath = OpenCodeCliPath,
+            OpenCodeEnabled = OpenCodeEnabled,
             Host = Host,
             Port = Port,
             Username = Username,
@@ -76,9 +104,92 @@ public partial class SettingsViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void BrowseOpenCode()
+    private async Task RefreshOpenCodeStatusAsync()
     {
-        // Implemented in code-behind (OnBrowseOpenCodeClick in SettingsWindow.axaml.cs).
-        // This command exists to keep the XAML binding surface clean.
+        if (!OpenCodeEnabled)
+        {
+            UpdateOpenCodeStatus(false);
+            return;
+        }
+
+        try
+        {
+            var health = await _openCodeClient.HealthAsync();
+            UpdateOpenCodeStatus(health.Healthy);
+        }
+        catch
+        {
+            UpdateOpenCodeStatus(false);
+        }
     }
+
+    [RelayCommand]
+    private void SelectPage(SettingsPage page)
+    {
+        SelectedPage = page;
+    }
+
+    public void OpenServicesPage()
+    {
+        SelectedPage = SettingsPage.Services;
+    }
+
+    partial void OnSelectedPageChanged(SettingsPage value)
+    {
+        OnPropertyChanged(nameof(IsGeneralSelected));
+        OnPropertyChanged(nameof(IsServicesSelected));
+    }
+
+    public Task InitializeAsync() => RefreshOpenCodeStatusAsync();
+
+    partial void OnOpenCodeEnabledChanged(bool value)
+    {
+        if (!value)
+        {
+            UpdateOpenCodeStatus(false);
+            return;
+        }
+
+        _ = RefreshOpenCodeStatusAsync();
+    }
+
+    partial void OnHostChanged(string value)
+    {
+        OpenCodeUrl = BuildOpenCodeUrl();
+    }
+
+    partial void OnPortChanged(int value)
+    {
+        OpenCodeUrl = BuildOpenCodeUrl();
+    }
+
+    partial void OnUsernameChanged(string value)
+    {
+        if (OpenCodeEnabled)
+        {
+            _ = RefreshOpenCodeStatusAsync();
+        }
+    }
+
+    partial void OnPasswordChanged(string value)
+    {
+        if (OpenCodeEnabled)
+        {
+            _ = RefreshOpenCodeStatusAsync();
+        }
+    }
+
+    private string BuildOpenCodeUrl() => $"http://{Host}:{Port}";
+
+    private void UpdateOpenCodeStatus(bool connected)
+    {
+        IsOpenCodeConnected = connected;
+        OpenCodeStatusText = connected ? "已连接" : "断开";
+    }
+}
+
+public enum SettingsPage
+{
+    General,
+    Services,
 }
