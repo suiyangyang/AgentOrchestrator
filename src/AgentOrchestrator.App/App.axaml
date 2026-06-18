@@ -39,8 +39,16 @@
         <Style Selector="TextBlock.code-text">
             <Setter Property="FontSize" Value="12" />
             <Setter Property="FontFamily" Value="Cascadia Code, Consolas, Menlo, monospace" />
-            <Setter Property="LineHeight" Value="18" />
+            <Setter Property="LineHeight" Value="22" />
             <Setter Property="Foreground" Value="#1F2328" />
+        </Style>
+        <Style Selector="TextBox.tool-code-viewer">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontFamily" Value="Cascadia Code, Consolas, Menlo, monospace" />
+            <Setter Property="LineHeight" Value="22" />
+            <Setter Property="Foreground" Value="#1F2328" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
         </Style>
 
         <Style Selector="Border.composer-shell">
@@ -408,7 +416,7 @@
         <Style Selector="TextBlock.thinking-body-text">
             <Setter Property="Foreground" Value="#71757D" />
             <Setter Property="FontSize" Value="12" />
-            <Setter Property="LineHeight" Value="18" />
+            <Setter Property="LineHeight" Value="22" />
         </Style>
         <Style Selector="TextBlock.diff-text">
             <Setter Property="Foreground" Value="#18A558" />
@@ -571,6 +579,8 @@
             <Setter Property="Margin" Value="0,14,0,0" />
             <Setter Property="BorderBrush" Value="#E2E5EA" />
             <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="MaxHeight" Value="300" />
+            <Setter Property="ClipToBounds" Value="True" />
         </Style>
         <Style Selector="Border.collapsible-block-body TextBlock">
             <Setter Property="FontFamily" Value="Consolas, Cascadia Code, Menlo, monospace" />
@@ -612,6 +622,109 @@
             <Setter Property="Background" Value="#000000" />
             <Setter Property="BorderBrush" Value="#000000" />
         </Style>
+        <Style Selector="TextBlock.settings-page-title">
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#1F2328" />
+            <Setter Property="Margin" Value="0,2,0,12" />
+        </Style>
+        <Style Selector="TextBlock.settings-service-group-title">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#1F2328" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+        </Style>
+        <Style Selector="Border.settings-service-card">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#E6E8EC" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="TextBlock.settings-service-name">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#1F2328" />
+        </Style>
+        <Style Selector="TextBlock.settings-service-description">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="#737883" />
+            <Setter Property="LineHeight" Value="18" />
+        </Style>
+        <Style Selector="TextBlock.settings-service-status">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.settings-service-status-connected">
+            <Setter Property="Foreground" Value="#1F7A43" />
+        </Style>
+        <Style Selector="TextBlock.settings-service-status-disconnected">
+            <Setter Property="Foreground" Value="#7B8088" />
+        </Style>
+        <Style Selector="TextBlock.settings-service-status-disabled">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="#9BA1AA" />
+        </Style>
+        <Style Selector="TextBlock.settings-service-label">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#1F2328" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.settings-service-field-shell">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#D8DDE5" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="Padding" Value="12,2" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.settings-service-field-text">
+            <Setter Property="Foreground" Value="#6E727A" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBox.settings-service-input">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="#1F2328" />
+            <Setter Property="WatermarkForeground" Value="#9AA1AA" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="MinHeight" Value="26" />
+        </Style>
+        <Style Selector="TextBox.settings-service-input /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="26" />
+            <Setter Property="Height" Value="26" />
+        </Style>
+        <Style Selector="TextBox.settings-service-input /template/ ScrollViewer#PART_ContentPresenter">
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="MinHeight" Value="26" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.settings-service-icon-button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.settings-service-icon-button:pointerover">
+            <Setter Property="Background" Value="#F2F4F7" />
+        </Style>
 
         <!-- ============================================================ -->
         <!-- Sidebar                                                        -->
@@ -645,18 +758,51 @@
         <Style Selector="Button.sidebar-nav-entry:pointerover">
             <Setter Property="Background" Value="#EEF0F3" />
         </Style>
-        <Style Selector="TextBlock.sidebar-nav-icon">
-            <Setter Property="Foreground" Value="#40444B" />
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="Width" Value="16" />
-            <Setter Property="TextAlignment" Value="Center" />
+        <Style Selector="Path.sidebar-nav-icon-path">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="Stretch" Value="Uniform" />
             <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Stroke" Value="#7A7F87" />
+            <Setter Property="StrokeThickness" Value="1.2" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Fill" Value="Transparent" />
+        </Style>
+        <Style Selector="Path.sidebar-new-chat-icon">
+            <Setter Property="Data" Value="M 2.25,2.1 H 7.35 A 1.55,1.55 0 0 1 8.9,3.65 V 10.75 A 1.55,1.55 0 0 1 7.35,12.3 H 2.25 A 1.55,1.55 0 0 1 0.7,10.75 V 3.65 A 1.55,1.55 0 0 1 2.25,2.1 Z M 2.95,4.4 H 6.75 M 2.95,6.55 H 5.95 M 8.4,8.95 L 6.25,9.45 L 6.75,7.3 L 10.8,3.25 A 0.92,0.92 0 0 1 12.1,3.25 L 12.45,3.6 A 0.92,0.92 0 0 1 12.45,4.9 Z M 9.95,4.1 L 11.6,5.75" />
+        </Style>
+        <Style Selector="Path.sidebar-search-icon">
+            <Setter Property="Data" Value="M 5.8,1.9 A 3.95,3.95 0 1 1 3.01,3.06 A 3.95,3.95 0 0 1 5.8,1.9 Z M 8.9,9.05 L 12.15,12.3" />
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Height" Value="10" />
+        </Style>
+        <Style Selector="Path.sidebar-folder-icon">
+            <Setter Property="Data" Value="M 1.05,6.2 A 1.45,1.45 0 0 1 2.5,4.75 H 5.2 L 6.45,5.95 H 11.55 A 1.45,1.45 0 0 1 13,7.4 V 11.35 A 1.45,1.45 0 0 1 11.55,12.8 H 2.5 A 1.45,1.45 0 0 1 1.05,11.35 Z" />
+            <Setter Property="Margin" Value="0,1,4,0" />
         </Style>
         <Style Selector="TextBlock.sidebar-nav-text">
             <Setter Property="Foreground" Value="#1F2328" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Grid.sidebar-plugin-icon-grid">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Ellipse.sidebar-plugin-dot">
+            <Setter Property="Width" Value="3.55" />
+            <Setter Property="Height" Value="3.55" />
+            <Setter Property="Stroke" Value="#7A7F87" />
+            <Setter Property="StrokeThickness" Value="1.2" />
+            <Setter Property="Fill" Value="Transparent" />
+            <Setter Property="Margin" Value="1.15" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
         </Style>
 
         <Style Selector="Button.sidebar-task-graph">
@@ -688,10 +834,44 @@
             <Setter Property="Foreground" Value="#9096A0" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
-        <Style Selector="TextBlock.sidebar-section-caret">
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="Foreground" Value="#9096A0" />
+        <Style Selector="Path.sidebar-chevron">
+            <Setter Property="Data" Value="M 0,0 L 4,4 L 8,0" />
+            <Setter Property="Stroke" Value="#9096A0" />
+            <Setter Property="StrokeThickness" Value="1.5" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Width" Value="8" />
+            <Setter Property="Height" Value="5" />
+            <Setter Property="Stretch" Value="Uniform" />
             <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsVisible" Value="False" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.18" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Button.sidebar-section-header:pointerover Path.sidebar-chevron">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <Style Selector="Button.sidebar-project-row:pointerover Path.sidebar-chevron">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <Style Selector="Path.sidebar-chevron.sidebar-chevron-expanded">
+            <Setter Property="RenderTransform">
+                <TransformGroup>
+                    <RotateTransform Angle="180" />
+                    <TranslateTransform X="0" Y="0.5" />
+                </TransformGroup>
+            </Setter>
+        </Style>
+        <Style Selector="Path.sidebar-section-caret">
+            <Setter Property="Margin" Value="0,0,6,0" />
         </Style>
 
         <Style Selector="Button.sidebar-project-header">
@@ -755,6 +935,24 @@
             <Setter Property="Background" Value="#DDE0E4" />
             <Setter Property="CornerRadius" Value="4" />
         </Style>
+        <Style Selector="Path.sidebar-action-icon">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="Stroke" Value="#7A7F87" />
+            <Setter Property="StrokeThickness" Value="1.2" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Fill" Value="Transparent" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.sidebar-section-action-btn Path.sidebar-action-icon">
+            <Setter Property="Stroke" Value="#7A7F87" />
+        </Style>
+        <Style Selector="Button.sidebar-row-action-btn Path.sidebar-action-icon">
+            <Setter Property="Stroke" Value="#7A7F87" />
+        </Style>
 
         <!-- Menu items inside the "..." popup. -->
         <Style Selector="Button.sidebar-menu-item">
@@ -775,17 +973,20 @@
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
 
-        <Style Selector="TextBlock.sidebar-project-icon">
-            <Setter Property="FontSize" Value="13" />
+        <Style Selector="Path.sidebar-project-icon">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="Stroke" Value="#7A7F87" />
+            <Setter Property="StrokeThickness" Value="1.2" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Fill" Value="Transparent" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="Margin" Value="0,0,4,0" />
         </Style>
-        <Style Selector="TextBlock.sidebar-project-caret">
-            <Setter Property="FontSize" Value="10" />
-            <Setter Property="Foreground" Value="#9096A0" />
-            <Setter Property="VerticalAlignment" Value="Center" />
+        <Style Selector="Path.sidebar-project-caret">
             <Setter Property="Margin" Value="0,0,6,0" />
-            <Setter Property="Width" Value="10" />
         </Style>
         <Style Selector="TextBlock.sidebar-project-name">
             <Setter Property="FontSize" Value="12" />
@@ -793,6 +994,7 @@
             <Setter Property="Foreground" Value="#40444B" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="MaxWidth" Value="168" />
         </Style>
 
         <Style Selector="Button.sidebar-session-item">
@@ -811,10 +1013,17 @@
         <Style Selector="Button.sidebar-session-item-selected:pointerover">
             <Setter Property="Background" Value="#E8E8EB" />
         </Style>
+        <Style Selector="Button.sidebar-settings-item-selected">
+            <Setter Property="Background" Value="#E8E8EB" />
+        </Style>
+        <Style Selector="Button.sidebar-settings-item-selected:pointerover">
+            <Setter Property="Background" Value="#E8E8EB" />
+        </Style>
         <Style Selector="TextBlock.sidebar-session-title">
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Foreground" Value="#1F2328" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="MaxWidth" Value="176" />
         </Style>
         <Style Selector="TextBlock.sidebar-session-time">
             <Setter Property="FontSize" Value="10" />
@@ -855,6 +1064,20 @@
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="#1F2328" />
             <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="MaxWidth" Value="520" />
+        </Style>
+        <Style Selector="Path.workspace-header-chevron">
+            <Setter Property="Data" Value="M 0,0 L 4,4 L 8,0" />
+            <Setter Property="Stroke" Value="#7B8088" />
+            <Setter Property="StrokeThickness" Value="1.5" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Height" Value="6" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Opacity" Value="1" />
         </Style>
         <Style Selector="TextBlock.right-panel-title">
             <Setter Property="FontSize" Value="14" />
@@ -949,6 +1172,42 @@
             <Setter Property="Background" Value="#F3F4F6" />
             <Setter Property="BorderBrush" Value="#C5C8CE" />
             <Setter Property="Foreground" Value="#1F2328" />
+        </Style>
+        <Style Selector="Button.workspace-header-outline-action">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="Button.workspace-header-outline-action:pointerover">
+            <Setter Property="Background" Value="#F3F4F6" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.workspace-header-outline-action:pressed">
+            <Setter Property="Background" Value="#ECEEF2" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.workspace-header-outline-icon-box">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="BorderBrush" Value="#7A7F87" />
+            <Setter Property="BorderThickness" Value="1.2" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.workspace-header-outline-icon-divider-right">
+            <Setter Property="Width" Value="1.2" />
+            <Setter Property="Height" Value="8" />
+            <Setter Property="Background" Value="#7A7F87" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,4.2,0" />
+            <Setter Property="CornerRadius" Value="1" />
         </Style>
         <Style Selector="ToggleButton.task-orchestration-toggle:checked">
             <Setter Property="Background" Value="#E8EEF9" />
