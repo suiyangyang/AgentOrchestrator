@@ -4,7 +4,10 @@ AgentOrchestrator is a desktop-only Avalonia app on `net10.0`.
 
 Current product focus:
 
-- chat workspace (with real OpenCode send/receive, thinking, tool display)
+- chat workspace (with real OpenCode send/receive, thinking, tool display;
+  collapsed tool headers show the action verb plus a project-relative file
+  path parsed from the tool's JSON input; long reasoning scrolls inside a
+  300px envelope that matches the read-only code block)
 - sidebar (project + session tree, search, hover-revealed actions,
   "..." menus for pin / open-in-explorer / rename / remove)
 - "new session" remembers the last focused project's working

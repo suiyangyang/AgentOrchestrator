@@ -32,9 +32,10 @@
   新对话 / 搜索 / 插件 buttons, and the per-row hover-revealed actions
 - The left sidebar toggle sits in the custom title bar, and the right
   sidebar toggle sits in the center workspace header
-- Search opens as a centered modal overlay with a dimmed backdrop and
-  filters the current sessions by title; selecting a result opens that
-  session and closes the overlay
+- Search opens as a top-anchored floating overlay with a dimmed backdrop,
+  covers the full shell without affecting layout, and filters the current
+  sessions by title; selecting a result opens that session and closes the
+  overlay
 - `ChatWorkspaceControl` is the main chat surface (fixed top header strip + message list + composer)
 - 右侧 `Subagent` 卡片是双层滚动结构：外层面板负责整个右栏滚动，
   卡片内部 `ScrollViewer` 负责 400px 固定高度正文的 Markdown 浏览；
@@ -145,3 +146,38 @@ View ── ViewModel ── IAgentGateway / ISidebarRepository
 - `IAppSettingsService` (extended with `LastProjectId`)
 - `DialogHost` provides code-only Confirm/Input Windows used by the
   sidebar rename + remove flows
+- `ToolDisplayParser` converts a tool call's name + JSON input +
+  working directory + output into a structured `ToolDisplayInfo`
+  (`PrimaryText`, relative `FilePath`, optional `LineRangeText`,
+  optional `CodeText`); the parser searches well-known argument keys
+  (`path`, `file`, `filePath`, `filepath`, `filename`, `target*`,
+  `oldPath`/`newPath`) and walks nested objects/arrays when needed
+
+## Chat Block Tool Display
+
+- `RemoteBlock` carries the tool call's JSON `Input` alongside the
+  existing `ToolName` / `ToolOutput`; `OpenCodeAgentGateway.ResolveTool`
+  reads `tool.State.Input` from any of `ToolStatePending` /
+  `ToolStateRunning` / `ToolStateCompleted` / `ToolStateError` and
+  packages it as the 4th tuple element so the view-model never has to
+  re-parse the OpenCode event payload
+- `IChatBlock.ToolInput` is the contract that surfaces the same JSON
+  dictionary to `ChatBlockViewModel`, which forwards it to
+  `ToolDisplayParser.Parse(...)`; `ToolWorkingDirectory` (set on every
+  tool block by `ChatWorkspaceViewModel.CreateToolBlock`) is the
+  anchor the parser uses to convert absolute paths to project-relative
+  paths via `Path.GetRelativePath`
+- Collapsed Tool / Task headers in `CollapsibleBlockControl` render
+  four structured spans: action verb, optional relative file path,
+  optional line range, with separate `IsVisible` flags driven by
+  `ShowToolHeader` / `HasToolHeaderFilePath` /
+  `HasToolHeaderLineRange`
+- When the tool output contains numbered lines (`123: ...`) or a
+  fenced code block, the parser extracts the body into
+  `ToolDisplayInfo.CodeText`; `CollapsibleBlockControl` renders that
+  body via the dedicated `ReadOnlyCodeBlock` control instead of
+  falling through to `MarkdownRenderer`
+- `ReadOnlyCodeBlock` is a `UserControl` that wraps a read-only
+  `TextBox` (`Classes="tool-code-viewer"`) inside a `ScrollViewer` with
+  `MaxHeight=300`, so long tool bodies scroll within the same 300px
+  envelope that thinking blocks use

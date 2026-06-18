@@ -57,8 +57,8 @@
 - `ToolPart` 的 `tool.state` 可能出现当前客户端不认识的状态；
   这种情况必须降级显示为普通 Tool 运行态，不能让聊天流异常退出
 - OpenCode 的结构化提问不是普通 permission 弹窗，而是会返回带
-  `questions / options / custom` 的挂起 question 列表；当前 UI 需要从窗口顶部下拉
-  固定确认面板，让用户勾选或输入答案后再统一提交
+  `questions / options / custom` 的挂起 question 列表；当前 UI 使用悬浮在主窗口内容区上方的确认面板，
+  不再占用标题栏下方的固定布局高度，用户勾选或输入答案后再统一提交
 - `SidebarViewModel` owns the project + session tree, the search
   overlay state, search result list, current-project focus, and the
   per-row "..." actions
@@ -66,6 +66,8 @@
   right sidebars; the center column contains a fixed header area that
   spans the workspace and right sidebar top edge, plus the active
   workspace body
+- 标题栏左侧包含一个与主界面图标风格一致的单色服务按钮；
+  点击后直接弹出 `SettingsWindow` 并定位到 `设置 / 集成 / 服务`
 - 右侧 `Subagent` 区域使用固定高度卡片展示子会话活动；卡片正文按
   Markdown 渲染并支持内部滚动，默认高度为 `400`，展示该子会话的完整信息汇总，
   而不是仅显示最后一条消息；底部显示 `Agent 名称 · Model 名称 · 耗时`；
@@ -74,7 +76,12 @@
   当 subagent 内容字段刷新时，卡片内部滚动条会自动贴到底部
 - `ChatWorkspaceControl` adds a fixed header strip inside the chat
   workspace for task orchestration and subagent activity
-- `SettingsWindow.axaml` is a fixed-size settings dialog
+- `SettingsWindow.axaml` is a fixed-size settings dialog with a left
+  two-level navigation rail. The current top-level groups are `个人`
+  and `集成`; `个人 / 常规` shows a placeholder page, and
+  `集成 / 服务` shows a service list. `OpenCode` exposes enable state,
+  connection status, URL, username, and password; `codex` is present
+  as a disabled placeholder entry.
 
 ## Binding And Styling
 
@@ -82,9 +89,19 @@
 - Every view and data template should set `x:DataType`
 - Global style tokens live in `App.axaml`
 - `TextBox` uses the chat input style
-- `TextBlock.code-text` is the code style
+- `TextBlock.code-text` is the code style (12px Cascadia Code,
+  `LineHeight=22`)
+- `TextBox.tool-code-viewer` is the dedicated style for the
+  read-only `TextBox` inside `ReadOnlyCodeBlock` (12px Cascadia Code,
+  `LineHeight=22`, transparent background, no padding)
 - `TextBlock.assistant-text` and `TextBlock.thinking-body-text` are
-  chat content styles
+  chat content styles; both use `LineHeight=22` so the breathing room
+  matches the code-block typography
+- `Border.collapsible-block-body` is the shared body container used
+  by `CollapsibleBlockControl` for Thinking / Tool / Task blocks;
+  capped at `MaxHeight=300` with `ClipToBounds=True`, and the
+  Thinking body wraps its Markdown output in an internal
+  `ScrollViewer` so long reasoning scrolls inside the same envelope
 - Sidebar styles live under `Button.sidebar-*` and
   `TextBlock.sidebar-*` classes (see `App.axaml`)
 - Per-row hover-revealed action buttons: `sidebar-row-action-btn` and
