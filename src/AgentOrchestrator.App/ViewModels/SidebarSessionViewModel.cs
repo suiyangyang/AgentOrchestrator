@@ -1,5 +1,4 @@
 using System;
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using AgentOrchestrator.App.Models.Sidebar;
@@ -14,11 +13,27 @@ public sealed class SidebarSessionViewModel : INotifyPropertyChanged
 {
     public SidebarSessionViewModel(SessionRecord record)
     {
-        Record = record;
+        _record = record;
         _title = string.IsNullOrWhiteSpace(record.Title) ? "新对话" : record.Title;
     }
 
-    public SessionRecord Record { get; }
+    private SessionRecord _record;
+    public SessionRecord Record
+    {
+        get => _record;
+        set
+        {
+            if (_record == value) return;
+            _record = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SessionId));
+            OnPropertyChanged(nameof(AgentSessionId));
+            OnPropertyChanged(nameof(ProjectId));
+            OnPropertyChanged(nameof(DisplayRelativeTime));
+            OnPropertyChanged(nameof(EffectiveLastActivityAt));
+            OnPropertyChanged(nameof(HasUnreadCompletion));
+        }
+    }
 
     public string SessionId => Record.SessionId;
     public string AgentSessionId => Record.AgentSessionId;
@@ -33,11 +48,10 @@ public sealed class SidebarSessionViewModel : INotifyPropertyChanged
             if (_title == value) return;
             _title = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(DisplayRelativeTime));
         }
     }
 
-    public string DisplayRelativeTime => FormatRelative(Record.CreatedAt);
+    public string DisplayRelativeTime => FormatRelative(EffectiveLastActivityAt);
 
     private bool _isSelected;
     public bool IsSelected
@@ -48,14 +62,38 @@ public sealed class SidebarSessionViewModel : INotifyPropertyChanged
             if (_isSelected == value) return;
             _isSelected = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasUnreadCompletion));
         }
     }
+
+    private bool _isStreaming;
+    public bool IsStreaming
+    {
+        get => _isStreaming;
+        set
+        {
+            if (_isStreaming == value) return;
+            _isStreaming = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasUnreadCompletion));
+        }
+    }
+
+    public long EffectiveLastActivityAt => Record.LastActivityAt > 0 ? Record.LastActivityAt : Record.CreatedAt;
+
+    public bool HasUnreadCompletion
+        => !IsSelected
+           && !IsStreaming
+           && (!Record.ViewedAt.HasValue || Record.ViewedAt.Value < EffectiveLastActivityAt);
 
     public void UpdateRecord(SessionRecord record)
     {
         // Refresh the underlying record (title sync, etc.) without changing identity.
+        Record = record;
         Title = string.IsNullOrWhiteSpace(record.Title) ? "新对话" : record.Title;
         OnPropertyChanged(nameof(DisplayRelativeTime));
+        OnPropertyChanged(nameof(EffectiveLastActivityAt));
+        OnPropertyChanged(nameof(HasUnreadCompletion));
     }
 
     public static string FormatRelative(long unixMs)

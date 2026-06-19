@@ -46,6 +46,7 @@ public partial class SidebarControl : UserControl
 
     private void OnProjectRowAddClick(object? sender, RoutedEventArgs e)
     {
+        e.Handled = true;
         if (sender is Control { Tag: string projectId }
             && DataContext is SidebarViewModel vm)
         {
@@ -55,6 +56,7 @@ public partial class SidebarControl : UserControl
 
     private void OnProjectRowMoreClick(object? sender, RoutedEventArgs e)
     {
+        e.Handled = true;
         if (sender is not Control btn) return;
         if (btn.Tag is not string projectId) return;
         ShowProjectMenu(btn, projectId);
@@ -126,9 +128,28 @@ public partial class SidebarControl : UserControl
 
     private void OnSessionRowMoreClick(object? sender, RoutedEventArgs e)
     {
+        e.Handled = true;
         if (sender is not Control btn) return;
         if (btn.Tag is not string sessionId) return;
         ShowSessionMenu(btn, sessionId);
+    }
+
+    private void OnProjectSessionExpandClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is Control { DataContext: SidebarProjectViewModel project })
+        {
+            project.ShowMoreSessions();
+        }
+    }
+
+    private void OnProjectSessionCollapseClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is Control { DataContext: SidebarProjectViewModel project })
+        {
+            project.CollapseSessions();
+        }
     }
 
     private void ShowSessionMenu(Control anchor, string sessionId)

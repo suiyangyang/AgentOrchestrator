@@ -1,6 +1,7 @@
 ﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:AgentOrchestrator.App.ViewModels"
+             xmlns:controls="using:AgentOrchestrator.App.Controls"
              x:Class="AgentOrchestrator.App.Controls.SidebarControl"
              x:DataType="vm:SidebarViewModel">
     <Border Background="#F9F9FB" BorderBrush="#E2E5EA" BorderThickness="0,0,1,0">
@@ -31,15 +32,8 @@
                         HorizontalContentAlignment="Left"
                         Command="{Binding RequestTaskGraphCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                        <Grid Classes="sidebar-plugin-icon-grid"
-                              RowDefinitions="Auto,Auto"
-                              ColumnDefinitions="Auto,Auto">
-                            <Ellipse Classes="sidebar-plugin-dot" Grid.Row="0" Grid.Column="0" />
-                            <Ellipse Classes="sidebar-plugin-dot" Grid.Row="0" Grid.Column="1" />
-                            <Ellipse Classes="sidebar-plugin-dot" Grid.Row="1" Grid.Column="0" />
-                            <Ellipse Classes="sidebar-plugin-dot" Grid.Row="1" Grid.Column="1" />
-                        </Grid>
-                        <TextBlock Text="插件" Classes="sidebar-nav-text" />
+                        <Path Classes="sidebar-nav-icon-path sidebar-orchestrator-icon" />
+                        <TextBlock Text="任务编排" Classes="sidebar-nav-text" />
                     </StackPanel>
                 </Button>
             </StackPanel>
@@ -105,21 +99,35 @@
                                             </Grid>
                                         </Button>
                                         <StackPanel IsVisible="{Binding IsExpanded}" Margin="20,0,0,0">
-                                            <ItemsControl ItemsSource="{Binding Sessions}">
+                                            <ItemsControl ItemsSource="{Binding VisibleSessions}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate DataType="vm:SidebarSessionViewModel">
                                                         <Button x:Name="SessionRow"
-                                                                Classes="sidebar-session-item"
-                                                                Classes.sidebar-session-item-selected="{Binding IsSelected}"
-                                                                HorizontalAlignment="Stretch"
-                                                                HorizontalContentAlignment="Stretch"
-                                                                Click="OnSessionClick">
-                                                            <Grid ColumnDefinitions="*,Auto">
-                                                                <StackPanel Grid.Column="0" Spacing="2">
-                                                                    <TextBlock Text="{Binding Title}" Classes="sidebar-session-title" TextTrimming="CharacterEllipsis" />
-                                                                    <TextBlock Text="{Binding DisplayRelativeTime}" Classes="sidebar-session-time" />
-                                                                </StackPanel>
-                                                                <Button Grid.Column="1"
+                                                                 Classes="sidebar-session-item"
+                                                                 Classes.sidebar-session-item-selected="{Binding IsSelected}"
+                                                                 HorizontalAlignment="Stretch"
+                                                                 HorizontalContentAlignment="Stretch"
+                                                                 Click="OnSessionClick">
+                                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
+                                                                <Grid Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center">
+                                                                    <controls:SpinnerControl IsVisible="{Binding IsStreaming}" />
+                                                                    <Ellipse Width="8"
+                                                                             Height="8"
+                                                                             Fill="#2F7CF6"
+                                                                             HorizontalAlignment="Center"
+                                                                             VerticalAlignment="Center"
+                                                                             IsVisible="{Binding HasUnreadCompletion}" />
+                                                                </Grid>
+                                                                <TextBlock Grid.Column="1"
+                                                                           Text="{Binding Title}"
+                                                                           Classes="sidebar-session-title"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           VerticalAlignment="Center" />
+                                                                <TextBlock Grid.Column="2"
+                                                                           Text="{Binding DisplayRelativeTime}"
+                                                                           Classes="sidebar-session-time"
+                                                                           VerticalAlignment="Center" />
+                                                                <Button Grid.Column="3"
                                                                         Classes="sidebar-row-action-btn"
                                                                         Content="..."
                                                                         Click="OnSessionRowMoreClick"
@@ -130,6 +138,19 @@
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
+                                            <StackPanel Orientation="Horizontal"
+                                                        Spacing="12"
+                                                        Margin="10,2,4,0"
+                                                        IsVisible="{Binding HasSessionPaginationControls}">
+                                                <Button Classes="sidebar-session-page-action"
+                                                        Content="展开显示"
+                                                        Click="OnProjectSessionExpandClick"
+                                                        IsVisible="{Binding HasMoreSessions}" />
+                                                <Button Classes="sidebar-session-page-action"
+                                                        Content="折叠显示"
+                                                        Click="OnProjectSessionCollapseClick"
+                                                        IsVisible="{Binding CanCollapseSessions}" />
+                                            </StackPanel>
                                             <TextBlock Text="暂无对话"
                                                        Classes="sidebar-empty"
                                                        IsVisible="{Binding !HasSessions}" />
@@ -174,12 +195,26 @@
                                             HorizontalContentAlignment="Stretch"
                                             Margin="10,0,4,0"
                                             Click="OnSessionClick">
-                                        <Grid ColumnDefinitions="*,Auto">
-                                            <StackPanel Grid.Column="0" Spacing="2">
-                                                <TextBlock Text="{Binding Title}" Classes="sidebar-session-title" TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Text="{Binding DisplayRelativeTime}" Classes="sidebar-session-time" />
-                                            </StackPanel>
-                                            <Button Grid.Column="1"
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
+                                            <Grid Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center">
+                                                <controls:SpinnerControl IsVisible="{Binding IsStreaming}" />
+                                                <Ellipse Width="8"
+                                                         Height="8"
+                                                         Fill="#2F7CF6"
+                                                         HorizontalAlignment="Center"
+                                                         VerticalAlignment="Center"
+                                                         IsVisible="{Binding HasUnreadCompletion}" />
+                                            </Grid>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding Title}"
+                                                       Classes="sidebar-session-title"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{Binding DisplayRelativeTime}"
+                                                       Classes="sidebar-session-time"
+                                                       VerticalAlignment="Center" />
+                                            <Button Grid.Column="3"
                                                     Classes="sidebar-row-action-btn"
                                                     Content="..."
                                                     Click="OnSessionRowMoreClick"

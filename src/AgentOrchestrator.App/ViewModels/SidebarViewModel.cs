@@ -125,6 +125,23 @@ public sealed partial class SidebarViewModel : ViewModelBase
         RefreshSearchResults();
     }
 
+    public void SetSessionStreaming(string sessionId, bool isStreaming)
+    {
+        if (_sessionsById.TryGetValue(sessionId, out var vm))
+        {
+            vm.IsStreaming = isStreaming;
+        }
+    }
+
+    public void MarkSessionViewed(string sessionId, long viewedAt)
+    {
+        if (_sessionsById.TryGetValue(sessionId, out var vm))
+        {
+            vm.UpdateRecord(vm.Record with { ViewedAt = viewedAt });
+            RefreshSearchResults();
+        }
+    }
+
     public void UpdateSessionTitle(string sessionId, string newTitle)
     {
         if (_sessionsById.TryGetValue(sessionId, out var vm))

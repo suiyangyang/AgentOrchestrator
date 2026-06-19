@@ -101,7 +101,11 @@ The sidebar surface the following actions; each is wired through a
 
 The two menus (`...`) are inline popups built in code-behind from a
 shared `RowActionPopup` element so we don't need a separate XAML file
-per menu.
+per menu. `SidebarProjectViewModel` is the per-project tree node that
+owns the project record, the `Sessions` / `VisibleSessions`
+collections, the expand / current / pinned flags, and the
+`VisibleSessionCount` paging counter (5 at a time, with inline
+`展开显示` / `折叠显示` controls).
 
 ## Cross-cutting State
 
@@ -178,7 +182,7 @@ View ── ViewModel ── IAgentGateway / ISidebarRepository
   `Application.Current.Resources` so every view that references the
   `UiFontFamily` / `UiFontSize` / `CodeFontFamily` / `CodeFontSize`
   DynamicResource tokens picks up the saved values automatically
-- UI 默认字体链为 `Inter, Segoe UI, Microsoft YaHei UI, Microsoft YaHei`；
+- UI 默认字体链为 `Segoe UI, Microsoft YaHei UI, Microsoft YaHei`；
   `JsonAppSettingsService.Load()` 会把旧配置中的 `Source Han Sans`
   自动迁移到这条系统字体链，避免 Avalonia/Skia 在 Windows 上把常规中文
   文本渲染得过重、发虚
