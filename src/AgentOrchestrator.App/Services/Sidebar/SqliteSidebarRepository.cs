@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOrchestrator.App.Models.Sidebar;
@@ -67,6 +68,8 @@ public sealed class SqliteSidebarRepository : ISidebarRepository
                     title             TEXT NOT NULL,
                     project_id        TEXT,
                     created_at        INTEGER NOT NULL,
+                    last_activity_at  INTEGER NOT NULL,
+                    viewed_at        INTEGER,
                     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
                 );
 
@@ -75,6 +78,9 @@ public sealed class SqliteSidebarRepository : ISidebarRepository
                 CREATE INDEX IF NOT EXISTS ix_sessions_created  ON sessions(created_at DESC);
                 """;
             await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+
+            await EnsureSessionColumnAsync(conn, "last_activity_at", "INTEGER NOT NULL DEFAULT 0", ct).ConfigureAwait(false);
+            await EnsureSessionColumnAsync(conn, "viewed_at", "INTEGER", ct).ConfigureAwait(false);
 
             _initialized = true;
         }
@@ -89,6 +95,28 @@ public sealed class SqliteSidebarRepository : ISidebarRepository
         var conn = new SqliteConnection(_connectionString);
         conn.Open();
         return conn;
+    }
+
+    private async Task EnsureSessionColumnAsync(
+        SqliteConnection conn,
+        string columnName,
+        string columnDefinition,
+        CancellationToken ct)
+    {
+        await using var pragma = conn.CreateCommand();
+        pragma.CommandText = "PRAGMA table_info(sessions);";
+        await using var reader = await pragma.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+
+        await using var alter = conn.CreateCommand();
+        alter.CommandText = $"ALTER TABLE sessions ADD COLUMN {columnName} {columnDefinition};";
+        await alter.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
     // ── Project ───────────────────────────────────────────────────────────
@@ -182,7 +210,7 @@ public sealed class SqliteSidebarRepository : ISidebarRepository
         await using var conn = OpenConnection();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            SELECT session_id, agent_session_id, title, project_id, created_at
+            SELECT session_id, agent_session_id, title, project_id, created_at, last_activity_at, viewed_at
             FROM sessions
             ORDER BY created_at DESC;
             """;
@@ -195,7 +223,9 @@ public sealed class SqliteSidebarRepository : ISidebarRepository
                 reader.GetString(1),
                 reader.GetString(2),
                 reader.IsDBNull(3) ? null : reader.GetString(3),
-                reader.GetInt64(4)));
+                reader.GetInt64(4),
+                reader.GetInt64(5),
+                reader.IsDBNull(6) ? null : reader.GetInt64(6)));
         }
         return result;
     }
@@ -206,7 +236,7 @@ public sealed class SqliteSidebarRepository : ISidebarRepository
         await using var conn = OpenConnection();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            SELECT session_id, agent_session_id, title, project_id, created_at
+            SELECT session_id, agent_session_id, title, project_id, created_at, last_activity_at, viewed_at
             FROM sessions
             WHERE session_id = $id;
             """;
@@ -219,7 +249,9 @@ public sealed class SqliteSidebarRepository : ISidebarRepository
                 reader.GetString(1),
                 reader.GetString(2),
                 reader.IsDBNull(3) ? null : reader.GetString(3),
-                reader.GetInt64(4));
+                reader.GetInt64(4),
+                reader.GetInt64(5),
+                reader.IsDBNull(6) ? null : reader.GetInt64(6));
         }
         return null;
     }
@@ -230,14 +262,16 @@ public sealed class SqliteSidebarRepository : ISidebarRepository
         await using var conn = OpenConnection();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO sessions (session_id, agent_session_id, title, project_id, created_at)
-            VALUES ($session_id, $agent_session_id, $title, $project_id, $created_at);
+            INSERT INTO sessions (session_id, agent_session_id, title, project_id, created_at, last_activity_at, viewed_at)
+            VALUES ($session_id, $agent_session_id, $title, $project_id, $created_at, $last_activity_at, $viewed_at);
             """;
         cmd.Parameters.AddWithValue("$session_id", record.SessionId);
         cmd.Parameters.AddWithValue("$agent_session_id", record.AgentSessionId);
         cmd.Parameters.AddWithValue("$title", record.Title);
         cmd.Parameters.AddWithValue("$project_id", (object?)record.ProjectId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$created_at", record.CreatedAt);
+        cmd.Parameters.AddWithValue("$last_activity_at", record.LastActivityAt);
+        cmd.Parameters.AddWithValue("$viewed_at", (object?)record.ViewedAt ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         return record;
     }
@@ -251,13 +285,17 @@ public sealed class SqliteSidebarRepository : ISidebarRepository
             UPDATE sessions
             SET agent_session_id = $agent_session_id,
                 title            = $title,
-                project_id       = $project_id
+                project_id       = $project_id,
+                last_activity_at = $last_activity_at,
+                viewed_at        = $viewed_at
             WHERE session_id = $session_id;
             """;
         cmd.Parameters.AddWithValue("$session_id", record.SessionId);
         cmd.Parameters.AddWithValue("$agent_session_id", record.AgentSessionId);
         cmd.Parameters.AddWithValue("$title", record.Title);
         cmd.Parameters.AddWithValue("$project_id", (object?)record.ProjectId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$last_activity_at", record.LastActivityAt);
+        cmd.Parameters.AddWithValue("$viewed_at", (object?)record.ViewedAt ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
@@ -291,7 +329,7 @@ public sealed class SqliteSidebarRepository : ISidebarRepository
         await using var conn = OpenConnection();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            SELECT session_id, agent_session_id, title, project_id, created_at
+            SELECT session_id, agent_session_id, title, project_id, created_at, last_activity_at, viewed_at
             FROM sessions
             WHERE title LIKE $kw COLLATE NOCASE
             ORDER BY created_at DESC;
@@ -306,7 +344,9 @@ public sealed class SqliteSidebarRepository : ISidebarRepository
                 reader.GetString(1),
                 reader.GetString(2),
                 reader.IsDBNull(3) ? null : reader.GetString(3),
-                reader.GetInt64(4)));
+                reader.GetInt64(4),
+                reader.GetInt64(5),
+                reader.IsDBNull(6) ? null : reader.GetInt64(6)));
         }
         return result;
     }

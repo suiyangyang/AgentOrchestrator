@@ -29,7 +29,11 @@
   project's "Control" naming convention, so the templates are
   declared by hand to keep the rule out of the way.
 - `SidebarControl` is the project + session tree, the icon+text
-  新对话 / 搜索 / 插件 buttons, and the per-row hover-revealed actions
+  新对话 / 搜索 / 任务编排 buttons, and the per-row hover-revealed actions;
+  project session lists page in chunks of 5 with inline 展开显示 / 折叠显示 controls;
+  session rows reserve a compact state slot that shows a spinner while the
+  session is streaming and a blue dot after completion until the user opens
+  that session
 - The left sidebar toggle sits in the custom title bar, and the right
   sidebar toggle sits in the center workspace header
 - Search opens as a top-anchored floating overlay with a dimmed backdrop,
@@ -37,6 +41,9 @@
   sessions by title; selecting a result opens that session and closes the
   overlay
 - `ChatWorkspaceControl` is the main chat surface (fixed top header strip + message list + composer)
+- `ChatWorkspaceViewModel` keeps per-session runtime state in memory, so
+  switching the foreground chat no longer cancels another session's in-flight
+  refresh or stream
 - 右侧 `Subagent` 卡片是双层滚动结构：外层面板负责整个右栏滚动，
   卡片内部 `ScrollViewer` 负责 400px 固定高度正文的 Markdown 浏览；
   子会话内容由消息序列聚合成完整 Markdown 摘要，不再只取最后一条预览；
@@ -86,6 +93,7 @@ The sidebar surface the following actions; each is wired through a
 | Project section header "..." | (reserved)         | No-op in v1                                         |
 | Project row "+"          | New session in project  | Set current project, open blank page                |
 | Project row "..."        | More menu               | 置顶项目 / 在资源管理器中打开 / 重命名项目 / 移除    |
+| Project session list     | Page sessions           | Show 5 at a time, then expand in batches of 5       |
 | Session row "..."        | More menu               | 重命名对话 / 移除                                   |
 | 项目 / 对话 section header click | Expand-all / collapse-all | Toggle all project expand states          |
 | Project row click        | Expand + focus          | Toggle expand and set current project               |
@@ -105,6 +113,12 @@ per menu.
   short-term "what should the next session use" working directory.
   Set by `ChatWorkspaceViewModel.OpenBlankPage(workingDirectory)`,
   consumed by the same VM's `SendAsync` when creating a new session.
+- The `sessions` table also tracks `last_activity_at` (refreshed on
+  every stream / message change) and `viewed_at` (set when the user
+  opens the session). The sidebar uses the pair to render the
+  compact streaming spinner / "new since last view" blue dot, and
+  the CLI seeds both fields when creating new sessions via the
+  `new-session` smoke test.
 
 ## Layered Services
 
@@ -136,6 +150,50 @@ View ── ViewModel ── IAgentGateway / ISidebarRepository
   and refreshes subagent activity while the current session is streaming
 - The CLI (`AgentOrchestrator.Cli`) reuses the same services for
   headless verification
+
+## Settings
+
+- `AppSettings` is a single POCO that carries every persisted field
+  (`OpenCodeEnabled`, `Host`, `Port`, `Username`, `Password`,
+  `UiFontFamily`, `CodeFontFamily`, `UiFontSize`, `CodeFontSize`,
+  `LastProjectId`); the layout is intentionally flat so the JSON
+  override file stays diff-friendly
+- `JsonAppSettingsService.Load()` is a three-layer merge:
+  1. compiled defaults from `new AppSettings()`
+  2. the embedded `appsettings.json` resource shipped with the binary
+  3. the local file at `%LOCALAPPDATA%/AgentOrchestrator/appsettings.local.json`
+  Later layers override earlier ones; corrupt local files are ignored
+  silently so a bad edit cannot brick startup
+- `SettingsWindow` exposes a three-page rail:
+  `个人 / 常规` (placeholder), `个人 / 外观`, `集成 / 服务`
+- `个人 / 外观` exposes UI / code font family and size in px; the
+  font family fields are displayed read-only, while the size fields
+  accept free-form input
+- `集成 / 服务` is a card list; `OpenCode` shows a derived URL
+  (`http://{Host}:{Port}`), enable toggle, live connection status,
+  username, password (with show/hide toggle), and a `codex`
+  placeholder entry
+- Appearance values are applied once on app startup
+  (`App.axaml.OnFrameworkInitializationCompleted`) by writing to
+  `Application.Current.Resources` so every view that references the
+  `UiFontFamily` / `UiFontSize` / `CodeFontFamily` / `CodeFontSize`
+  DynamicResource tokens picks up the saved values automatically
+- UI 默认字体链为 `Inter, Segoe UI, Microsoft YaHei UI, Microsoft YaHei`；
+  `JsonAppSettingsService.Load()` 会把旧配置中的 `Source Han Sans`
+  自动迁移到这条系统字体链，避免 Avalonia/Skia 在 Windows 上把常规中文
+  文本渲染得过重、发虚
+- `OpenCodeEnabled` is the runtime gate: `SettingsViewModel`
+  short-circuits the health check and reports the service as `断开`
+  whenever the flag is off; live connection status is refreshed
+  whenever the flag, host, port, username, or password changes
+- `SettingsViewModel.Ok()` and `MainWindowViewModel` each write their
+  own slice of `AppSettings` to the same local file. The settings VM
+  persists appearance + OpenCode service fields on confirm; the shell
+  persists `LastProjectId` + the live OpenCode service fields on
+  every sidebar focus change. Whichever runs last wins on the shared
+  fields
+- `SettingsViewModel.OpenServicesPage()` lets the shell jump straight
+  to the services page when the title-bar service button is clicked
 
 ## Current Services
 

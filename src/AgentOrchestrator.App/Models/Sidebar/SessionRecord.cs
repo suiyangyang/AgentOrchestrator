@@ -10,5 +10,7 @@ public sealed record SessionRecord(
     string AgentSessionId,
     string Title,
     string? ProjectId,
-    long CreatedAt
+    long CreatedAt,
+    long LastActivityAt,
+    long? ViewedAt = null
 );

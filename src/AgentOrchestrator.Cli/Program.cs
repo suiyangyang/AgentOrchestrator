@@ -242,7 +242,9 @@ public static class Program
             AgentSessionId: agentId,
             Title: "新对话",
             ProjectId: project?.Id,
-            CreatedAt: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            CreatedAt: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            LastActivityAt: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            ViewedAt: null);
         await repo.CreateSessionAsync(record);
         Console.WriteLine($"[2] sidebar record created: {record.SessionId}");
 
