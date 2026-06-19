@@ -17,6 +17,7 @@ public partial class SettingsViewModel : ViewModelBase
     private SettingsPage _selectedPage = SettingsPage.General;
 
     public bool IsGeneralSelected => SelectedPage == SettingsPage.General;
+    public bool IsAppearanceSelected => SelectedPage == SettingsPage.Appearance;
     public bool IsServicesSelected => SelectedPage == SettingsPage.Services;
 
     [ObservableProperty]
@@ -33,6 +34,18 @@ public partial class SettingsViewModel : ViewModelBase
 
     [ObservableProperty]
     private string _password = "";
+
+    [ObservableProperty]
+    private string _uiFontFamily = "Segoe UI, Microsoft YaHei UI, Microsoft YaHei";
+
+    [ObservableProperty]
+    private string _codeFontFamily = "Consolas";
+
+    [ObservableProperty]
+    private double _uiFontSize = 14;
+
+    [ObservableProperty]
+    private double _codeFontSize = 12;
 
     [ObservableProperty]
     private bool _isPasswordVisible = false;
@@ -72,6 +85,10 @@ public partial class SettingsViewModel : ViewModelBase
         Port = s.Port;
         Username = s.Username;
         Password = s.Password;
+        UiFontFamily = s.UiFontFamily;
+        CodeFontFamily = s.CodeFontFamily;
+        UiFontSize = s.UiFontSize;
+        CodeFontSize = s.CodeFontSize;
         OpenCodeUrl = BuildOpenCodeUrl();
         UpdateOpenCodeStatus(false);
     }
@@ -85,7 +102,11 @@ public partial class SettingsViewModel : ViewModelBase
             Host = Host,
             Port = Port,
             Username = Username,
-            Password = Password
+            Password = Password,
+            UiFontFamily = UiFontFamily,
+            CodeFontFamily = CodeFontFamily,
+            UiFontSize = UiFontSize,
+            CodeFontSize = CodeFontSize
         };
         _settingsService.Save(s);
         HostWindow?.Close(true);
@@ -137,6 +158,7 @@ public partial class SettingsViewModel : ViewModelBase
     partial void OnSelectedPageChanged(SettingsPage value)
     {
         OnPropertyChanged(nameof(IsGeneralSelected));
+        OnPropertyChanged(nameof(IsAppearanceSelected));
         OnPropertyChanged(nameof(IsServicesSelected));
     }
 
@@ -191,5 +213,6 @@ public partial class SettingsViewModel : ViewModelBase
 public enum SettingsPage
 {
     General,
+    Appearance,
     Services,
 }
