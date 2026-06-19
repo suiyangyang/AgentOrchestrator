@@ -76,6 +76,7 @@ namespace OpenCode.Client.Internal.Json;
 [JsonSerializable(typeof(QuestionItem))]
 [JsonSerializable(typeof(QuestionOption))]
 [JsonSerializable(typeof(QuestionTime))]
+[JsonSerializable(typeof(QuestionReplyRequest))]
 
 // FilePartSource
 [JsonSerializable(typeof(FilePartSource))]
