@@ -13,7 +13,9 @@ Current product focus:
 - "new session" remembers the last focused project's working
   directory (persisted via `LastProjectId` in `appsettings.local.json`)
 - task-graph workspace (placeholder, planned)
-- settings window
+- settings window (Personal / General placeholder, Personal / Appearance for
+  UI & code font family + size, Integrations / Services with the live
+  OpenCode enable/status/URL/username/password card and a codex placeholder)
 - compiled bindings
 - MVVM with CommunityToolkit.Mvvm
 - local SQLite for sidebar metadata
