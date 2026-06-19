@@ -34,10 +34,9 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     private readonly IAgentGateway _agent;
     private readonly ISidebarRepository _repo;
     private readonly SidebarViewModel _sidebar;
+    private readonly Dictionary<string, SessionRuntimeState> _sessionStates = new(StringComparer.Ordinal);
+    private SessionRuntimeState _activeState = new();
     private readonly Queue<QueuedSendRequest> _pendingSendQueue = new();
-    private CancellationTokenSource? _sendCts;
-    private CancellationTokenSource? _subagentRefreshCts;
-    private CancellationTokenSource? _pendingQuestionCts;
 
     public ChatWorkspaceViewModel(
         IAgentGateway agent,
@@ -48,17 +47,14 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         _repo = repo;
         _sidebar = sidebar;
 
-        _selectedPermission = Permissions[2];
-        _selectedPermission.IsSelected = true;
-        Attachments.CollectionChanged += OnAttachmentsChanged;
-        SubagentActivities.CollectionChanged += OnSubagentActivitiesChanged;
-        QueuedDrafts.CollectionChanged += OnQueuedDraftsChanged;
+        SelectedPermission = Permissions[2];
+        AttachActiveStateHandlers(_activeState);
     }
 
-    public ObservableCollection<ChatMessageViewModel> Messages { get; } = [];
-    public ObservableCollection<ChatAttachment> Attachments { get; } = [];
-    public ObservableCollection<SubagentActivityViewModel> SubagentActivities { get; } = [];
-    public ObservableCollection<QueuedChatDraftViewModel> QueuedDrafts { get; } = [];
+    public ObservableCollection<ChatMessageViewModel> Messages => _activeState.Messages;
+    public ObservableCollection<ChatAttachment> Attachments => _activeState.Attachments;
+    public ObservableCollection<SubagentActivityViewModel> SubagentActivities => _activeState.SubagentActivities;
+    public ObservableCollection<QueuedChatDraftViewModel> QueuedDrafts => _activeState.QueuedDrafts;
     public ObservableCollection<PermissionOption> Permissions { get; } =
     [
         new("ask", "请求批准", "编辑外部文件和使用互联网时始终询问", "✋"),
@@ -67,40 +63,134 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     ];
     public IReadOnlyList<string> Models { get; } = ["codex", "gpt-5", "claude-compatible"];
 
-    /// <summary>The local session id. Null = blank page.</summary>
-    [ObservableProperty]
-    private string? _currentSessionId;
+    public string? CurrentSessionId
+    {
+        get => _activeState.SessionId;
+        private set
+        {
+            if (_activeState.SessionId == value) return;
+            _activeState.SessionId = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsBlankPage));
+        }
+    }
 
-    /// <summary>The Agent-side session id. Null when CurrentSessionId is null.</summary>
-    [ObservableProperty]
-    private string? _currentAgentSessionId;
+    public string? CurrentAgentSessionId
+    {
+        get => _activeState.AgentSessionId;
+        private set
+        {
+            if (_activeState.AgentSessionId == value) return;
+            _activeState.AgentSessionId = value;
+            OnPropertyChanged();
+        }
+    }
 
-    [ObservableProperty]
-    private string _draftText = string.Empty;
+    public string DraftText
+    {
+        get => _activeState.DraftText;
+        set
+        {
+            if (_activeState.DraftText == value) return;
+            _activeState.DraftText = value;
+            OnPropertyChanged();
+            OnComposerStateChanged();
+        }
+    }
 
-    [ObservableProperty]
-    private PermissionOption _selectedPermission = null!;
+    public PermissionOption SelectedPermission
+    {
+        get => Permissions.FirstOrDefault(p => string.Equals(p.Key, _activeState.SelectedPermissionKey, StringComparison.Ordinal)) ?? Permissions[2];
+        set
+        {
+            if (value is null) return;
+            if (_activeState.SelectedPermissionKey == value.Key) return;
+            _activeState.SelectedPermissionKey = value.Key;
+            foreach (var item in Permissions) item.IsSelected = ReferenceEquals(item, value);
+            OnPropertyChanged();
+        }
+    }
 
-    [ObservableProperty]
-    private string _selectedModel = "codex";
+    public string SelectedModel
+    {
+        get => _activeState.SelectedModel;
+        set
+        {
+            if (_activeState.SelectedModel == value) return;
+            _activeState.SelectedModel = value;
+            OnPropertyChanged();
+        }
+    }
 
-    [ObservableProperty]
-    private bool _isStreaming;
+    public bool IsStreaming
+    {
+        get => _activeState.IsStreaming;
+        set
+        {
+            if (_activeState.IsStreaming == value) return;
+            _activeState.IsStreaming = value;
+            OnPropertyChanged();
+            OnComposerStateChanged();
+            SyncActiveSessionRuntime();
+        }
+    }
 
-    [ObservableProperty]
-    private string? _statusMessage;
+    public string? StatusMessage
+    {
+        get => _activeState.StatusMessage;
+        set
+        {
+            if (_activeState.StatusMessage == value) return;
+            _activeState.StatusMessage = value;
+            OnPropertyChanged();
+        }
+    }
 
-    [ObservableProperty]
-    private string _headerTitle = "新对话";
+    public string HeaderTitle
+    {
+        get => _activeState.HeaderTitle;
+        set
+        {
+            if (_activeState.HeaderTitle == value) return;
+            _activeState.HeaderTitle = value;
+            OnPropertyChanged();
+        }
+    }
 
-    [ObservableProperty]
-    private string? _currentWorkingDirectory;
+    public string? CurrentWorkingDirectory
+    {
+        get => _activeState.CurrentWorkingDirectory;
+        set
+        {
+            if (_activeState.CurrentWorkingDirectory == value) return;
+            _activeState.CurrentWorkingDirectory = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsBlankPage));
+        }
+    }
 
-    [ObservableProperty]
-    private PendingQuestion? _pendingQuestion;
+    public PendingQuestion? PendingQuestion
+    {
+        get => _activeState.PendingQuestion;
+        set
+        {
+            if (ReferenceEquals(_activeState.PendingQuestion, value)) return;
+            _activeState.PendingQuestion = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasPendingQuestion));
+        }
+    }
 
-    [ObservableProperty]
-    private string? _pendingQuestionStatus;
+    public string? PendingQuestionStatus
+    {
+        get => _activeState.PendingQuestionStatus;
+        set
+        {
+            if (_activeState.PendingQuestionStatus == value) return;
+            _activeState.PendingQuestionStatus = value;
+            OnPropertyChanged();
+        }
+    }
 
     public bool HasAttachments => Attachments.Count > 0;
     public bool HasSubagentActivities => SubagentActivities.Count > 0;
@@ -114,9 +204,18 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     /// <summary>Fired when a brand-new session is created (so MainWindow can switch workspace).</summary>
     public event EventHandler? SessionChanged;
 
-    partial void OnSelectedPermissionChanged(PermissionOption value)
+    private void AttachActiveStateHandlers(SessionRuntimeState state)
     {
-        foreach (var item in Permissions) item.IsSelected = ReferenceEquals(item, value);
+        state.Attachments.CollectionChanged += OnAttachmentsChanged;
+        state.SubagentActivities.CollectionChanged += OnSubagentActivitiesChanged;
+        state.QueuedDrafts.CollectionChanged += OnQueuedDraftsChanged;
+    }
+
+    private void DetachActiveStateHandlers(SessionRuntimeState state)
+    {
+        state.Attachments.CollectionChanged -= OnAttachmentsChanged;
+        state.SubagentActivities.CollectionChanged -= OnSubagentActivitiesChanged;
+        state.QueuedDrafts.CollectionChanged -= OnQueuedDraftsChanged;
     }
 
     private void OnAttachmentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -131,11 +230,32 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     private void OnQueuedDraftsChanged(object? sender, NotifyCollectionChangedEventArgs e)
         => OnPropertyChanged(nameof(HasQueuedDrafts));
 
-    partial void OnDraftTextChanged(string value)
-        => OnComposerStateChanged();
-
-    partial void OnIsStreamingChanged(bool value)
-        => OnComposerStateChanged();
+    private void OnActiveStateChanged()
+    {
+        OnPropertyChanged(nameof(Messages));
+        OnPropertyChanged(nameof(Attachments));
+        OnPropertyChanged(nameof(SubagentActivities));
+        OnPropertyChanged(nameof(QueuedDrafts));
+        OnPropertyChanged(nameof(CurrentSessionId));
+        OnPropertyChanged(nameof(CurrentAgentSessionId));
+        OnPropertyChanged(nameof(DraftText));
+        OnPropertyChanged(nameof(SelectedPermission));
+        OnPropertyChanged(nameof(SelectedModel));
+        OnPropertyChanged(nameof(IsStreaming));
+        OnPropertyChanged(nameof(StatusMessage));
+        OnPropertyChanged(nameof(HeaderTitle));
+        OnPropertyChanged(nameof(CurrentWorkingDirectory));
+        OnPropertyChanged(nameof(PendingQuestion));
+        OnPropertyChanged(nameof(PendingQuestionStatus));
+        OnPropertyChanged(nameof(HasAttachments));
+        OnPropertyChanged(nameof(HasSubagentActivities));
+        OnPropertyChanged(nameof(HasQueuedDrafts));
+        OnPropertyChanged(nameof(HasPendingQuestion));
+        OnPropertyChanged(nameof(IsBlankPage));
+        OnPropertyChanged(nameof(CanQueueCurrentDraft));
+        OnPropertyChanged(nameof(ShowSendButton));
+        OnPropertyChanged(nameof(ShowStopButton));
+    }
 
     private void OnComposerStateChanged()
     {
@@ -143,6 +263,92 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowSendButton));
         OnPropertyChanged(nameof(ShowStopButton));
         OnPropertyChanged(nameof(HasPendingQuestion));
+    }
+
+    private SessionRuntimeState GetOrCreateSessionState(string? sessionId)
+    {
+        if (!string.IsNullOrEmpty(sessionId) && _sessionStates.TryGetValue(sessionId, out var existing))
+        {
+            return existing;
+        }
+
+        var state = new SessionRuntimeState();
+        if (!string.IsNullOrEmpty(sessionId))
+        {
+            state.SessionId = sessionId;
+            _sessionStates[sessionId] = state;
+        }
+        return state;
+    }
+
+    private void SetActiveState(SessionRuntimeState next)
+    {
+        if (ReferenceEquals(_activeState, next))
+        {
+            return;
+        }
+
+        DetachActiveStateHandlers(_activeState);
+        _activeState = next;
+        AttachActiveStateHandlers(_activeState);
+        OnActiveStateChanged();
+    }
+
+    private void SyncActiveSessionRuntime()
+    {
+        if (_activeState.SessionId is null)
+        {
+            return;
+        }
+
+        if (!_sessionStates.TryGetValue(_activeState.SessionId, out var state))
+        {
+            _sessionStates[_activeState.SessionId] = _activeState;
+            return;
+        }
+
+        state.IsStreaming = _activeState.IsStreaming;
+        state.StatusMessage = _activeState.StatusMessage;
+        state.HeaderTitle = _activeState.HeaderTitle;
+        state.CurrentWorkingDirectory = _activeState.CurrentWorkingDirectory;
+        state.PendingQuestion = _activeState.PendingQuestion;
+        state.PendingQuestionStatus = _activeState.PendingQuestionStatus;
+    }
+
+    private void SyncSidebarSessionStreaming(SessionRuntimeState state)
+    {
+        if (!string.IsNullOrEmpty(state.SessionId))
+        {
+            _sidebar.SetSessionStreaming(state.SessionId, state.IsStreaming);
+        }
+    }
+
+    private void SyncSidebarSessionViewed(SessionRuntimeState state, long viewedAt)
+    {
+        if (!string.IsNullOrEmpty(state.SessionId))
+        {
+            _sidebar.MarkSessionViewed(state.SessionId, viewedAt);
+        }
+    }
+
+    private void SyncSidebarSessionRecord(SessionRecord record)
+        => _sidebar.AddOrUpdateSession(record);
+
+    private async Task MarkSessionViewedAsync(SessionRuntimeState state, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(state.SessionId) || state.Record is null)
+        {
+            return;
+        }
+
+        var viewedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var updatedRecord = state.Record with { ViewedAt = viewedAt };
+
+        state.ViewedAt = viewedAt;
+        state.Record = updatedRecord;
+        SyncSidebarSessionViewed(state, viewedAt);
+        SyncSidebarSessionRecord(updatedRecord);
+        await _repo.UpdateSessionAsync(updatedRecord, ct).ConfigureAwait(true);
     }
 
     [RelayCommand]
@@ -161,36 +367,37 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     /// </summary>
     public async Task OpenSessionAsync(SessionRecord record, CancellationToken ct = default)
     {
-        _sendCts?.Cancel();
-        SendCancellationCleanup();
+        var state = GetOrCreateSessionState(record.SessionId);
+        SetActiveState(state);
 
         CurrentSessionId = record.SessionId;
         CurrentAgentSessionId = record.AgentSessionId;
         HeaderTitle = string.IsNullOrWhiteSpace(record.Title) ? "新对话" : record.Title;
         CurrentWorkingDirectory = await ResolveWorkingDirectoryForSessionAsync(record, ct).ConfigureAwait(true);
         ProjectsTracker.CurrentWorkingDirectory = CurrentWorkingDirectory;
-        Messages.Clear();
-        ClearPendingQueue();
-        PendingQuestion = null;
-        PendingQuestionStatus = null;
-        await RefreshSubagentActivitiesAsync(record.AgentSessionId, ct).ConfigureAwait(true);
-        await RefreshPendingQuestionAsync(record.AgentSessionId, ct).ConfigureAwait(true);
-        StatusMessage = null;
-
-        try
+        state.SessionId = record.SessionId;
+        state.AgentSessionId = record.AgentSessionId;
+        state.Record = record;
+        state.HeaderTitle = HeaderTitle;
+        state.CurrentWorkingDirectory = CurrentWorkingDirectory;
+        if (!state.HistoryLoaded)
         {
+            state.Messages.Clear();
             var remote = await _agent.GetMessagesAsync(record.AgentSessionId, ct).ConfigureAwait(true);
             foreach (var msg in remote)
             {
-                Messages.Add(MapRemoteMessage(msg));
+                state.Messages.Add(MapRemoteMessage(msg));
             }
-            StatusMessage = null;
+            state.HistoryLoaded = true;
         }
-        catch (Exception ex)
-        {
-            // Per spec: do NOT clear messages on failure. Show error.
-            StatusMessage = $"加载历史失败:{ex.Message}";
-        }
+
+        ClearPendingQueue(state);
+        PendingQuestion = null;
+        PendingQuestionStatus = null;
+        await RefreshSubagentActivitiesAsync(state, ct).ConfigureAwait(true);
+        await RefreshPendingQuestionAsync(state, ct).ConfigureAwait(true);
+        StatusMessage = null;
+        await MarkSessionViewedAsync(state, ct).ConfigureAwait(true);
         OnPropertyChanged(nameof(IsBlankPage));
         SessionChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -201,15 +408,15 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     /// back to <see cref="ProjectsTracker"/> or the app base directory.</param>
     public void OpenBlankPage(string? workingDirectory = null)
     {
-        _sendCts?.Cancel();
-        SendCancellationCleanup();
+        var state = new SessionRuntimeState();
+        SetActiveState(state);
 
         CurrentSessionId = null;
         CurrentAgentSessionId = null;
         HeaderTitle = "新对话";
         Messages.Clear();
         SubagentActivities.Clear();
-        ClearPendingQueue();
+        ClearPendingQueue(state);
         PendingQuestion = null;
         PendingQuestionStatus = null;
         StatusMessage = null;
@@ -232,14 +439,42 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         var request = CaptureDraft();
         if (request is null) return;
 
-        if (IsStreaming)
+        var state = _activeState;
+        if (state.SendPipelineActive || state.IsStreaming)
         {
-            EnqueuePendingDraft(request);
-            StatusMessage = $"已加入队列，前方还有 {QueuedDrafts.Count} 条";
+            EnqueuePendingDraft(state, request);
+            StatusMessage = $"已加入队列，前方还有 {state.QueuedDrafts.Count} 条";
             return;
         }
 
-        await RunSendQueueAsync(request).ConfigureAwait(true);
+        state.SendPipelineActive = true;
+        try
+        {
+            await RunSendQueueAsync(state, request).ConfigureAwait(true);
+        }
+        finally
+        {
+            state.SendPipelineActive = false;
+        }
+    }
+
+    private async Task PersistSessionStateAsync(SessionRuntimeState state, CancellationToken ct)
+    {
+        if (state.Record is null || state.SessionId is null || state.AgentSessionId is null)
+        {
+            return;
+        }
+
+        var updated = state.Record with
+        {
+            Title = string.IsNullOrWhiteSpace(state.HeaderTitle) ? state.Record.Title : state.HeaderTitle,
+            LastActivityAt = state.LastActivityAt ?? state.Record.LastActivityAt,
+            ViewedAt = state.ViewedAt ?? state.Record.ViewedAt,
+        };
+
+        state.Record = updated;
+        await _repo.UpdateSessionAsync(updated, ct).ConfigureAwait(true);
+        _sidebar.AddOrUpdateSession(updated);
     }
 
     [RelayCommand(AllowConcurrentExecutions = true)]
@@ -254,17 +489,17 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         await SendAsync().ConfigureAwait(true);
     }
 
-    private async Task RunSendQueueAsync(QueuedSendRequest firstRequest)
+    private async Task RunSendQueueAsync(SessionRuntimeState state, QueuedSendRequest firstRequest)
     {
         var request = firstRequest;
         while (request is not null)
         {
-            await SendOneAsync(request).ConfigureAwait(true);
-            request = DequeuePendingDraft();
+            await SendOneAsync(state, request).ConfigureAwait(true);
+            request = DequeuePendingDraft(state);
         }
     }
 
-    private async Task SendOneAsync(QueuedSendRequest request)
+    private async Task SendOneAsync(SessionRuntimeState state, QueuedSendRequest request)
     {
         // 1. Build the user message locally so the UI reflects it immediately.
         var userMessage = new ChatMessageViewModel(Guid.NewGuid().ToString("N"), ChatRole.User, "你");
@@ -276,7 +511,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         {
             userMessage.Blocks.Add(new ChatBlockViewModel(ChatBlockKind.Image, partId: null, text: attachment.DisplayName, assetPath: attachment.Path));
         }
-        Messages.Add(userMessage);
+        state.Messages.Add(userMessage);
 
         // 2. Placeholder assistant message that streaming chunks will append to.
         var assistantId = Guid.NewGuid().ToString("N");
@@ -285,26 +520,44 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             IsStreaming = true,
             StreamingStatusText = "正在发送…",
         };
-        Messages.Add(assistantMessage);
-        IsStreaming = true;
+        state.Messages.Add(assistantMessage);
+        state.IsStreaming = true;
+        SyncSidebarSessionStreaming(state);
 
-        _sendCts = new CancellationTokenSource();
-        var ct = _sendCts.Token;
-        StartSubagentRefreshLoop(ct);
-        StartPendingQuestionRefreshLoop(ct);
+        state.SendCts?.Dispose();
+        state.SendCts = new CancellationTokenSource();
+        var ct = state.SendCts.Token;
+        StartSubagentRefreshLoop(state, ct);
+        StartPendingQuestionRefreshLoop(state, ct);
 
         try
         {
-            if (CurrentAgentSessionId is null)
+            if (state.AgentSessionId is null)
             {
                 var workingDir = ResolveWorkingDirectory();
                 var record = await CreateSessionForFirstMessageAsync(workingDir, ct).ConfigureAwait(true);
+                var viewedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                var updatedRecord = record with { ViewedAt = viewedAt };
+                state.SessionId = record.SessionId;
+                state.AgentSessionId = record.AgentSessionId;
+                state.Record = updatedRecord;
+                state.CurrentWorkingDirectory = workingDir;
+                state.HeaderTitle = record.Title;
+                state.HistoryLoaded = true;
+                state.ViewedAt = viewedAt;
                 CurrentSessionId = record.SessionId;
                 CurrentAgentSessionId = record.AgentSessionId;
                 CurrentWorkingDirectory = workingDir;
                 HeaderTitle = record.Title;
-                _sidebar.AddOrUpdateSession(record);
+                SyncSidebarSessionRecord(updatedRecord);
                 OnPropertyChanged(nameof(IsBlankPage));
+            }
+            else if (!string.IsNullOrEmpty(state.SessionId))
+            {
+                CurrentSessionId = state.SessionId;
+                CurrentAgentSessionId = state.AgentSessionId;
+                CurrentWorkingDirectory = state.CurrentWorkingDirectory;
+                HeaderTitle = state.HeaderTitle;
             }
 
             var chatRequest = new AgentChatRequest(
@@ -314,17 +567,20 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                 Model: SelectedModel);
 
             await foreach (var chunk in _agent
-                .SendMessageAsync(CurrentAgentSessionId!, chatRequest, ct)
+                .SendMessageAsync(state.AgentSessionId!, chatRequest, ct)
                 .ConfigureAwait(true))
             {
                 assistantMessage.StreamingStatusText = null;
                 ApplyChunk(assistantMessage, chunk);
             }
 
-            await SyncFinalAssistantStateAsync(assistantMessage, ct).ConfigureAwait(true);
-            await RefreshSubagentActivitiesAsync(CurrentAgentSessionId!, ct).ConfigureAwait(true);
-            await TrySyncTitleAsync(ct).ConfigureAwait(true);
+            await SyncFinalAssistantStateAsync(state, assistantMessage, ct).ConfigureAwait(true);
+            await RefreshSubagentActivitiesAsync(state, ct).ConfigureAwait(true);
+            await TrySyncTitleAsync(state, ct).ConfigureAwait(true);
             assistantMessage.StreamingStatusText = null;
+
+            state.LastActivityAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            await PersistSessionStateAsync(state, ct).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
@@ -337,10 +593,12 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         finally
         {
             assistantMessage.IsStreaming = false;
-            IsStreaming = false;
-            StopSubagentRefreshLoop();
-            StopPendingQuestionRefreshLoop();
-            SendCancellationCleanup();
+            state.IsStreaming = false;
+            SyncSidebarSessionStreaming(state);
+            StopSubagentRefreshLoop(state);
+            StopPendingQuestionRefreshLoop(state);
+            state.SendCts?.Dispose();
+            state.SendCts = null;
         }
     }
 
@@ -358,80 +616,74 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         return new QueuedSendRequest(Guid.NewGuid().ToString("N"), prompt, snapshotAttachments);
     }
 
-    private void EnqueuePendingDraft(QueuedSendRequest request)
+    private void EnqueuePendingDraft(SessionRuntimeState state, QueuedSendRequest request)
     {
-        _pendingSendQueue.Enqueue(request);
-        QueuedDrafts.Add(new QueuedChatDraftViewModel(request.Id, request.Prompt, request.Attachments));
+        state.PendingSendQueue.Enqueue(request);
+        state.QueuedDrafts.Add(new QueuedChatDraftViewModel(request.Id, request.Prompt, request.Attachments));
     }
 
-    private QueuedSendRequest? DequeuePendingDraft()
+    private QueuedSendRequest? DequeuePendingDraft(SessionRuntimeState state)
     {
-        if (_pendingSendQueue.Count == 0)
+        if (state.PendingSendQueue.Count == 0)
         {
             return null;
         }
 
-        var request = _pendingSendQueue.Dequeue();
-        var vm = QueuedDrafts.FirstOrDefault(x => x.Id == request.Id);
+        var request = state.PendingSendQueue.Dequeue();
+        var vm = state.QueuedDrafts.FirstOrDefault(x => x.Id == request.Id);
         if (vm is not null)
         {
-            QueuedDrafts.Remove(vm);
+            state.QueuedDrafts.Remove(vm);
         }
         return request;
     }
 
-    private void ClearPendingQueue()
+    private void ClearPendingQueue(SessionRuntimeState state)
     {
-        _pendingSendQueue.Clear();
-        QueuedDrafts.Clear();
+        state.PendingSendQueue.Clear();
+        state.QueuedDrafts.Clear();
     }
 
-    private void SendCancellationCleanup()
+    private void StartSubagentRefreshLoop(SessionRuntimeState state, CancellationToken ct)
     {
-        _sendCts?.Dispose();
-        _sendCts = null;
+        StopSubagentRefreshLoop(state);
+        state.SubagentRefreshCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _ = RefreshSubagentActivitiesLoopAsync(state, state.SubagentRefreshCts.Token);
     }
 
-    private void StartSubagentRefreshLoop(CancellationToken ct)
+    private void StopSubagentRefreshLoop(SessionRuntimeState state)
     {
-        StopSubagentRefreshLoop();
-        _subagentRefreshCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        _ = RefreshSubagentActivitiesLoopAsync(_subagentRefreshCts.Token);
+        state.SubagentRefreshCts?.Cancel();
+        state.SubagentRefreshCts?.Dispose();
+        state.SubagentRefreshCts = null;
     }
 
-    private void StopSubagentRefreshLoop()
+    private void StartPendingQuestionRefreshLoop(SessionRuntimeState state, CancellationToken ct)
     {
-        _subagentRefreshCts?.Cancel();
-        _subagentRefreshCts?.Dispose();
-        _subagentRefreshCts = null;
+        StopPendingQuestionRefreshLoop(state);
+        state.PendingQuestionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _ = RefreshPendingQuestionLoopAsync(state, state.PendingQuestionCts.Token);
     }
 
-    private void StartPendingQuestionRefreshLoop(CancellationToken ct)
+    private void StopPendingQuestionRefreshLoop(SessionRuntimeState state)
     {
-        StopPendingQuestionRefreshLoop();
-        _pendingQuestionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        _ = RefreshPendingQuestionLoopAsync(_pendingQuestionCts.Token);
+        state.PendingQuestionCts?.Cancel();
+        state.PendingQuestionCts?.Dispose();
+        state.PendingQuestionCts = null;
     }
 
-    private void StopPendingQuestionRefreshLoop()
-    {
-        _pendingQuestionCts?.Cancel();
-        _pendingQuestionCts?.Dispose();
-        _pendingQuestionCts = null;
-    }
-
-    private async Task RefreshSubagentActivitiesLoopAsync(CancellationToken ct)
+    private async Task RefreshSubagentActivitiesLoopAsync(SessionRuntimeState state, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
             try
             {
-                if (!IsStreaming || CurrentAgentSessionId is null)
+                if (!state.IsStreaming || string.IsNullOrEmpty(state.AgentSessionId))
                 {
                     return;
                 }
 
-                await RefreshSubagentActivitiesAsync(CurrentAgentSessionId, ct).ConfigureAwait(true);
+                await RefreshSubagentActivitiesAsync(state, ct).ConfigureAwait(true);
                 await Task.Delay(TimeSpan.FromSeconds(1.5), ct).ConfigureAwait(true);
             }
             catch (OperationCanceledException)
@@ -445,19 +697,19 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         }
     }
 
-    private async Task RefreshPendingQuestionLoopAsync(CancellationToken ct)
+    private async Task RefreshPendingQuestionLoopAsync(SessionRuntimeState state, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
             try
             {
-                if (CurrentAgentSessionId is null)
+                if (string.IsNullOrEmpty(state.AgentSessionId))
                 {
-                    PendingQuestion = null;
+                    state.PendingQuestion = null;
                     return;
                 }
 
-                await RefreshPendingQuestionAsync(CurrentAgentSessionId, ct).ConfigureAwait(true);
+                await RefreshPendingQuestionAsync(state, ct).ConfigureAwait(true);
                 await Task.Delay(TimeSpan.FromSeconds(0.8), ct).ConfigureAwait(true);
             }
             catch (OperationCanceledException)
@@ -474,7 +726,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     [RelayCommand]
     private void Cancel()
     {
-        _sendCts?.Cancel();
+        _activeState.SendCts?.Cancel();
     }
 
     [RelayCommand]
@@ -485,14 +737,14 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             return;
         }
 
-        var remaining = _pendingSendQueue.Where(x => x.Id != draft.Id).ToArray();
-        _pendingSendQueue.Clear();
+        var remaining = _activeState.PendingSendQueue.Where(x => x.Id != draft.Id).ToArray();
+        _activeState.PendingSendQueue.Clear();
         foreach (var item in remaining)
         {
-            _pendingSendQueue.Enqueue(item);
+            _activeState.PendingSendQueue.Enqueue(item);
         }
 
-        QueuedDrafts.Remove(draft);
+        _activeState.QueuedDrafts.Remove(draft);
         OnPropertyChanged(nameof(HasQueuedDrafts));
     }
 
@@ -539,7 +791,8 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     [RelayCommand]
     private async Task SubmitPendingQuestionAsync()
     {
-        if (PendingQuestion is null || CurrentAgentSessionId is null)
+        var state = _activeState;
+        if (PendingQuestion is null || state.AgentSessionId is null)
         {
             return;
         }
@@ -555,13 +808,13 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         {
             PendingQuestionStatus = "正在提交…";
             await _agent.SubmitQuestionAnswerAsync(
-                CurrentAgentSessionId,
+                state.AgentSessionId,
                 PendingQuestion.RequestId,
                 answers,
-                _sendCts?.Token ?? CancellationToken.None).ConfigureAwait(true);
+                state.SendCts?.Token ?? CancellationToken.None).ConfigureAwait(true);
             PendingQuestionStatus = null;
             PendingQuestion = null;
-            await RefreshPendingQuestionAsync(CurrentAgentSessionId, CancellationToken.None).ConfigureAwait(true);
+            await RefreshPendingQuestionAsync(state, CancellationToken.None).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -605,7 +858,9 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             AgentSessionId: agentSessionId,
             Title: "新对话",
             ProjectId: project?.Id,
-            CreatedAt: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            CreatedAt: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            LastActivityAt: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            ViewedAt: null);
         await _repo.CreateSessionAsync(record, ct).ConfigureAwait(true);
         return record;
     }
@@ -625,18 +880,23 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     private static string NormalizeDir(string dir) =>
         dir.TrimEnd('/', '\\').Replace('/', '\\');
 
-    private async Task TrySyncTitleAsync(CancellationToken ct)
+    private async Task TrySyncTitleAsync(SessionRuntimeState state, CancellationToken ct)
     {
-        if (CurrentAgentSessionId is null || CurrentSessionId is null) return;
+        if (state.AgentSessionId is null || state.SessionId is null) return;
         try
         {
-            var newTitle = await _agent.GetSessionTitleAsync(CurrentAgentSessionId, ct).ConfigureAwait(true);
+            var newTitle = await _agent.GetSessionTitleAsync(state.AgentSessionId, ct).ConfigureAwait(true);
             if (string.IsNullOrWhiteSpace(newTitle)) return;
             if (newTitle == "新对话") return;
 
-            _sidebar.UpdateSessionTitle(CurrentSessionId, newTitle);
-            HeaderTitle = newTitle;
-            var existing = await _repo.GetSessionAsync(CurrentSessionId, ct).ConfigureAwait(true);
+            state.HeaderTitle = newTitle;
+            if (ReferenceEquals(state, _activeState))
+            {
+                HeaderTitle = newTitle;
+            }
+
+            _sidebar.UpdateSessionTitle(state.SessionId, newTitle);
+            var existing = await _repo.GetSessionAsync(state.SessionId, ct).ConfigureAwait(true);
             if (existing is not null)
             {
                 var updated = existing with { Title = newTitle };
@@ -837,14 +1097,14 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         return vm;
     }
 
-    private async Task SyncFinalAssistantStateAsync(ChatMessageViewModel assistant, CancellationToken ct)
+    private async Task SyncFinalAssistantStateAsync(SessionRuntimeState state, ChatMessageViewModel assistant, CancellationToken ct)
     {
-        if (CurrentAgentSessionId is null)
+        if (state.AgentSessionId is null)
         {
             return;
         }
 
-        var messages = await _agent.GetMessagesAsync(CurrentAgentSessionId, ct).ConfigureAwait(true);
+        var messages = await _agent.GetMessagesAsync(state.AgentSessionId, ct).ConfigureAwait(true);
         var remoteAssistant = messages.LastOrDefault(m => m.Role == ChatRole.Assistant);
         if (remoteAssistant is null) return;
 
@@ -861,7 +1121,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                 current.ToolState = block.ToolState ?? current.ToolState;
                 current.ToolOutput = block.ToolOutput;
                 current.ToolInput = block.ToolInput;
-                current.ToolWorkingDirectory = CurrentWorkingDirectory;
+                current.ToolWorkingDirectory = state.CurrentWorkingDirectory;
                 current.ToolQuestion = block.Question;
             }
             else
@@ -924,17 +1184,22 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         return SidebarWorkingDirectoryOrTracked();
     }
 
-    private async Task RefreshSubagentActivitiesAsync(string agentSessionId, CancellationToken ct)
+    private async Task RefreshSubagentActivitiesAsync(SessionRuntimeState state, CancellationToken ct)
     {
         try
         {
-            var snapshots = await _agent.GetSubagentActivitiesAsync(agentSessionId, ct).ConfigureAwait(true);
-            SubagentActivities.Clear();
+            if (string.IsNullOrEmpty(state.AgentSessionId))
+            {
+                return;
+            }
+
+            var snapshots = await _agent.GetSubagentActivitiesAsync(state.AgentSessionId, ct).ConfigureAwait(true);
+            state.SubagentActivities.Clear();
             foreach (var snapshot in snapshots)
             {
                 var vm = new SubagentActivityViewModel();
                 vm.UpdateFrom(snapshot);
-                SubagentActivities.Add(vm);
+                state.SubagentActivities.Add(vm);
             }
         }
         catch
@@ -943,21 +1208,35 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         }
     }
 
-    private async Task RefreshPendingQuestionAsync(string agentSessionId, CancellationToken ct)
+    private async Task RefreshPendingQuestionAsync(SessionRuntimeState state, CancellationToken ct)
     {
         try
         {
-            var requests = await _agent.GetPendingQuestionsAsync(agentSessionId, ct).ConfigureAwait(true);
-            var request = requests.FirstOrDefault();
-            if (request is not null)
+            if (string.IsNullOrEmpty(state.AgentSessionId))
             {
-                PendingQuestion = MapPendingQuestion(request);
-                OnPropertyChanged(nameof(HasPendingQuestion));
+                state.PendingQuestion = null;
                 return;
             }
 
-            PendingQuestion = TryRestorePendingQuestionFromMessages();
-            OnPropertyChanged(nameof(HasPendingQuestion));
+            var requests = await _agent.GetPendingQuestionsAsync(state.AgentSessionId, ct).ConfigureAwait(true);
+            var request = requests.FirstOrDefault();
+            if (request is not null)
+            {
+                state.PendingQuestion = MapPendingQuestion(request);
+                if (ReferenceEquals(state, _activeState))
+                {
+                    PendingQuestion = state.PendingQuestion;
+                    OnPropertyChanged(nameof(HasPendingQuestion));
+                }
+                return;
+            }
+
+            state.PendingQuestion = TryRestorePendingQuestionFromMessages(state);
+            if (ReferenceEquals(state, _activeState))
+            {
+                PendingQuestion = state.PendingQuestion;
+                OnPropertyChanged(nameof(HasPendingQuestion));
+            }
         }
         catch
         {
@@ -990,9 +1269,9 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         return vm;
     }
 
-    private PendingQuestion? TryRestorePendingQuestionFromMessages()
+    private PendingQuestion? TryRestorePendingQuestionFromMessages(SessionRuntimeState state)
     {
-        var block = Messages
+        var block = state.Messages
             .Where(m => m.IsAssistant)
             .SelectMany(m => m.Blocks)
             .LastOrDefault(b => b.ToolQuestion is not null && b.ToolState is not ToolState.Completed and not ToolState.Failed);
@@ -1079,11 +1358,6 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
     [RelayCommand]
     private void RemoveAttachment(ChatAttachment attachment) => Attachments.Remove(attachment);
-
-    private sealed record QueuedSendRequest(
-        string Id,
-        string Prompt,
-        IReadOnlyList<ChatAttachment> Attachments);
 }
 
 /// <summary>
