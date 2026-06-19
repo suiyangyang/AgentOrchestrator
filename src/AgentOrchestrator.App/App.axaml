@@ -8,6 +8,10 @@
     <!-- Shared width cap for chat content and composer — keeps message columns aligned with input. -->
     <Application.Resources>
         <x:Double x:Key="Chat.Content.MaxWidth">900</x:Double>
+        <FontFamily x:Key="UiFontFamily">Segoe UI, Microsoft YaHei UI, Microsoft YaHei</FontFamily>
+        <x:Double x:Key="UiFontSize">14</x:Double>
+        <FontFamily x:Key="CodeFontFamily">Consolas</FontFamily>
+        <x:Double x:Key="CodeFontSize">12</x:Double>
     </Application.Resources>
 
     <Application.DataTemplates>
@@ -27,24 +31,28 @@
 
         <!-- ============================================================ -->
         <!-- Typography tokens                                             -->
-        <!--   UI default: 14px  (TextBlock without explicit FontSize)    -->
-        <!--   Code style : 12px  (apply via Classes="code-text")         -->
-        <!--   Note: TextBox default stays 18px (chat input ergonomics).  -->
-        <!--   Note: chat content (assistant-text, thinking-body-text)    -->
-        <!--         keeps 12px — these are content, not chrome.          -->
+        <!--   All values driven by AppSettings.Appearance.*               -->
+        <!--   Defaults: UI = Source Han Sans 14px, Code = Consolas 12px. -->
+        <!--   Override at runtime via Application.Current.Resources in   -->
+        <!--   App.axaml.cs OnFrameworkInitializationCompleted.            -->
+        <!--   Source Han Sans is bundled in Assets/Fonts as a single       -->
+<!--   variable font (covers all weights incl. SemiBold 600);       -->
+<!--   other fonts fall back to system names.                       -->
+        <!--   Header/Title chrome and icon glyphs keep hardcoded sizes.   -->
         <!-- ============================================================ -->
         <Style Selector="TextBlock">
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
+            <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}" />
         </Style>
         <Style Selector="TextBlock.code-text">
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="FontFamily" Value="Cascadia Code, Consolas, Menlo, monospace" />
+            <Setter Property="FontSize" Value="{DynamicResource CodeFontSize}" />
+            <Setter Property="FontFamily" Value="{DynamicResource CodeFontFamily}" />
             <Setter Property="LineHeight" Value="22" />
             <Setter Property="Foreground" Value="#1F2328" />
         </Style>
         <Style Selector="TextBox.tool-code-viewer">
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="FontFamily" Value="Cascadia Code, Consolas, Menlo, monospace" />
+            <Setter Property="FontSize" Value="{DynamicResource CodeFontSize}" />
+            <Setter Property="FontFamily" Value="{DynamicResource CodeFontFamily}" />
             <Setter Property="LineHeight" Value="22" />
             <Setter Property="Foreground" Value="#1F2328" />
             <Setter Property="Padding" Value="0" />
@@ -89,8 +97,8 @@
         </Style>
         <Style Selector="TextBlock.assistant-loading-text">
             <Setter Property="Foreground" Value="#6E727A" />
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="FontFamily" Value="Consolas" />
+            <Setter Property="FontSize" Value="{DynamicResource CodeFontSize}" />
+            <Setter Property="FontFamily" Value="{DynamicResource CodeFontFamily}" />
         </Style>
         <Style Selector="Border.inline-attachment">
             <Setter Property="Background" Value="#F7F8FA" />
@@ -149,16 +157,16 @@
             <Setter Property="Foreground" Value="#1F2328" />
         </Style>
         <Style Selector="TextBlock.question-banner-subtitle">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#60656D" />
         </Style>
         <Style Selector="TextBlock.question-item-header">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="#3A4048" />
         </Style>
         <Style Selector="TextBlock.question-item-question">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#5E646C" />
         </Style>
         <Style Selector="Button.question-option-button">
@@ -182,21 +190,21 @@
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style Selector="TextBlock.question-option-label">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#1F2328" />
         </Style>
         <Style Selector="TextBlock.question-option-description">
-            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#6C7178" />
         </Style>
         <Style Selector="TextBlock.question-option-indicator-mark">
             <Setter Property="Foreground" Value="#1F2328" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style Selector="TextBlock.question-banner-status">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#8B9098" />
         </Style>
         <Style Selector="Button.question-confirm-button">
@@ -285,7 +293,7 @@
             <Setter Property="Background" Value="#1F2328" />
             <Setter Property="Foreground" Value="White" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -345,18 +353,18 @@
         </Style>
         <Style Selector="TextBlock.queue-item-text">
             <Setter Property="Foreground" Value="#40444B" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="LineHeight" Value="18" />
         </Style>
         <Style Selector="TextBlock.queue-item-action-text">
             <Setter Property="Foreground" Value="#70757D" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
         </Style>
         <Style Selector="ComboBox.permission-combo">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
         </Style>
         <Style Selector="ComboBox.permission-combo /template/ Border#PART_BorderElement">
             <Setter Property="Background" Value="Transparent" />
@@ -372,7 +380,7 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="MinHeight" Value="24" />
         </Style>
         <Style Selector="ComboBox.model-combo /template/ Border#PART_BorderElement">
@@ -393,7 +401,7 @@
         </Style>
         <Style Selector="TextBlock.permission-pill-text">
             <Setter Property="Foreground" Value="#FF6A00" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
         </Style>
         <Style Selector="TextBlock.permission-caret">
             <Setter Property="Foreground" Value="#FF6A00" />
@@ -401,30 +409,30 @@
         </Style>
         <Style Selector="TextBlock.permission-description">
             <Setter Property="Foreground" Value="#9096A0" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
         </Style>
         <Style Selector="TextBlock.assistant-text">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="LineHeight" Value="18" />
             <Setter Property="Foreground" Value="#1F2328" />
         </Style>
         <Style Selector="TextBlock.thinking-header-text">
             <Setter Property="Foreground" Value="#6E727A" />
-			<Setter Property="FontFamily" Value="Consolas" />
-            <Setter Property="FontSize" Value="12" />
+			<Setter Property="FontFamily" Value="{DynamicResource CodeFontFamily}" />
+            <Setter Property="FontSize" Value="{DynamicResource CodeFontSize}" />
         </Style>
         <Style Selector="TextBlock.thinking-body-text">
             <Setter Property="Foreground" Value="#71757D" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="LineHeight" Value="22" />
         </Style>
         <Style Selector="TextBlock.diff-text">
             <Setter Property="Foreground" Value="#18A558" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
         </Style>
         <Style Selector="TextBlock.model-text">
             <Setter Property="Foreground" Value="#40444B" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
         </Style>
         <Style Selector="TextBlock.model-dot">
             <Setter Property="Foreground" Value="#C5C8CE" />
@@ -434,7 +442,8 @@
             <Setter Property="FontSize" Value="11" />
         </Style>
         <Style Selector="TextBox">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
+            <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="Background" Value="Transparent" />
@@ -490,7 +499,7 @@
             <Setter Property="HorizontalContentAlignment" Value="Left" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Foreground" Value="#40444B" />
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Transitions">
                 <Transitions>
@@ -569,7 +578,7 @@
         </Style>
         <Style Selector="TextBlock.collapsible-block-label">
             <Setter Property="Foreground" Value="#40444B" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style Selector="Border.collapsible-block-body">
@@ -583,7 +592,7 @@
             <Setter Property="ClipToBounds" Value="True" />
         </Style>
         <Style Selector="Border.collapsible-block-body TextBlock">
-            <Setter Property="FontFamily" Value="Consolas, Cascadia Code, Menlo, monospace" />
+            <Setter Property="FontFamily" Value="{DynamicResource CodeFontFamily}" />
         </Style>
         <!-- ============================================================ -->
         <!-- Settings Dialog Buttons                                       -->
@@ -595,7 +604,7 @@
             <Setter Property="BorderBrush" Value="#DCE1E8" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Foreground" Value="#1F2328" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Padding" Value="20,8" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="MinWidth" Value="88" />
@@ -611,7 +620,7 @@
             <Setter Property="BorderBrush" Value="#1F2328" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Foreground" Value="White" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Padding" Value="20,8" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="MinWidth" Value="88" />
@@ -647,12 +656,12 @@
             <Setter Property="Foreground" Value="#1F2328" />
         </Style>
         <Style Selector="TextBlock.settings-service-description">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#737883" />
             <Setter Property="LineHeight" Value="18" />
         </Style>
         <Style Selector="TextBlock.settings-service-status">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
         <Style Selector="TextBlock.settings-service-status-connected">
@@ -662,11 +671,11 @@
             <Setter Property="Foreground" Value="#7B8088" />
         </Style>
         <Style Selector="TextBlock.settings-service-status-disabled">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#9BA1AA" />
         </Style>
         <Style Selector="TextBlock.settings-service-label">
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="#1F2328" />
             <Setter Property="VerticalAlignment" Value="Center" />
@@ -683,14 +692,14 @@
         </Style>
         <Style Selector="TextBlock.settings-service-field-text">
             <Setter Property="Foreground" Value="#6E727A" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style Selector="TextBox.settings-service-input">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#1F2328" />
             <Setter Property="WatermarkForeground" Value="#9AA1AA" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -775,7 +784,7 @@
         </Style>
         <Style Selector="Path.sidebar-search-icon">
             <Setter Property="Data" Value="M 5.8,1.9 A 3.95,3.95 0 1 1 3.01,3.06 A 3.95,3.95 0 0 1 5.8,1.9 Z M 8.9,9.05 L 12.15,12.3" />
-            <Setter Property="Width" Value="10" />
+            <Setter Property="Width" Value="14" />
             <Setter Property="Height" Value="10" />
         </Style>
         <Style Selector="Path.sidebar-folder-icon">
@@ -784,25 +793,15 @@
         </Style>
         <Style Selector="TextBlock.sidebar-nav-text">
             <Setter Property="Foreground" Value="#1F2328" />
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
+            <Setter Property="FontWeight" Value="Bold" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
-        <Style Selector="Grid.sidebar-plugin-icon-grid">
-            <Setter Property="Width" Value="14" />
-            <Setter Property="Height" Value="14" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="HorizontalAlignment" Value="Center" />
-        </Style>
-        <Style Selector="Ellipse.sidebar-plugin-dot">
-            <Setter Property="Width" Value="3.55" />
-            <Setter Property="Height" Value="3.55" />
-            <Setter Property="Stroke" Value="#7A7F87" />
-            <Setter Property="StrokeThickness" Value="1.2" />
-            <Setter Property="Fill" Value="Transparent" />
-            <Setter Property="Margin" Value="1.15" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="HorizontalAlignment" Value="Center" />
+        <Style Selector="Path.sidebar-orchestrator-icon">
+            <!-- Tree: one root node (top) connecting down to three task nodes (bottom).
+                 Inherits Width/Height/Stroke/StrokeThickness/StrokeLineCap/StrokeLineJoin/Fill
+                 from the shared sidebar-nav-icon-path style above. -->
+            <Setter Property="Data" Value="M 8.2,2.7 A 1.2,1.2 0 1 1 5.8,2.7 A 1.2,1.2 0 1 1 8.2,2.7 Z M 7,3.9 L 2.5,10 M 7,3.9 L 7,10 M 7,3.9 L 11.5,10 M 3.7,11.2 A 1.2,1.2 0 1 1 1.3,11.2 A 1.2,1.2 0 1 1 3.7,11.2 Z M 8.2,11.2 A 1.2,1.2 0 1 1 5.8,11.2 A 1.2,1.2 0 1 1 8.2,11.2 Z M 12.7,11.2 A 1.2,1.2 0 1 1 10.3,11.2 A 1.2,1.2 0 1 1 12.7,11.2 Z" />
         </Style>
 
         <Style Selector="Button.sidebar-task-graph">
@@ -825,12 +824,12 @@
             <Setter Property="Background" Value="#EEF0F3" />
         </Style>
         <Style Selector="TextBlock.sidebar-section-label">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="#6E727A" />
         </Style>
         <Style Selector="TextBlock.sidebar-section-action">
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#9096A0" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
@@ -909,9 +908,10 @@
             <Setter Property="Padding" Value="4,0" />
             <Setter Property="MinWidth" Value="20" />
             <Setter Property="Height" Value="20" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#6E727A" />
             <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
         </Style>
         <Style Selector="Button.sidebar-row-action-btn:pointerover">
             <Setter Property="Background" Value="#DDE0E4" />
@@ -925,7 +925,7 @@
             <Setter Property="Padding" Value="4,0" />
             <Setter Property="MinWidth" Value="20" />
             <Setter Property="Height" Value="20" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#6E727A" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -954,6 +954,20 @@
             <Setter Property="Stroke" Value="#7A7F87" />
         </Style>
 
+        <Style Selector="Button.sidebar-session-page-action">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="2,2" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Foreground" Value="#9096A0" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
+        <Style Selector="Button.sidebar-session-page-action:pointerover">
+            <Setter Property="Background" Value="#F2F3F5" />
+            <Setter Property="Foreground" Value="#6E727A" />
+        </Style>
+
         <!-- Menu items inside the "..." popup. -->
         <Style Selector="Button.sidebar-menu-item">
             <Setter Property="Background" Value="Transparent" />
@@ -966,7 +980,7 @@
         </Style>
 
         <Style Selector="TextBlock.sidebar-empty-hint">
-            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="FontStyle" Value="Italic" />
             <Setter Property="Foreground" Value="#9096A0" />
             <Setter Property="Margin" Value="20,4,12,4" />
@@ -989,12 +1003,12 @@
             <Setter Property="Margin" Value="0,0,6,0" />
         </Style>
         <Style Selector="TextBlock.sidebar-project-name">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="#40444B" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-            <Setter Property="MaxWidth" Value="168" />
+            <Setter Property="MaxWidth" Value="250" />
         </Style>
 
         <Style Selector="Button.sidebar-session-item">
@@ -1020,23 +1034,23 @@
             <Setter Property="Background" Value="#E8E8EB" />
         </Style>
         <Style Selector="TextBlock.sidebar-session-title">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#1F2328" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-            <Setter Property="MaxWidth" Value="176" />
+            <Setter Property="MaxWidth" Value="210" />
         </Style>
         <Style Selector="TextBlock.sidebar-session-time">
-            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#9096A0" />
         </Style>
         <Style Selector="TextBlock.sidebar-session-more">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#9096A0" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="Margin" Value="6,0,0,0" />
         </Style>
         <Style Selector="TextBlock.sidebar-empty">
-            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="FontStyle" Value="Italic" />
             <Setter Property="Foreground" Value="#9096A0" />
             <Setter Property="Margin" Value="20,4,0,4" />
@@ -1056,7 +1070,8 @@
             <Setter Property="Background" Value="#FFFFFF" />
             <Setter Property="BorderBrush" Value="#E5E7EB" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
-            <Setter Property="Padding" Value="20,12" />
+            <Setter Property="Padding" Value="20,4" />
+            <Setter Property="Height" Value="38" />
             <Setter Property="Grid.ColumnSpan" Value="2" />
         </Style>
         <Style Selector="TextBlock.workspace-header-title">
@@ -1091,7 +1106,7 @@
             <Setter Property="Foreground" Value="#6E727A" />
         </Style>
         <Style Selector="TextBlock.right-panel-empty">
-            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#9096A0" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
@@ -1104,7 +1119,7 @@
             <Setter Property="Padding" Value="12" />
         </Style>
         <Style Selector="TextBlock.right-panel-placeholder-text">
-            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#9096A0" />
         </Style>
         <Style Selector="Button.right-panel-action">
@@ -1131,8 +1146,8 @@
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="Height" Value="400" />
             <Setter Property="Padding" Value="10,8" />
-            <Setter Property="TextElement.FontFamily" Value="Consolas, Microsoft YaHei UI, Microsoft YaHei, SimHei" />
-            <Setter Property="TextElement.FontSize" Value="12" />
+            <Setter Property="TextElement.FontFamily" Value="{DynamicResource CodeFontFamily}" />
+            <Setter Property="TextElement.FontSize" Value="{DynamicResource CodeFontSize}" />
         </Style>
         <Style Selector="TextBlock.subagent-title">
             <Setter Property="FontSize" Value="12" />
@@ -1140,17 +1155,17 @@
             <Setter Property="Foreground" Value="#1F2328" />
         </Style>
         <Style Selector="TextBlock.subagent-status">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#7B8088" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style Selector="TextBlock.subagent-message">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#6E727A" />
             <Setter Property="LineHeight" Value="18" />
         </Style>
         <Style Selector="TextBlock.subagent-footer">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Foreground" Value="#7B8088" />
             <Setter Property="LineHeight" Value="18" />
         </Style>
@@ -1160,7 +1175,7 @@
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Foreground" Value="#6E727A" />
             <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
             <Setter Property="Width" Value="30" />
             <Setter Property="Height" Value="30" />
             <Setter Property="Padding" Value="0" />

@@ -22,7 +22,7 @@ namespace AgentOrchestrator.App.ViewModels;
 /// </summary>
 public partial class MainWindowViewModel : ViewModelBase
 {
-    private static readonly GridLength DefaultLeftSidebarWidth = new(240);
+    private static readonly GridLength DefaultLeftSidebarWidth = new(300);
     private static readonly GridLength DefaultRightSidebarWidth = new(280);
 
     private readonly ISidebarRepository _repo;

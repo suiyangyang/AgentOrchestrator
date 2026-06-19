@@ -13,16 +13,16 @@
                        Foreground="#1F2328"
                        HorizontalAlignment="Center" />
             <TextBlock Text="{Binding Description}"
-                       FontSize="13" Foreground="#6E727A"
+                        FontSize="{DynamicResource UiFontSize}" Foreground="#6E727A"
                        TextWrapping="Wrap" TextAlignment="Center"
                        HorizontalAlignment="Center" />
             <Border Background="#FFF5ED" CornerRadius="8" Padding="14,8"
                     HorizontalAlignment="Center">
                 <TextBlock Text="{Binding ComingSoon}"
-                           FontSize="12" Foreground="#FF6A00" FontWeight="SemiBold" />
+                            FontSize="{DynamicResource UiFontSize}" Foreground="#FF6A00" FontWeight="SemiBold" />
             </Border>
             <TextBlock Text="{Binding Hint}"
-                       FontSize="11" Foreground="#9096A0"
+                        FontSize="{DynamicResource UiFontSize}" Foreground="#9096A0"
                        TextWrapping="Wrap" TextAlignment="Center"
                        HorizontalAlignment="Center" />
         </StackPanel>

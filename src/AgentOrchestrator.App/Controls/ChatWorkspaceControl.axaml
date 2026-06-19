@@ -36,7 +36,7 @@
                                                             <Border Classes="mini-file-icon">
                                                                 <TextBlock Text="+" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                             </Border>
-                                                            <TextBlock Text="{Binding Text}" VerticalAlignment="Center" FontSize="12" />
+                                                            <TextBlock Text="{Binding Text}" VerticalAlignment="Center" FontSize="{DynamicResource UiFontSize}" />
                                                         </StackPanel>
                                                     </Border>
                                                 </StackPanel>
@@ -80,7 +80,7 @@
                                                             <Border Classes="mini-file-icon">
                                                                 <TextBlock Text="+" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                             </Border>
-                                                            <TextBlock Text="{Binding Text}" VerticalAlignment="Center" FontSize="12" />
+                                                            <TextBlock Text="{Binding Text}" VerticalAlignment="Center" FontSize="{DynamicResource UiFontSize}" />
                                                         </StackPanel>
                                                     </Border>
                                                 </StackPanel>
@@ -154,7 +154,7 @@
                                         <Border Classes="mini-file-icon">
                                             <TextBlock Text="+" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
-                                        <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" FontSize="12" />
+                                        <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" FontSize="{DynamicResource UiFontSize}" />
                                         <Button Command="{Binding #Root.DataContext.RemoveAttachmentCommand}"
                                                 CommandParameter="{Binding}"
                                                 Classes="mini-close-button"
@@ -184,14 +184,16 @@
 
                 <Grid Grid.Row="2">
                     <TextBox Text="{Binding DraftText, Mode=TwoWay}"
-                             AcceptsReturn="False"
-                             TextWrapping="Wrap"
-                             BorderThickness="0"
-                             Background="Transparent"
-                             MinHeight="64"
-                             PlaceholderText="要求后续变更"
-                             KeyDown="OnDraftKeyDown"
-                             PastingFromClipboard="OnDraftPasting" />
+                              AcceptsReturn="False"
+                              TextWrapping="Wrap"
+                              BorderThickness="0"
+                              Background="Transparent"
+                              MinHeight="64"
+                              PlaceholderText="要求后续变更"
+                               FontSize="{DynamicResource UiFontSize}"
+                               FontFamily="{DynamicResource UiFontFamily}"
+                              KeyDown="OnDraftKeyDown"
+                              PastingFromClipboard="OnDraftPasting" />
                 </Grid>
 
                 <Grid Grid.Row="3" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" VerticalAlignment="Center" Margin="0,12,0,0">
@@ -263,7 +265,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Button Classes="permission-item" Click="OnModelItemClick" CommandParameter="{Binding}">
-                                            <TextBlock Text="{Binding .}" FontSize="12" />
+                                             <TextBlock Text="{Binding .}" FontSize="{DynamicResource UiFontSize}" />
                                         </Button>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

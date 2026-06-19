@@ -5,6 +5,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core;
 using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using AgentOrchestrator.App.Services.Agent;
 using AgentOrchestrator.App.Services.Settings;
 using AgentOrchestrator.App.Services.Sidebar;
@@ -31,10 +32,31 @@ public partial class App : Application
             var provider = services.BuildServiceProvider();
 
             desktop.MainWindow = provider.GetRequiredService<MainWindow>();
+
+            // Load appearance settings and populate DynamicResource tokens.
+            var settings = new JsonAppSettingsService().Load();
+            Application.Current.Resources["UiFontFamily"] = ResolveFontFamily(settings.UiFontFamily);
+            Application.Current.Resources["UiFontSize"] = settings.UiFontSize;
+            Application.Current.Resources["CodeFontFamily"] = ResolveFontFamily(settings.CodeFontFamily);
+            Application.Current.Resources["CodeFontSize"] = settings.CodeFontSize;
         }
 
         base.OnFrameworkInitializationCompleted();
     }
+
+    private static FontFamily ResolveFontFamily(string name)
+    {
+        // Map known friendly names to embedded avares:// resources. Anything else
+        // is treated as a system font name (e.g. "Consolas", "Inter").
+        return name switch
+        {
+            "Source Han Sans" => EmbeddedSourceHanSans,
+            _ => string.IsNullOrWhiteSpace(name) ? FontFamily.Default : new FontFamily(name),
+        };
+    }
+
+    private static readonly FontFamily EmbeddedSourceHanSans =
+        new("avares://AgentOrchestrator.App/Assets/Fonts/SourceHanSans-VF.otf#Source Han Sans");
 
     private static void ConfigureServices(IServiceCollection services)
     {
