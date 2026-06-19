@@ -31,6 +31,10 @@ namespace AgentOrchestrator.App.ViewModels;
 /// </summary>
 public partial class ChatWorkspaceViewModel : ViewModelBase
 {
+    private const int InitialHistoryWindowSize = 40;
+    private const int HistoryWindowStep = 40;
+    private const int MaxHistoryWindowSize = 400;
+
     private readonly IAgentGateway _agent;
     private readonly ISidebarRepository _repo;
     private readonly SidebarViewModel _sidebar;
@@ -196,6 +200,8 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     public bool HasSubagentActivities => SubagentActivities.Count > 0;
     public bool HasQueuedDrafts => QueuedDrafts.Count > 0;
     public bool HasPendingQuestion => PendingQuestion is not null;
+    public bool HasOlderHistory => _activeState.HasOlderHistory;
+    public bool IsLoadingOlderHistory => _activeState.IsLoadingOlderHistory;
     public bool IsBlankPage => CurrentSessionId is null && Messages.Count == 0;
     public bool CanQueueCurrentDraft => !string.IsNullOrWhiteSpace(DraftText.Trim()) || Attachments.Count > 0;
     public bool ShowSendButton => !ShowStopButton;
@@ -251,6 +257,8 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasSubagentActivities));
         OnPropertyChanged(nameof(HasQueuedDrafts));
         OnPropertyChanged(nameof(HasPendingQuestion));
+        OnPropertyChanged(nameof(HasOlderHistory));
+        OnPropertyChanged(nameof(IsLoadingOlderHistory));
         OnPropertyChanged(nameof(IsBlankPage));
         OnPropertyChanged(nameof(CanQueueCurrentDraft));
         OnPropertyChanged(nameof(ShowSendButton));
@@ -263,6 +271,12 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowSendButton));
         OnPropertyChanged(nameof(ShowStopButton));
         OnPropertyChanged(nameof(HasPendingQuestion));
+    }
+
+    private void NotifyHistoryStateChanged()
+    {
+        OnPropertyChanged(nameof(HasOlderHistory));
+        OnPropertyChanged(nameof(IsLoadingOlderHistory));
     }
 
     private SessionRuntimeState GetOrCreateSessionState(string? sessionId)
@@ -313,6 +327,9 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         state.CurrentWorkingDirectory = _activeState.CurrentWorkingDirectory;
         state.PendingQuestion = _activeState.PendingQuestion;
         state.PendingQuestionStatus = _activeState.PendingQuestionStatus;
+        state.HistoryWindowSize = _activeState.HistoryWindowSize;
+        state.HasOlderHistory = _activeState.HasOlderHistory;
+        state.IsLoadingOlderHistory = _activeState.IsLoadingOlderHistory;
     }
 
     private void SyncSidebarSessionStreaming(SessionRuntimeState state)
@@ -383,11 +400,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         if (!state.HistoryLoaded)
         {
             state.Messages.Clear();
-            var remote = await _agent.GetMessagesAsync(record.AgentSessionId, ct).ConfigureAwait(true);
-            foreach (var msg in remote)
-            {
-                state.Messages.Add(MapRemoteMessage(msg));
-            }
+            await LoadInitialHistoryAsync(state, ct).ConfigureAwait(true);
             state.HistoryLoaded = true;
         }
 
@@ -421,6 +434,9 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         PendingQuestionStatus = null;
         StatusMessage = null;
         CurrentWorkingDirectory = workingDirectory ?? SidebarWorkingDirectoryOrTracked();
+        state.HistoryWindowSize = 0;
+        state.HasOlderHistory = false;
+        state.IsLoadingOlderHistory = false;
 
         if (!string.IsNullOrEmpty(workingDirectory))
         {
@@ -429,6 +445,59 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
         OnPropertyChanged(nameof(IsBlankPage));
         SessionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public async Task<bool> LoadOlderHistoryAsync(CancellationToken ct = default)
+    {
+        var state = _activeState;
+        if (string.IsNullOrEmpty(state.AgentSessionId) ||
+            !state.HistoryLoaded ||
+            state.IsLoadingOlderHistory ||
+            !state.HasOlderHistory)
+        {
+            return false;
+        }
+
+        state.IsLoadingOlderHistory = true;
+        if (ReferenceEquals(state, _activeState))
+        {
+            NotifyHistoryStateChanged();
+        }
+
+        try
+        {
+            var nextWindowSize = ComputeNextHistoryWindowSize(state.HistoryWindowSize);
+            var remote = await _agent
+                .GetMessagesAsync(state.AgentSessionId, limit: nextWindowSize, ct)
+                .ConfigureAwait(true);
+
+            var mapped = remote.Select(MapRemoteMessage).ToList();
+            var existingIds = new HashSet<string>(state.Messages.Select(m => m.Id), StringComparer.Ordinal);
+            var missing = mapped.Where(m => !existingIds.Contains(m.Id)).ToList();
+
+            for (var i = missing.Count - 1; i >= 0; i--)
+            {
+                state.Messages.Insert(0, missing[i]);
+            }
+
+            state.HistoryWindowSize = Math.Max(nextWindowSize, mapped.Count);
+            state.HasOlderHistory = remote.Count >= nextWindowSize && missing.Count > 0;
+
+            if (ReferenceEquals(state, _activeState))
+            {
+                NotifyHistoryStateChanged();
+            }
+
+            return missing.Count > 0;
+        }
+        finally
+        {
+            state.IsLoadingOlderHistory = false;
+            if (ReferenceEquals(state, _activeState))
+            {
+                NotifyHistoryStateChanged();
+            }
+        }
     }
 
     // ── Send (the heart of this VM) ──────────────────────────────────────
@@ -544,6 +613,9 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                 state.CurrentWorkingDirectory = workingDir;
                 state.HeaderTitle = record.Title;
                 state.HistoryLoaded = true;
+                state.HistoryWindowSize = state.Messages.Count;
+                state.HasOlderHistory = false;
+                state.IsLoadingOlderHistory = false;
                 state.ViewedAt = viewedAt;
                 CurrentSessionId = record.SessionId;
                 CurrentAgentSessionId = record.AgentSessionId;
@@ -842,6 +914,54 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     private string? SidebarWorkingDirectoryOrTracked()
         => _sidebar.CurrentWorkingDirectory ?? ProjectsTracker.CurrentWorkingDirectory;
 
+    private async Task LoadInitialHistoryAsync(SessionRuntimeState state, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(state.AgentSessionId))
+        {
+            state.HistoryWindowSize = 0;
+            state.HasOlderHistory = false;
+            state.IsLoadingOlderHistory = false;
+            if (ReferenceEquals(state, _activeState))
+            {
+                NotifyHistoryStateChanged();
+            }
+            return;
+        }
+
+        var remote = await _agent
+            .GetMessagesAsync(state.AgentSessionId, limit: InitialHistoryWindowSize, ct)
+            .ConfigureAwait(true);
+
+        foreach (var msg in remote)
+        {
+            state.Messages.Add(MapRemoteMessage(msg));
+        }
+
+        state.HistoryWindowSize = Math.Max(InitialHistoryWindowSize, remote.Count);
+        state.HasOlderHistory = remote.Count >= InitialHistoryWindowSize;
+        state.IsLoadingOlderHistory = false;
+
+        if (ReferenceEquals(state, _activeState))
+        {
+            NotifyHistoryStateChanged();
+        }
+    }
+
+    private static int ComputeNextHistoryWindowSize(int currentWindowSize)
+    {
+        if (currentWindowSize <= 0)
+        {
+            return InitialHistoryWindowSize;
+        }
+
+        if (currentWindowSize < MaxHistoryWindowSize)
+        {
+            return currentWindowSize + HistoryWindowStep;
+        }
+
+        return currentWindowSize + (HistoryWindowStep * 2);
+    }
+
     private async Task<SessionRecord> CreateSessionForFirstMessageAsync(string workingDir, CancellationToken ct)
     {
         // 1. Look up existing project for workingDir, or auto-create one.
@@ -1104,7 +1224,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             return;
         }
 
-        var messages = await _agent.GetMessagesAsync(state.AgentSessionId, ct).ConfigureAwait(true);
+        var messages = await _agent.GetMessagesAsync(state.AgentSessionId, limit: null, ct).ConfigureAwait(true);
         var remoteAssistant = messages.LastOrDefault(m => m.Role == ChatRole.Assistant);
         if (remoteAssistant is null) return;
 

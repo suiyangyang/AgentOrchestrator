@@ -32,4 +32,7 @@ internal sealed class SessionRuntimeState
     public CancellationTokenSource? SubagentRefreshCts { get; set; }
     public CancellationTokenSource? PendingQuestionCts { get; set; }
     public bool HistoryLoaded { get; set; }
+    public int HistoryWindowSize { get; set; }
+    public bool HasOlderHistory { get; set; }
+    public bool IsLoadingOlderHistory { get; set; }
 }

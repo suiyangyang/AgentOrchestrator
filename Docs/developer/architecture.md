@@ -28,8 +28,9 @@
   `ViewLocator`'s "ViewModel" → "View" rename does not match the
   project's "Control" naming convention, so the templates are
   declared by hand to keep the rule out of the way.
-- `SidebarControl` is the project + session tree, the icon+text
-  新对话 / 搜索 / 任务编排 buttons, and the per-row hover-revealed actions;
+- `SidebarControl` is the left navigation tree. Top quick actions keep
+  新对话 / 搜索, while 任务编排 / 项目 / 对话 are all rendered as
+  collapsible sections with hover-revealed action buttons;
   project session lists page in chunks of 5 with inline 展开显示 / 折叠显示 controls;
   session rows reserve a compact state slot that shows a spinner while the
   session is streaming and a blue dot after completion until the user opens
@@ -44,6 +45,9 @@
 - `ChatWorkspaceViewModel` keeps per-session runtime state in memory, so
   switching the foreground chat no longer cancels another session's in-flight
   refresh or stream
+- 长对话历史按“尾部优先”加载：打开会话时先只请求并渲染最近一段消息窗口，
+  聊天区初始定位在底部；当用户把滚动条拉到顶部附近时，再触发向前扩窗加载更早历史，
+  并在插入旧消息后补偿 `ScrollViewer.Offset` 以保持当前可视位置稳定
 - 右侧 `Subagent` 卡片是双层滚动结构：外层面板负责整个右栏滚动，
   卡片内部 `ScrollViewer` 负责 400px 固定高度正文的 Markdown 浏览；
   子会话内容由消息序列聚合成完整 Markdown 摘要，不再只取最后一条预览；
@@ -75,8 +79,21 @@
 - 结构化 question 交互走单独的数据流：`OpenCode.Client` 负责读取会话挂起问题列表并提交
   `answers[][]`，`ChatWorkspaceViewModel` 维护当前挂起问题状态，`MainWindow` 在标题栏下方渲染
   顶部确认面板，而不是把它塞进消息流或权限菜单
-- `TaskGraphWorkspaceControl` is a placeholder until the TaskGraph plan
-  ships; v1 shows a fixed "coming soon" page
+- `TaskGraphWorkspaceControl` is the TaskGraph orchestration workspace.
+  It contains:
+  - a saved-plan list backed by JSON files under the local app data directory
+  - four creation modes: template / direct text / intent / document
+  - a graph canvas that renders nodes by `TaskNode.Position` and edges by dependency
+  - node cards can be repositioned by drag-and-drop; dependencies can be created either from the side panel or by dragging from a node's link handle onto another node
+  - an editor toolbar for add/delete node, auto-layout, and zoom controls
+  - a graph focus mode that collapses both TaskGraph side panels and asks the shell to hide the outer left/right sidebars so the canvas fills the window
+  - an empty-canvas onboarding state so the graph surface is visible even before the first graph exists
+  - a right-side node editor for inline title/description updates plus a lightweight node-creation form
+  - three built-in templates: task list / feature development / bug list
+  - execution controls (save / execute / continue / retry failed / cancel)
+  - a right-side node detail panel for summary, errors, tags, touched files, and session drill-down
+  - a waiting-for-input checkpoint for feature-development graphs before plan execution continues
+  - node detail entry points that open a dedicated session-detail window
 - `SettingsWindow` is a separate dialog
 - Global styles stay in `App.axaml`
 
@@ -89,13 +106,17 @@ The sidebar surface the following actions; each is wired through a
 | Surface                  | Action                  | Effect                                              |
 |--------------------------|-------------------------|-----------------------------------------------------|
 | Top button "新对话"      | Start a new chat        | Open blank page in chat VM, using current project  |
+| 任务编排 section header "+" | New task graph      | Switch to TaskGraph workspace and clear current graph |
+| 任务编排 row click       | Open task graph         | Switch to TaskGraph and load the selected graph    |
+| 任务编排 row "..."       | More menu               | 重命名任务编排 / 移除                              |
 | Project section header "+" | Add project          | Open folder picker → `Sidebar.AddProjectAsync`      |
 | Project section header "..." | (reserved)         | No-op in v1                                         |
 | Project row "+"          | New session in project  | Set current project, open blank page                |
 | Project row "..."        | More menu               | 置顶项目 / 在资源管理器中打开 / 重命名项目 / 移除    |
 | Project session list     | Page sessions           | Show 5 at a time, then expand in batches of 5       |
 | Session row "..."        | More menu               | 重命名对话 / 移除                                   |
-| 项目 / 对话 section header click | Expand-all / collapse-all | Toggle all project expand states          |
+| 任务编排 / 对话 section header click | Expand / collapse | Toggle that section                         |
+| 项目 section header click | Expand-all / collapse-all | Toggle all project expand states          |
 | Project row click        | Expand + focus          | Toggle expand and set current project               |
 | Session row click        | Open session            | Switch to chat and load history                     |
 
@@ -138,12 +159,43 @@ View ── ViewModel ── IAgentGateway / ISidebarRepository
 
 - `IAgentGateway` is agent-agnostic (`AgentKind = "opencode"` in v1);
   the chat VM never references `OpenCode.Client.*` types
+- `IAgentGateway.GetMessagesAsync(agentSessionId, limit)` 支持按消息数限制历史窗口；
+  当前 OpenCode 后端只有 `limit` 没有 cursor / before，因此“向上翻页”实现为
+  扩大 limit 重新取最近 N 条，再只把本地尚未显示的更早消息 prepend 到顶部
 - `ISidebarRepository` is the local SQLite store for project and
   session metadata (no message content is persisted locally)
+- `ITaskGraphStore` is a JSON-backed local store for TaskGraph plans;
+  it persists the graph structure, execution state, node session ids,
+  summaries, and recovery metadata under `%LOCALAPPDATA%/AgentOrchestrator/Datas/TaskGraphs`
 - `OpenCodeAgentGateway` wraps `OpenCodeClient`, translates Part/Message/
   ToolState into the chat-block vocabulary, routes SSE events into
   streaming `ChatStreamChunk` envelopes, and queries child sessions plus
   session status for subagent activity snapshots
+- `TaskGraphExecutor` runs graph nodes against `IAgentGateway` with one
+  agent session per node, persists state after each node transition,
+  reconciles interrupted `Running` nodes back to `Failed` on reload,
+  pauses feature-development graphs at the human-confirmation node, and
+  performs scoped runtime graph expansion after the generated-plan node
+- `TaskGraphRuntimeHub` is an in-memory event bridge between the executor
+  and node-detail windows; it forwards streamed chunks and node-state
+  changes without coupling the executor to UI types
+- `TaskGraphChatMapper` reuses the existing chat block vocabulary
+  (`ChatMessageViewModel` / `ChatBlockViewModel`) so node-detail windows
+  can render remote history and live stream output with the same markdown /
+  thought / tool / task surfaces as the main chat workspace
+- `TaskGraphTemplateBuilder` materializes the built-in graph templates:
+  linear task chains, feature-development graphs with confirmation and
+  dynamic-plan expansion, and bug-list graphs with decision branches plus
+  a final report node
+- `TaskGraphDynamicExpander` holds the template-specific runtime rules for
+  scoped graph mutation and decision-based node skipping
+- `TaskGraphBugStructuredParser` parses bug decision/review JSON output,
+  drives branch selection from structured fields, and assembles the final
+  bug report locally instead of relying on free-form model prose
+- bug-list graphs expose the assembled report twice in the UI:
+  as a dedicated right-side report panel for inspection and as the report
+  node's output summary for execution trace continuity; the panel can export
+  Markdown and JSON snapshots to the local exports directory
 - 流式正文 / Thinking 的真实来源不是只看 `message.part.updated`
   快照；`OpenCode.Client` 需要把 `message.part.delta` 也反序列化出来，
   `OpenCodeAgentGateway` 再按 `partID` 将 delta 追加到现有块，

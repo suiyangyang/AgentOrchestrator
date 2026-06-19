@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using AgentOrchestrator.App.Models.Sidebar;
 using AgentOrchestrator.App.Services.Settings;
@@ -9,8 +10,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
+using AgentOrchestrator.App.Views;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AgentOrchestrator.App.ViewModels;
 
@@ -23,12 +26,14 @@ namespace AgentOrchestrator.App.ViewModels;
 public partial class MainWindowViewModel : ViewModelBase
 {
     private static readonly GridLength DefaultLeftSidebarWidth = new(300);
-    private static readonly GridLength DefaultRightSidebarWidth = new(280);
+    private static readonly GridLength DefaultRightSidebarWidth = new(400);
 
     private readonly ISidebarRepository _repo;
     private readonly IAppSettingsService _settingsService;
+    private readonly IServiceProvider _services;
     private GridLength _leftSidebarExpandedWidth = DefaultLeftSidebarWidth;
     private GridLength _rightSidebarExpandedWidth = DefaultRightSidebarWidth;
+    private bool _isRestoringTaskGraphShell;
 
     public MainWindowViewModel(
         ChatWorkspaceViewModel chat,
@@ -36,10 +41,12 @@ public partial class MainWindowViewModel : ViewModelBase
         SidebarViewModel sidebar,
         SettingsViewModel settings,
         ISidebarRepository repo,
-        IAppSettingsService settingsService)
+        IAppSettingsService settingsService,
+        IServiceProvider services)
     {
         _repo = repo;
         _settingsService = settingsService;
+        _services = services;
         Chat = chat;
         TaskGraph = graph;
         Sidebar = sidebar;
@@ -48,9 +55,13 @@ public partial class MainWindowViewModel : ViewModelBase
         Sidebar.SessionSelected += OnSidebarSessionSelected;
         Sidebar.NewSessionRequested += OnSidebarNewSessionRequested;
         Sidebar.TaskGraphRequested += (_, _) => ActiveWorkspace = TaskGraph;
+        Sidebar.TaskGraphSelected += OnSidebarTaskGraphSelected;
+        Sidebar.TaskGraphOpenRequested += OnSidebarTaskGraphOpenRequested;
+        Sidebar.NewTaskGraphRequested += OnSidebarNewTaskGraphRequested;
         Sidebar.AddProjectRequested += (_, _) => _ = OnAddProjectRequested();
         Sidebar.ProjectActionRequested += OnProjectActionRequested;
         Sidebar.SessionActionRequested += OnSessionActionRequested;
+        Sidebar.TaskGraphActionRequested += OnTaskGraphActionRequested;
         Sidebar.SessionSelected += OnSidebarSessionSelectionChanged;
 
         // Persist focus changes back to the settings file so the next
@@ -74,6 +85,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         Chat.PropertyChanged += OnWorkspacePropertyChanged;
         TaskGraph.PropertyChanged += OnWorkspacePropertyChanged;
+        TaskGraph.NodeDetailRequested += OnTaskGraphNodeDetailRequested;
 
         ActiveWorkspace = Chat;
         UpdateConnectedServiceCount();
@@ -190,6 +202,17 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnActiveWorkspaceChanged(ViewModelBase value)
     {
         OnPropertyChanged(nameof(ActiveWorkspaceTitle));
+
+        if (value == TaskGraph)
+        {
+            SyncTaskGraphShellFocusMode();
+            return;
+        }
+
+        if (TaskGraph.IsGraphMaximized)
+        {
+            TaskGraph.ToggleGraphMaximizeCommand.Execute(null);
+        }
     }
 
     partial void OnConnectedServiceCountChanged(int value)
@@ -202,12 +225,75 @@ public partial class MainWindowViewModel : ViewModelBase
         if (sender == Chat && e.PropertyName == nameof(ChatWorkspaceViewModel.HeaderTitle))
         {
             OnPropertyChanged(nameof(ActiveWorkspaceTitle));
+            return;
+        }
+
+        if (sender == TaskGraph)
+        {
+            if (e.PropertyName == nameof(TaskGraphWorkspaceViewModel.HeaderTitle))
+            {
+                OnPropertyChanged(nameof(ActiveWorkspaceTitle));
+            }
+
+            if (e.PropertyName == nameof(TaskGraphWorkspaceViewModel.IsGraphMaximized))
+            {
+                SyncTaskGraphShellFocusMode();
+            }
+        }
+    }
+
+    private void SyncTaskGraphShellFocusMode()
+    {
+        if (ActiveWorkspace != TaskGraph && !TaskGraph.IsGraphMaximized)
+        {
+            return;
+        }
+
+        if (TaskGraph.IsGraphMaximized)
+        {
+            IsLeftSidebarVisible = false;
+            IsRightSidebarVisible = false;
+            return;
+        }
+
+        if (_isRestoringTaskGraphShell)
+        {
+            return;
+        }
+
+        _isRestoringTaskGraphShell = true;
+        try
+        {
+            IsLeftSidebarVisible = true;
+            IsRightSidebarVisible = true;
+        }
+        finally
+        {
+            _isRestoringTaskGraphShell = false;
         }
     }
 
     private void UpdateConnectedServiceCount()
     {
         ConnectedServiceCount = Settings.OpenCodeEnabled && Settings.IsOpenCodeConnected ? 1 : 0;
+    }
+
+    private async void OnTaskGraphNodeDetailRequested(object? sender, TaskGraphNodeDetailRequest request)
+    {
+        var viewModel = _services.GetRequiredService<TaskGraphNodeDetailViewModel>();
+        await viewModel.InitializeAsync(request.GraphId, request.Node, request.WorkingDirectory).ConfigureAwait(true);
+        var window = new TaskGraphNodeDetailWindow(viewModel);
+        var owner = GetOwnerWindow();
+        if (owner is not null)
+        {
+            await window.ShowDialog(owner).ConfigureAwait(true);
+        }
+        else
+        {
+            window.Show();
+        }
+
+        viewModel.Dispose();
     }
 
     // ── Sidebar event handlers ─────────────────────────────────────────
@@ -229,6 +315,24 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         ActiveWorkspace = Chat;
         Chat.OpenBlankPage(ctx.WorkingDirectory);
+    }
+
+    private async void OnSidebarTaskGraphSelected(object? sender, string taskGraphId)
+    {
+        ActiveWorkspace = TaskGraph;
+        await TaskGraph.OpenGraphByIdAsync(taskGraphId);
+    }
+
+    private async void OnSidebarTaskGraphOpenRequested(object? sender, string taskGraphId)
+    {
+        ActiveWorkspace = TaskGraph;
+        await TaskGraph.OpenGraphByIdAsync(taskGraphId);
+    }
+
+    private async void OnSidebarNewTaskGraphRequested(object? sender, EventArgs e)
+    {
+        ActiveWorkspace = TaskGraph;
+        await TaskGraph.NewGraphCommand.ExecuteAsync(null);
     }
 
     private async Task OnAddProjectRequested()
@@ -323,6 +427,47 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    private async void OnTaskGraphActionRequested(object? sender, TaskGraphActionRequest req)
+    {
+        switch (req.Kind)
+        {
+            case TaskGraphActionKind.Rename:
+            {
+                var graph = await TaskGraphStoreLoadAsync(req.TaskGraphId);
+                if (graph is null)
+                {
+                    return;
+                }
+
+                var newName = await PromptInputAsync("重命名任务编排", "新名称", graph.Name);
+                if (!string.IsNullOrWhiteSpace(newName))
+                {
+                    await Sidebar.RenameTaskGraphAsync(req.TaskGraphId, newName);
+                }
+                break;
+            }
+            case TaskGraphActionKind.Remove:
+            {
+                var graph = await TaskGraphStoreLoadAsync(req.TaskGraphId);
+                if (graph is null)
+                {
+                    return;
+                }
+
+                var ok = await PromptConfirmAsync("移除任务编排", $"确定要移除任务编排 “{graph.Name}” 吗?");
+                if (ok)
+                {
+                    await Sidebar.RemoveTaskGraphAsync(req.TaskGraphId);
+                    if (TaskGraph.CurrentGraph?.Id == req.TaskGraphId)
+                    {
+                        await TaskGraph.NewGraphCommand.ExecuteAsync(null);
+                    }
+                }
+                break;
+            }
+        }
+    }
+
     private bool TryGetProject(string projectId, out SidebarProjectViewModel pvm)
     {
         foreach (var p in Sidebar.Projects)
@@ -332,6 +477,9 @@ public partial class MainWindowViewModel : ViewModelBase
         pvm = null!;
         return false;
     }
+
+    private Task<Models.TaskGraph.TaskGraph?> TaskGraphStoreLoadAsync(string taskGraphId)
+        => _services.GetRequiredService<Services.TaskGraph.ITaskGraphStore>().LoadAsync(taskGraphId);
 
     private static void OpenInExplorer(string path)
     {

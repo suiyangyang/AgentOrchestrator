@@ -19,6 +19,14 @@ public partial class SidebarControl : UserControl
         }
     }
 
+    private void OnTaskGraphsHeaderClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SidebarViewModel vm)
+        {
+            vm.ToggleTaskGraphsExpanded();
+        }
+    }
+
     private void OnProjectSectionAddClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is SidebarViewModel vm)
@@ -31,6 +39,25 @@ public partial class SidebarControl : UserControl
     {
         // No section-level "..." menu; clicking the "..." on the header is
         // a no-op in v1 to keep the icon present.
+    }
+
+    private void OnTaskGraphClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: SidebarTaskGraphItemViewModel vm }
+            && DataContext is SidebarViewModel sidebar)
+        {
+            sidebar.SelectTaskGraphCommand.Execute(vm.Id);
+            sidebar.RequestTaskGraphCommand.Execute(null);
+            sidebar.OpenTaskGraphCommand.Execute(vm.Id);
+        }
+    }
+
+    private void OnTaskGraphRowMoreClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is not Control btn) return;
+        if (btn.Tag is not string taskGraphId) return;
+        ShowTaskGraphMenu(btn, taskGraphId);
     }
 
     private void OnProjectRowClick(object? sender, RoutedEventArgs e)
@@ -183,12 +210,63 @@ public partial class SidebarControl : UserControl
         RowActionPopup.IsOpen = true;
     }
 
+    private void ShowTaskGraphMenu(Control anchor, string taskGraphId)
+    {
+        RowActionPanel.Children.Clear();
+
+        void Add(string label, TaskGraphActionKind kind)
+        {
+            var b = new Button
+            {
+                Content = BuildTaskGraphMenuRow(label, kind),
+                Classes = { "sidebar-menu-item" },
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Left,
+            };
+            b.Click += (_, _) =>
+            {
+                RowActionPopup.IsOpen = false;
+                if (DataContext is SidebarViewModel vm)
+                {
+                    vm.RequestTaskGraphActionCommand.Execute(new TaskGraphActionRequest(taskGraphId, kind));
+                }
+            };
+            RowActionPanel.Children.Add(b);
+        }
+
+        Add("重命名任务编排", TaskGraphActionKind.Rename);
+        Add("移除", TaskGraphActionKind.Remove);
+
+        RowActionPopup.PlacementTarget = anchor;
+        RowActionPopup.IsOpen = true;
+    }
+
     private static StackPanel BuildSessionMenuRow(string label, SessionActionKind kind)
     {
         var icon = kind switch
         {
             SessionActionKind.Rename => "✎",
             SessionActionKind.Remove => "🗑",
+            _ => "•",
+        };
+        return new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = icon, FontSize = 12 },
+                new TextBlock { Text = label, FontSize = 12 },
+            }
+        };
+    }
+
+    private static StackPanel BuildTaskGraphMenuRow(string label, TaskGraphActionKind kind)
+    {
+        var icon = kind switch
+        {
+            TaskGraphActionKind.Rename => "✎",
+            TaskGraphActionKind.Remove => "🗑",
             _ => "•",
         };
         return new StackPanel

@@ -62,18 +62,18 @@
                             </Border>
                         </Grid>
                     </Button>
-                    <!-- Settings (gear icon: &#xE115;) -->
-                    <Button Classes="title-bar-btn" Click="OnSettingsButtonClick" ToolTip.Tip="设置"
-                            Content="&#xE115;" />
-                    <!-- Minimize (dash: &#xE921;) -->
-                    <Button Classes="title-bar-btn" Click="OnMinButtonClick" ToolTip.Tip="最小化"
-                            Content="&#xE921;" />
-                    <!-- Maximize / Restore (&#xE922; ↔ &#xE923;) -->
-                    <Button x:Name="MaxButton" Classes="title-bar-btn" Click="OnMaxButtonClick" ToolTip.Tip="最大化"
-                            Content="&#xE922;" />
-                    <!-- Close (X: &#xE8BB;) -->
-                    <Button Classes="title-bar-btn title-bar-btn-close" Click="OnCloseButtonClick" ToolTip.Tip="关闭"
-                            Content="&#xE8BB;" />
+                    <Button Classes="title-bar-btn" Click="OnSettingsButtonClick" ToolTip.Tip="设置">
+                        <Path Classes="workspace-header-icon window-settings-icon" />
+                    </Button>
+                    <Button Classes="title-bar-btn" Click="OnMinButtonClick" ToolTip.Tip="最小化">
+                        <Path Classes="workspace-header-icon window-minimize-icon" />
+                    </Button>
+                    <Button x:Name="MaxButton" Classes="title-bar-btn" Click="OnMaxButtonClick" ToolTip.Tip="最大化">
+                        <Path Classes="workspace-header-icon window-maximize-icon" />
+                    </Button>
+                    <Button Classes="title-bar-btn title-bar-btn-close" Click="OnCloseButtonClick" ToolTip.Tip="关闭">
+                        <Path Classes="workspace-header-icon window-close-icon" />
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -109,16 +109,14 @@
                                   Classes="workspace-header-action task-orchestration-toggle"
                                   ToolTip.Tip="显示/隐藏任务编排"
                                   IsChecked="{Binding IsTaskOrchestrationVisible, Mode=TwoWay}"
-                                  Content="编"
-                                  Margin="0,0,8,0" />
+                                  Margin="0,0,8,0">
+                        <Path Classes="workspace-header-icon workspace-orchestrator-toggle-icon" />
+                    </ToggleButton>
                     <Button Grid.Column="2"
                             Classes="workspace-header-action workspace-header-outline-action"
                             Click="OnRightSidebarToggleButtonClick"
                             ToolTip.Tip="显示/隐藏右侧边栏">
-                        <Grid Width="14" Height="14">
-                            <Border Classes="workspace-header-outline-icon-box" />
-                            <Border Classes="workspace-header-outline-icon-divider-right" />
-                        </Grid>
+                        <Path Classes="workspace-header-icon workspace-layout-icon" />
                     </Button>
                 </Grid>
             </Border>

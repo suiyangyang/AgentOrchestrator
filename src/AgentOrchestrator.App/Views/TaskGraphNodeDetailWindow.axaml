@@ -1,0 +1,111 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AgentOrchestrator.App.ViewModels"
+        xmlns:controls="using:AgentOrchestrator.App.Controls"
+        xmlns:conv="using:Avalonia.Data.Converters"
+        x:Class="AgentOrchestrator.App.Views.TaskGraphNodeDetailWindow"
+        x:DataType="vm:TaskGraphNodeDetailViewModel"
+        Width="920"
+        Height="680"
+        MinWidth="760"
+        MinHeight="520"
+        Title="{Binding Title}"
+        Background="#FFFFFF">
+    <Grid RowDefinitions="Auto,*" Margin="20">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+            <StackPanel Spacing="4">
+                <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" />
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Text="{Binding StatusText}"
+                               Foreground="#6E727A" />
+                    <TextBlock Text="{Binding SessionId}"
+                               IsVisible="{Binding SessionId, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
+                               Foreground="#9096A0"
+                               FontFamily="{DynamicResource CodeFontFamily}" />
+                </StackPanel>
+                <TextBlock Text="{Binding ErrorText}"
+                           IsVisible="{Binding ErrorText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
+                           Foreground="#C53B27"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+            <Button Grid.Column="1"
+                    Command="{Binding ReloadCommand}"
+                    Content="刷新"
+                    Height="32"
+                    MinWidth="72"
+                    VerticalAlignment="Top" />
+        </Grid>
+
+        <Border Grid.Row="1"
+                BorderBrush="#E2E5EA"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="12">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Messages}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:ChatMessageViewModel">
+                            <Grid Margin="0,0,0,14">
+                                <StackPanel Spacing="10" MaxWidth="860">
+                                    <Border Classes="user-bubble"
+                                            IsVisible="{Binding IsUser}"
+                                            HorizontalAlignment="Right">
+                                        <ItemsControl ItemsSource="{Binding Blocks}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Spacing="14" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="vm:ChatBlockViewModel">
+                                                    <StackPanel>
+                                                        <controls:MarkdownBlockControl IsVisible="{Binding IsText}"
+                                                                                       DataContext="{Binding}" />
+                                                        <controls:CollapsibleBlockControl IsVisible="{Binding IsThought}"
+                                                                                          DataContext="{Binding}" />
+                                                        <controls:CollapsibleBlockControl IsVisible="{Binding IsTool}"
+                                                                                          DataContext="{Binding}" />
+                                                        <controls:CollapsibleBlockControl IsVisible="{Binding IsTask}"
+                                                                                          DataContext="{Binding}" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Border>
+
+                                    <StackPanel Spacing="14"
+                                                IsVisible="{Binding IsAssistant}">
+                                        <TextBlock Text="{Binding StreamingStatusText}"
+                                                   IsVisible="{Binding StreamingStatusText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
+                                                   Classes="assistant-loading-text" />
+                                        <ItemsControl ItemsSource="{Binding Blocks}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Spacing="14" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="vm:ChatBlockViewModel">
+                                                    <StackPanel>
+                                                        <controls:MarkdownBlockControl IsVisible="{Binding IsText}"
+                                                                                       DataContext="{Binding}" />
+                                                        <controls:CollapsibleBlockControl IsVisible="{Binding IsThought}"
+                                                                                          DataContext="{Binding}" />
+                                                        <controls:CollapsibleBlockControl IsVisible="{Binding IsTool}"
+                                                                                          DataContext="{Binding}" />
+                                                        <controls:CollapsibleBlockControl IsVisible="{Binding IsTask}"
+                                                                                          DataContext="{Binding}" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</Window>

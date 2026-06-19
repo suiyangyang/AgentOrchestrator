@@ -57,6 +57,7 @@ public interface IAgentGateway
     /// </summary>
     Task<IReadOnlyList<RemoteMessage>> GetMessagesAsync(
         string agentSessionId,
+        int? limit = null,
         CancellationToken ct = default);
 
     /// <summary>Returns the Agent's current Title for a session.</summary>

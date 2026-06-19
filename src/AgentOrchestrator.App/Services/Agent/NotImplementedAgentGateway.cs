@@ -36,6 +36,7 @@ public sealed class NotImplementedAgentGateway : IAgentGateway
 
     public Task<IReadOnlyList<RemoteMessage>> GetMessagesAsync(
         string agentSessionId,
+        int? limit = null,
         CancellationToken ct = default)
         => throw new NotImplementedException();
 

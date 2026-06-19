@@ -190,10 +190,11 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
 
     public async Task<IReadOnlyList<RemoteMessage>> GetMessagesAsync(
         string agentSessionId,
+        int? limit = null,
         CancellationToken ct = default)
     {
         var messages = await _client.Sessions
-            .MessagesAsync(agentSessionId, directory: null, ct: ct)
+            .MessagesAsync(agentSessionId, limit: limit, directory: null, ct: ct)
             .ConfigureAwait(false);
 
         var result = new List<RemoteMessage>(messages.Count);

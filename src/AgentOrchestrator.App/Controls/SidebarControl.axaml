@@ -7,7 +7,7 @@
     <Border Background="#F9F9FB" BorderBrush="#E2E5EA" BorderThickness="0,0,1,0">
         <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,8,0,0">
 
-            <!-- 新对话 / 搜索 / 任务编排 -->
+            <!-- 新对话 / 搜索 -->
             <StackPanel Grid.Row="0" Margin="12,4,12,12" Spacing="4">
                 <Button Classes="sidebar-nav-entry"
                         HorizontalAlignment="Stretch"
@@ -27,23 +27,77 @@
                         <TextBlock Text="搜索" Classes="sidebar-nav-text" />
                     </StackPanel>
                 </Button>
-                <Button Classes="sidebar-nav-entry"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Command="{Binding RequestTaskGraphCommand}">
-                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                        <Path Classes="sidebar-nav-icon-path sidebar-orchestrator-icon" />
-                        <TextBlock Text="任务编排" Classes="sidebar-nav-text" />
-                    </StackPanel>
-                </Button>
             </StackPanel>
 
             <!-- 树: 项目 + 对话 -->
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="2">
 
-                    <!-- 项目分类头 + 节点 -->
+                    <!-- 任务编排分类头 + 节点 -->
                     <StackPanel>
+                        <Button x:Name="TaskGraphsHeader"
+                                Classes="sidebar-section-header"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch"
+                                Click="OnTaskGraphsHeaderClick">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                <Path Grid.Column="0" Classes="sidebar-section-icon sidebar-orchestrator-icon" />
+                                <TextBlock Grid.Column="1" Text="任务编排" Classes="sidebar-section-label" />
+                                <Path Grid.Column="2"
+                                      Classes="sidebar-chevron sidebar-section-caret"
+                                      Classes.sidebar-chevron-expanded="{Binding IsTaskGraphsExpanded}" />
+                                <Button Grid.Column="3"
+                                        Classes="sidebar-section-action-btn"
+                                        Command="{Binding RequestNewTaskGraphCommand}"
+                                        IsVisible="{Binding #TaskGraphsHeader.IsPointerOver}">
+                                    <Path Classes="sidebar-action-icon sidebar-plus-icon" />
+                                </Button>
+                            </Grid>
+                        </Button>
+                        <ItemsControl ItemsSource="{Binding TaskGraphs}"
+                                      IsVisible="{Binding IsTaskGraphsExpanded}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:SidebarTaskGraphItemViewModel">
+                                    <Button x:Name="TaskGraphRow"
+                                            Classes="sidebar-session-item"
+                                            Classes.sidebar-session-item-selected="{Binding IsSelected}"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch"
+                                            Margin="10,0,4,0"
+                                            Click="OnTaskGraphClick">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6" RowDefinitions="Auto,Auto" RowSpacing="2">
+                                            <Path Grid.Column="0" Grid.RowSpan="2" Classes="sidebar-task-item-icon sidebar-orchestrator-icon" />
+                                            <TextBlock Grid.Column="1" Grid.Row="0"
+                                                       Text="{Binding Name}"
+                                                       Classes="sidebar-session-title"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Grid.Row="1"
+                                                       Text="{Binding SubtitleText}"
+                                                       Classes="sidebar-session-time" />
+                                            <TextBlock Grid.Column="2" Grid.RowSpan="2"
+                                                       Text="{Binding DisplayRelativeTime}"
+                                                       Classes="sidebar-session-time"
+                                                       VerticalAlignment="Center" />
+                                            <Button Grid.Column="3" Grid.RowSpan="2"
+                                                    Classes="sidebar-row-action-btn"
+                                                    Click="OnTaskGraphRowMoreClick"
+                                                    Tag="{Binding Id}"
+                                                    IsVisible="{Binding #TaskGraphRow.IsPointerOver}">
+                                                <Path Classes="sidebar-action-icon sidebar-more-icon" />
+                                            </Button>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="暂无任务编排"
+                                   Classes="sidebar-empty"
+                                   IsVisible="{Binding !HasTaskGraphs}" />
+                    </StackPanel>
+
+                    <!-- 项目分类头 + 节点 -->
+                    <StackPanel Margin="0,8,0,0">
                         <Button x:Name="ProjectsHeader"
                                 Classes="sidebar-section-header"
                                 HorizontalAlignment="Stretch"
@@ -56,14 +110,15 @@
                                       Classes.sidebar-chevron-expanded="{Binding AreProjectsExpanded}" />
                                 <Button Grid.Column="2"
                                         Classes="sidebar-section-action-btn"
-                                        Content="..."
                                         Click="OnProjectSectionMoreClick"
-                                        IsVisible="{Binding #ProjectsHeader.IsPointerOver}" />
+                                        IsVisible="{Binding #ProjectsHeader.IsPointerOver}">
+                                    <Path Classes="sidebar-action-icon sidebar-more-icon" />
+                                </Button>
                                 <Button Grid.Column="3"
                                         Classes="sidebar-section-action-btn"
                                         Command="{Binding RequestAddProjectCommand}"
                                         IsVisible="{Binding #ProjectsHeader.IsPointerOver}">
-                                    <Path Classes="sidebar-action-icon sidebar-new-chat-icon" />
+                                    <Path Classes="sidebar-action-icon sidebar-plus-icon" />
                                 </Button>
                             </Grid>
                         </Button>
@@ -85,16 +140,17 @@
                                                       Classes.sidebar-chevron-expanded="{Binding IsExpanded}" />
                                                 <Button Grid.Column="3"
                                                         Classes="sidebar-row-action-btn"
-                                                        Content="..."
                                                         Click="OnProjectRowMoreClick"
                                                         Tag="{Binding Id}"
-                                                        IsVisible="{Binding #ProjectRow.IsPointerOver}" />
+                                                        IsVisible="{Binding #ProjectRow.IsPointerOver}">
+                                                    <Path Classes="sidebar-action-icon sidebar-more-icon" />
+                                                </Button>
                                                 <Button Grid.Column="4"
                                                         Classes="sidebar-row-action-btn"
                                                         Click="OnProjectRowAddClick"
                                                         Tag="{Binding Id}"
                                                         IsVisible="{Binding #ProjectRow.IsPointerOver}">
-                                                    <Path Classes="sidebar-action-icon sidebar-new-chat-icon" />
+                                                    <Path Classes="sidebar-action-icon sidebar-plus-icon" />
                                                 </Button>
                                             </Grid>
                                         </Button>
@@ -129,10 +185,11 @@
                                                                            VerticalAlignment="Center" />
                                                                 <Button Grid.Column="3"
                                                                         Classes="sidebar-row-action-btn"
-                                                                        Content="..."
                                                                         Click="OnSessionRowMoreClick"
                                                                         Tag="{Binding SessionId}"
-                                                                        IsVisible="{Binding #SessionRow.IsPointerOver}" />
+                                                                        IsVisible="{Binding #SessionRow.IsPointerOver}">
+                                                                    <Path Classes="sidebar-action-icon sidebar-more-icon" />
+                                                                </Button>
                                                             </Grid>
                                                         </Button>
                                                     </DataTemplate>
@@ -180,7 +237,7 @@
                                         Classes="sidebar-section-action-btn"
                                         Command="{Binding RequestNewSessionCommand}"
                                         IsVisible="{Binding #OrphansHeader.IsPointerOver}">
-                                    <Path Classes="sidebar-action-icon sidebar-new-chat-icon" />
+                                    <Path Classes="sidebar-action-icon sidebar-plus-icon" />
                                 </Button>
                             </Grid>
                         </Button>
@@ -216,10 +273,11 @@
                                                        VerticalAlignment="Center" />
                                             <Button Grid.Column="3"
                                                     Classes="sidebar-row-action-btn"
-                                                    Content="..."
                                                     Click="OnSessionRowMoreClick"
                                                     Tag="{Binding SessionId}"
-                                                    IsVisible="{Binding #OrphanSessionRow.IsPointerOver}" />
+                                                    IsVisible="{Binding #OrphanSessionRow.IsPointerOver}">
+                                                <Path Classes="sidebar-action-icon sidebar-more-icon" />
+                                            </Button>
                                         </Grid>
                                     </Button>
                                 </DataTemplate>

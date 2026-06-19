@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,15 +18,22 @@ namespace AgentOrchestrator.App.Controls;
 public partial class ChatWorkspaceControl : UserControl
 {
     private const double AutoScrollThreshold = 48d;
+    private const double LoadOlderThreshold = 80d;
 
     private ViewModels.ChatWorkspaceViewModel? _attachedVm;
+    private INotifyCollectionChanged? _subscribedMessages;
     private ViewModels.ChatMessageViewModel? _subscribedTail;
     private readonly NotifyCollectionChangedEventHandler _blocksHandler;
+    private bool _suppressScrollChanged;
+    private bool _pendingOlderHistoryCompensation;
+    private double _olderHistoryOffsetBeforeLoad;
+    private double _olderHistoryExtentBeforeLoad;
 
     public ChatWorkspaceControl()
     {
         InitializeComponent();
         _blocksHandler = OnBlocksCollectionChanged;
+        MessagesScrollViewer.ScrollChanged += OnMessagesScrollChanged;
     }
 
     // ── Enter / Shift+Enter handling ────────────────────────────────────
@@ -76,8 +84,8 @@ public partial class ChatWorkspaceControl : UserControl
         if (DataContext is ViewModels.ChatWorkspaceViewModel vm)
         {
             _attachedVm = vm;
-            vm.Messages.CollectionChanged += OnMessagesCollectionChanged;
-            SubscribeToLastMessageBlocks(vm);
+            vm.PropertyChanged += OnViewModelPropertyChanged;
+            AttachMessagesCollection(vm.Messages);
         }
     }
 
@@ -85,15 +93,54 @@ public partial class ChatWorkspaceControl : UserControl
     {
         if (_attachedVm is null) return;
 
-        _attachedVm.Messages.CollectionChanged -= OnMessagesCollectionChanged;
+        _attachedVm.PropertyChanged -= OnViewModelPropertyChanged;
+        DetachMessagesCollection();
         DetachTailBlocksSubscription();
         _attachedVm = null;
     }
 
-    private void SubscribeToLastMessageBlocks(ViewModels.ChatWorkspaceViewModel vm)
+    private void AttachMessagesCollection(INotifyCollectionChanged messagesCollection)
+    {
+        if (ReferenceEquals(_subscribedMessages, messagesCollection))
+        {
+            return;
+        }
+
+        DetachMessagesCollection();
+        _subscribedMessages = messagesCollection;
+        _subscribedMessages.CollectionChanged += OnMessagesCollectionChanged;
+        SubscribeToLastMessageBlocks();
+        MaybeScrollToEnd();
+    }
+
+    private void DetachMessagesCollection()
+    {
+        if (_subscribedMessages is null)
+        {
+            return;
+        }
+
+        _subscribedMessages.CollectionChanged -= OnMessagesCollectionChanged;
+        _subscribedMessages = null;
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_attachedVm is null)
+        {
+            return;
+        }
+
+        if (string.Equals(e.PropertyName, nameof(ViewModels.ChatWorkspaceViewModel.Messages), StringComparison.Ordinal))
+        {
+            AttachMessagesCollection(_attachedVm.Messages);
+        }
+    }
+
+    private void SubscribeToLastMessageBlocks()
     {
         DetachTailBlocksSubscription();
-        var last = vm.Messages.LastOrDefault();
+        var last = _attachedVm?.Messages.LastOrDefault();
         if (last is null) return;
         last.Blocks.CollectionChanged += _blocksHandler;
         _subscribedTail = last;
@@ -111,10 +158,7 @@ public partial class ChatWorkspaceControl : UserControl
         MaybeScrollToEnd();
 
         // The tail may have shifted (or been removed/reset); re-attach.
-        if (_attachedVm is not null)
-        {
-            SubscribeToLastMessageBlocks(_attachedVm);
-        }
+        SubscribeToLastMessageBlocks();
     }
 
     private void OnBlocksCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -131,6 +175,65 @@ public partial class ChatWorkspaceControl : UserControl
                 {
                     MessagesScrollViewer.ScrollToEnd();
                 }
+            },
+            DispatcherPriority.Background);
+    }
+
+    private void OnMessagesScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
+        if (_suppressScrollChanged || _attachedVm is null)
+        {
+            return;
+        }
+
+        if (_pendingOlderHistoryCompensation)
+        {
+            _pendingOlderHistoryCompensation = false;
+            var delta = Math.Max(MessagesScrollViewer.Extent.Height - _olderHistoryExtentBeforeLoad, 0d);
+            var targetY = _olderHistoryOffsetBeforeLoad + delta;
+            _suppressScrollChanged = true;
+            MessagesScrollViewer.Offset = new Vector(MessagesScrollViewer.Offset.X, targetY);
+            _suppressScrollChanged = false;
+            return;
+        }
+
+        if (MessagesScrollViewer.Offset.Y <= LoadOlderThreshold)
+        {
+            _ = TriggerLoadOlderHistoryAsync(_attachedVm);
+        }
+    }
+
+    private async Task TriggerLoadOlderHistoryAsync(ViewModels.ChatWorkspaceViewModel vm)
+    {
+        if (_pendingOlderHistoryCompensation || vm.IsLoadingOlderHistory || !vm.HasOlderHistory)
+        {
+            return;
+        }
+
+        _olderHistoryOffsetBeforeLoad = MessagesScrollViewer.Offset.Y;
+        _olderHistoryExtentBeforeLoad = MessagesScrollViewer.Extent.Height;
+
+        var added = await vm.LoadOlderHistoryAsync().ConfigureAwait(true);
+        if (!added)
+        {
+            return;
+        }
+
+        _pendingOlderHistoryCompensation = true;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (!_pendingOlderHistoryCompensation)
+                {
+                    return;
+                }
+
+                var delta = Math.Max(MessagesScrollViewer.Extent.Height - _olderHistoryExtentBeforeLoad, 0d);
+                var targetY = _olderHistoryOffsetBeforeLoad + delta;
+                _suppressScrollChanged = true;
+                MessagesScrollViewer.Offset = new Vector(MessagesScrollViewer.Offset.X, targetY);
+                _suppressScrollChanged = false;
+                _pendingOlderHistoryCompensation = false;
             },
             DispatcherPriority.Background);
     }

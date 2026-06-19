@@ -32,10 +32,40 @@
 - `ChatWorkspaceViewModel` manages messages, attachments, permissions,
   draft input, header title, subagent activity, and the full session lifecycle (new / open / send /
   stream) via `IAgentGateway` and `ISidebarRepository`
+- `TaskGraphWorkspaceViewModel` now owns the full task orchestration flow:
+  saved graphs, template-based creation, direct/intent/document plan
+  generation, graph-canvas projection, execute/continue/retry/cancel,
+  user-confirmation handoff, node drag/move, dependency link editing
+  (side-panel selection and canvas drag-link), zoom/auto-layout,
+  node add/delete/edit, bug report aggregation/export, and node-detail routing
+- TaskGraph 图形区支持“铺满窗口”模式：进入后会收起 TaskGraph 内部左右栏与主窗口外层左右侧栏，只保留图编辑区和画布工具条
+- `Models/TaskGraph/` contains the persisted graph model
+  (`TaskGraph`, `TaskNode`, template/execution enums, edges, planner schema)
+- `Services/TaskGraph/` contains the orchestration runtime:
+  direct parser, document reader, LLM planner, JSON store, topology
+  helper, template builder, dynamic expander, output injector,
+  execution runtime, runtime event hub, and chat-message mapper for
+  node detail rendering
+- TaskGraph 当前支持三种模板新建：
+  - 任务列表：将每一行任务转换成串行节点链
+  - 复杂功能开发：需求输入 → 方案生成 → 用户确认 → 计划生成 → 运行期注入开发节点 → 执行收尾
+  - Bug 列表：逐个 bug 做读取、分析、信息充分性判断、修复/未解决分流，最后汇总报告
+- 功能开发模板的动态编排范围当前是受控的：
+  只有 `feature_plan` 节点完成后，才会根据其 JSON 输出向当前图中注入执行节点；
+  这不是通用工作流引擎级别的任意运行期扩图
+- Bug 列表模板中的 `Decision` 节点当前通过输出约定
+  JSON `decision = EnoughInfo | NeedMoreInfo` 来驱动后续节点跳过或继续；
+  `review` 节点输出结构化 `resolved / reliability / reason / verification`，
+  最终报告节点则在本地汇总成 Markdown 表格
+- 每个 `SessionRuntimeState` 还缓存历史窗口大小、是否还有更早历史、
+  是否正在加载更早历史；切换会话时会保留各自的历史加载进度，
+  不再每次都重新全量建树
 - Thinking / Tool / Task 折叠块在运行态只显示前置转圈状态图标，
   不再在标题后追加文字状态标识；完成后恢复静态标题样式
 - 聊天区消息列表在滚动条接近底部时会自动跟随最新消息；
   用户主动上拉后不会强制拉回底部，只有接近底部时才继续贴底
+- 打开历史较长的会话时，聊天区首屏只加载最近一段历史并默认贴底；
+  用户上拉到顶部附近时再继续向前补页，同时保持当前阅读位置稳定不跳动
 - 输入区主按钮会根据当前草稿状态在“发送”和“停止”之间切换；
   发送过程中按钮仍保持可用，这样既能取消当前回复，也能继续把新草稿加入队列
 - 当发送管线已经启动但当前回复尚未结束时，新的发送请求会先进入输入区上方的可见队列，
@@ -63,8 +93,9 @@
   不再占用标题栏下方的固定布局高度，用户勾选或输入答案后再统一提交
 - `SidebarViewModel` owns the project + session tree, the search
   overlay state, search result list, current-project focus, the
-  per-row "..." actions, and the project-session paging state that
-  shows at most 5 chats per project by default
+  task-graph list under the `任务编排` section, the per-row "..." actions,
+  and the project-session paging state that shows at most 5 chats per
+  project by default
 - `MainWindow.axaml` hosts a 3-column shell with resizable left and
   right sidebars; the center column contains a fixed header area that
   spans the workspace and right sidebar top edge, plus the active
@@ -79,6 +110,9 @@
   当 subagent 内容字段刷新时，卡片内部滚动条会自动贴到底部
 - `ChatWorkspaceControl` adds a fixed header strip inside the chat
   workspace for task orchestration and subagent activity
+- `TaskGraphNodeDetailWindow` is a separate transient window that shows
+  one node's remote message history plus live streamed output, reusing
+  the same chat block controls as the main chat surface
 - `SettingsWindow.axaml` is a fixed-size settings dialog with a left
   two-level navigation rail. The top-level groups are `个人` and `集成`;
   the second level currently exposes `常规` (placeholder), `外观` and
@@ -123,6 +157,9 @@
   `ScrollViewer` so long reasoning scrolls inside the same envelope
 - Sidebar styles live under `Button.sidebar-*` and
   `TextBlock.sidebar-*` classes (see `App.axaml`)
+- Sidebar task-graph rows intentionally reuse the same selected / hover
+  row language as chat session rows so one task graph behaves like one
+  chat entry from the user's perspective
 - Per-row hover-revealed action buttons: `sidebar-row-action-btn` and
   `sidebar-section-action-btn`
 - Project session list paging buttons: `sidebar-session-page-action`

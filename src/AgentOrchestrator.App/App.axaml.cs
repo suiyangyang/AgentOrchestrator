@@ -9,6 +9,7 @@ using Avalonia.Media;
 using AgentOrchestrator.App.Services.Agent;
 using AgentOrchestrator.App.Services.Settings;
 using AgentOrchestrator.App.Services.Sidebar;
+using AgentOrchestrator.App.Services.TaskGraph;
 using AgentOrchestrator.App.ViewModels;
 using AgentOrchestrator.App.Views;
 using Microsoft.Extensions.DependencyInjection;
@@ -84,16 +85,26 @@ public partial class App : Application
 
         // ── Sidebar / local persistence ──
         services.AddSingleton<ISidebarRepository, SqliteSidebarRepository>();
+        services.AddSingleton<ITaskGraphStore, JsonTaskGraphStore>();
+        services.AddSingleton<ITaskGraphDirectParser, TaskGraphDirectParser>();
+        services.AddSingleton<IDocumentReader, DocumentReader>();
+        services.AddSingleton<JsonPlanningParser>();
+        services.AddSingleton<ITaskGraphPlanner, LlmTaskGraphPlanner>();
+        services.AddSingleton<INodeOutputInjector, DefaultNodeOutputInjector>();
+        services.AddSingleton<ITaskGraphRuntimeHub, TaskGraphRuntimeHub>();
+        services.AddSingleton<ITaskGraphExecutor, TaskGraphExecutor>();
 
         // ── ViewModels ──
         services.AddSingleton<SidebarViewModel>();
         services.AddSingleton<ChatWorkspaceViewModel>();
         services.AddSingleton<TaskGraphWorkspaceViewModel>();
+        services.AddTransient<TaskGraphNodeDetailViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<SettingsViewModel>();
 
         // ── Views ──
         services.AddTransient<MainWindow>();
         services.AddTransient<SettingsWindow>();
+        services.AddTransient<TaskGraphNodeDetailWindow>();
     }
 }
