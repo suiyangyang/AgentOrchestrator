@@ -19,6 +19,12 @@ namespace AgentOrchestrator.App;
 
 public partial class App : Application
 {
+    /// <summary>
+    /// Parsed startup arguments. Drives auto-open behavior such as
+    /// <c>--open-graph &lt;id-or-name-or-index&gt;</c> for screenshot tests.
+    /// </summary>
+    public StartupOptions StartupOptions { get; } = StartupOptions.Parse(Program.StartupArgs);
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -40,6 +46,10 @@ public partial class App : Application
             Application.Current.Resources["UiFontSize"] = settings.UiFontSize;
             Application.Current.Resources["CodeFontFamily"] = ResolveFontFamily(settings.CodeFontFamily);
             Application.Current.Resources["CodeFontSize"] = settings.CodeFontSize;
+
+            // Hand the parsed startup options to the shell so it can drive auto-open.
+            var shell = provider.GetRequiredService<MainWindowViewModel>();
+            shell.StartupOptions = StartupOptions;
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -106,5 +116,54 @@ public partial class App : Application
         services.AddTransient<MainWindow>();
         services.AddTransient<SettingsWindow>();
         services.AddTransient<TaskGraphNodeDetailWindow>();
+    }
+}
+
+/// <summary>
+/// Parsed startup command-line options. Forwarded to <c>MainWindowViewModel</c>
+/// so that screenshot / smoke tests can drive the app non-interactively.
+/// </summary>
+public sealed class StartupOptions
+{
+    /// <summary>Optional token referencing a saved task graph. Resolved by id,
+    /// 1-based index, or name (in that order) — same lookup order used by the
+    /// <c>taskgraph select</c> CLI command.</summary>
+    public string? OpenGraphToken { get; init; }
+
+    /// <summary>When true, the graph workspace is auto-maximized after the
+    /// graph is loaded (i.e. sidebars are hidden, graph fills the window).</summary>
+    public bool MaximizeGraph { get; init; }
+
+    public static StartupOptions Parse(string[] args)
+    {
+        if (args is null || args.Length == 0)
+        {
+            return new StartupOptions();
+        }
+
+        string? openGraph = null;
+        var maximize = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            var arg = args[i];
+            switch (arg)
+            {
+                case "--open-graph":
+                case "--select-graph":
+                case "--taskgraph":
+                    if (i + 1 < args.Length)
+                    {
+                        openGraph = args[++i];
+                    }
+                    break;
+                case "--maximize-graph":
+                case "--fullscreen":
+                    maximize = true;
+                    break;
+            }
+        }
+
+        return new StartupOptions { OpenGraphToken = openGraph, MaximizeGraph = maximize };
     }
 }

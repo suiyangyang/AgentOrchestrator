@@ -7,161 +7,162 @@
              x:Class="AgentOrchestrator.App.Controls.TaskGraphWorkspaceControl"
              x:Name="Root"
              x:DataType="vm:TaskGraphWorkspaceViewModel">
+    <!-- Single-column workspace. The node-details panel that used to live
+         here is now hosted by the shell's right sidebar; this control is
+         dedicated to the graph surface and its inline toolbars. -->
     <Grid Background="#FFFFFF">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="320" />
-        </Grid.ColumnDefinitions>
-
-        <Grid Grid.Column="0"
-              Margin="{Binding WorkspaceMargin}"
-              RowDefinitions="Auto,Auto,Auto,Auto,*"
+        <Grid Margin="{Binding WorkspaceMargin}"
+              RowDefinitions="Auto,Auto,Auto,*"
               RowSpacing="12">
+
+            <!-- ============================================================ -->
+            <!-- Toolbar 1 — Execution (Save / Run / Continue / Retry / Stop) -->
+            <!--   Plus a "More" menu at the end that holds the less-used      -->
+            <!--   items (delete node, link mode, etc.) to keep the bar       -->
+            <!--   uncluttered.                                               -->
+            <!-- ============================================================ -->
             <Grid Grid.Row="0"
                   IsVisible="{Binding IsGraphHeaderVisible}"
-                  ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto"
+                  ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto"
                   ColumnSpacing="8">
-                <StackPanel Grid.Column="0" Spacing="4">
+                <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Center">
                     <TextBlock Text="{Binding CurrentGraphName}" FontSize="18" FontWeight="SemiBold" />
                     <TextBlock Text="{Binding CurrentGraphSummaryText}" Foreground="#6E727A" />
                 </StackPanel>
-                <Button Grid.Column="1" Command="{Binding SaveCurrentCommand}" Content="保存" />
-                <Button Grid.Column="2" Command="{Binding ExecuteCurrentCommand}" Content="执行" IsEnabled="{Binding CanExecute}" />
-                <Button Grid.Column="3" Command="{Binding ContinueExecutionCommand}" Content="继续执行" IsEnabled="{Binding CanContinue}" />
-                <Button Grid.Column="4" Command="{Binding RetryFailedCommand}" Content="重试失败" IsEnabled="{Binding CanRetryFailed}" />
-                <Button Grid.Column="5" Command="{Binding CancelExecutionCommand}" Content="取消执行" IsEnabled="{Binding CanCancelExecution}" />
+
+                <!-- Save — always available (writes whatever's in the canvas). -->
+                <Button Grid.Column="1"
+                        Classes="task-toolbar-btn"
+                        Command="{Binding SaveCurrentCommand}"
+                        ToolTip.Tip="保存">
+                    <Path Classes="toolbar-icon-path toolbar-icon-save" />
+                </Button>
+
+                <!-- Execute — primary action. -->
+                <Button Grid.Column="2"
+                        Classes="task-toolbar-btn task-toolbar-btn-primary"
+                        Command="{Binding ExecuteCurrentCommand}"
+                        IsEnabled="{Binding CanExecute}"
+                        ToolTip.Tip="执行">
+                    <Path Classes="toolbar-icon-path toolbar-icon-execute" />
+                </Button>
+
+                <!-- Continue — secondary, only after a WaitingForInput gate. -->
+                <Button Grid.Column="3"
+                        Classes="task-toolbar-btn"
+                        Command="{Binding ContinueExecutionCommand}"
+                        IsEnabled="{Binding CanContinue}"
+                        ToolTip.Tip="继续执行">
+                    <Path Classes="toolbar-icon-path toolbar-icon-continue" />
+                </Button>
+
+                <!-- Retry failed nodes. -->
+                <Button Grid.Column="4"
+                        Classes="task-toolbar-btn"
+                        Command="{Binding RetryFailedCommand}"
+                        IsEnabled="{Binding CanRetryFailed}"
+                        ToolTip.Tip="重试失败">
+                    <Path Classes="toolbar-icon-path toolbar-icon-retry" />
+                </Button>
+
+                <!-- Cancel — only while running. -->
+                <Button Grid.Column="5"
+                        Classes="task-toolbar-btn task-toolbar-btn-danger"
+                        Command="{Binding CancelExecutionCommand}"
+                        IsEnabled="{Binding CanCancelExecution}"
+                        ToolTip.Tip="取消执行">
+                    <Path Classes="toolbar-icon-path toolbar-icon-cancel" />
+                </Button>
+
+                <!-- "More" — opens a popup that hosts the less-frequent tools
+                     (create from template, link mode, add node, etc.).       -->
+                <Button Grid.Column="6"
+                        x:Name="MoreButton"
+                        Classes="task-toolbar-btn"
+                        Click="OnMoreButtonClick"
+                        ToolTip.Tip="更多">
+                    <Path Classes="toolbar-icon-path toolbar-icon-more" />
+                </Button>
             </Grid>
 
+            <!-- ============================================================ -->
+            <!-- Toolbar 2 — Canvas (Add / Delete / AutoLayout / Zoom / FS)   -->
+            <!--   Frequently used while editing the canvas — kept visible.   -->
+            <!-- ============================================================ -->
             <Border Grid.Row="1"
+                    IsVisible="{Binding IsGraphHeaderVisible}"
                     Background="#F7F8FA"
                     BorderBrush="#E2E5EA"
                     BorderThickness="1"
                     CornerRadius="8"
                     Padding="12">
-                <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,*,Auto,Auto"
+                <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto"
                       ColumnSpacing="8">
-                    <Button Grid.Column="0" Command="{Binding AddNodeCommand}" Content="新增节点" IsEnabled="{Binding CanAddNode}" />
-                    <Button Grid.Column="1" Command="{Binding DeleteSelectedNodeCommand}" Content="删除节点" IsEnabled="{Binding CanDeleteNode}" />
-                    <Button Grid.Column="2" Command="{Binding AutoLayoutCommand}" Content="自动布局" />
-                    <Button Grid.Column="3" Command="{Binding ZoomOutCommand}" Content="缩小" />
-                    <Button Grid.Column="4" Command="{Binding ResetZoomCommand}" Content="{Binding ZoomText}" />
-                    <Button Grid.Column="5" Command="{Binding ZoomInCommand}" Content="放大" />
-                    <Button Grid.Column="6"
-                            Command="{Binding ToggleGraphMaximizeCommand}"
-                            Content="{Binding GraphMaximizeButtonText}" />
-                    <TextBlock Grid.Column="7"
-                               Text="直接拖动节点可改位置，拖动节点右侧圆点可连线。"
+                    <Button Grid.Column="0"
+                            Classes="task-toolbar-btn"
+                            Command="{Binding AddNodeCommand}"
+                            IsEnabled="{Binding CanAddNode}"
+                            ToolTip.Tip="新增节点">
+                        <Path Classes="toolbar-icon-path toolbar-icon-add-node" />
+                    </Button>
+                    <Button Grid.Column="1"
+                            Classes="task-toolbar-btn"
+                            Command="{Binding DeleteSelectedNodeCommand}"
+                            IsEnabled="{Binding CanDeleteNode}"
+                            ToolTip.Tip="删除节点">
+                        <Path Classes="toolbar-icon-path toolbar-icon-delete" />
+                    </Button>
+                    <Button Grid.Column="2"
+                            Classes="task-toolbar-btn"
+                            Command="{Binding AutoLayoutCommand}"
+                            ToolTip.Tip="自动布局">
+                        <Path Classes="toolbar-icon-path toolbar-icon-auto-layout" />
+                    </Button>
+
+                    <TextBlock Grid.Column="3"
+                               Text="拖动空白处可创建新节点；从节点右侧圆点可拉线建立依赖。"
                                VerticalAlignment="Center"
-                               Foreground="#6E727A" />
-                    <Button Grid.Column="8" Command="{Binding ToggleLinkModeCommand}" Content="{Binding LinkModeButtonText}" />
-                    <Button Grid.Column="9"
-                            Command="{Binding RemoveSelectedNodeLinksCommand}"
-                            Content="清空连线"
-                            IsEnabled="{Binding CanRemoveSelectedNodeLinks}" />
+                               Foreground="#6E727A"
+                               FontSize="12" />
+
+                    <Button Grid.Column="5"
+                            Classes="task-toolbar-btn"
+                            Command="{Binding ZoomOutCommand}"
+                            ToolTip.Tip="缩小">
+                        <Path Classes="toolbar-icon-path toolbar-icon-zoom-out" />
+                    </Button>
+                    <Button Grid.Column="6"
+                            Classes="task-toolbar-btn"
+                            Command="{Binding ResetZoomCommand}"
+                            ToolTip.Tip="还原缩放">
+                        <TextBlock Text="{Binding ZoomText}"
+                                   FontSize="12"
+                                   Foreground="#1F2328" />
+                    </Button>
+                    <Button Grid.Column="7"
+                            Classes="task-toolbar-btn"
+                            Command="{Binding ZoomInCommand}"
+                            ToolTip.Tip="放大">
+                        <Path Classes="toolbar-icon-path toolbar-icon-zoom-in" />
+                    </Button>
+                    <Button Grid.Column="8"
+                            Classes="task-toolbar-btn"
+                            Command="{Binding ToggleGraphMaximizeCommand}"
+                            ToolTip.Tip="{Binding GraphMaximizeButtonText}">
+                        <Panel>
+                            <Path Classes="toolbar-icon-path graph-fullscreen-enter-icon"
+                                  IsVisible="{Binding !IsGraphMaximized}" />
+                            <Path Classes="toolbar-icon-path graph-fullscreen-exit-icon"
+                                  IsVisible="{Binding IsGraphMaximized}" />
+                        </Panel>
+                    </Button>
                 </Grid>
             </Border>
 
+            <!-- ============================================================ -->
+            <!-- Pending user confirmation banner                             -->
+            <!-- ============================================================ -->
             <Border Grid.Row="2"
-                    IsVisible="{Binding IsGraphConfigurationVisible}"
-                    Background="#F8F9FB"
-                    BorderBrush="#E2E5EA"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Padding="12">
-                <StackPanel Spacing="12">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button Command="{Binding SelectModeCommand}" CommandParameter="{x:Static vm:TaskGraphInputMode.Template}" Content="模板新建" />
-                        <Button Command="{Binding SelectModeCommand}" CommandParameter="{x:Static vm:TaskGraphInputMode.Direct}" Content="直接输入" />
-                        <Button Command="{Binding SelectModeCommand}" CommandParameter="{x:Static vm:TaskGraphInputMode.Intent}" Content="智能编排" />
-                        <Button Command="{Binding SelectModeCommand}" CommandParameter="{x:Static vm:TaskGraphInputMode.Document}" Content="文档编排" />
-                    </StackPanel>
-
-                    <StackPanel IsVisible="{Binding IsTemplateMode}" Spacing="8">
-                        <Grid ColumnDefinitions="220,*,Auto" ColumnSpacing="8">
-                            <ComboBox Grid.Column="0"
-                                      ItemsSource="{Binding Templates}"
-                                      SelectedItem="{Binding SelectedTemplate, Mode=TwoWay}">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate DataType="vm:TaskGraphTemplateOptionViewModel">
-                                        <TextBlock Text="{Binding Title}" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                            <TextBox Grid.Column="1"
-                                     Text="{Binding TemplateGraphName, Mode=TwoWay}"
-                                     PlaceholderText="编排名称（可选）" />
-                            <Button Grid.Column="2"
-                                    Command="{Binding CreateTemplateGraphCommand}"
-                                    Content="按模板创建" />
-                        </Grid>
-                        <TextBlock Text="{Binding SelectedTemplate.Description}" Foreground="#6E727A" TextWrapping="Wrap" />
-                        <TextBox Text="{Binding TemplateInputText, Mode=TwoWay}"
-                                 AcceptsReturn="True"
-                                 TextWrapping="Wrap"
-                                 MinHeight="120" />
-                    </StackPanel>
-
-                    <StackPanel IsVisible="{Binding IsDirectMode}" Spacing="8">
-                        <TextBlock Text="支持 Markdown 列表、`depends on:` 依赖声明和 JSON 输入。" Foreground="#6E727A" />
-                        <TextBox Text="{Binding DirectInputText, Mode=TwoWay}"
-                                 AcceptsReturn="True"
-                                 TextWrapping="Wrap"
-                                 MinHeight="120" />
-                        <Button HorizontalAlignment="Left"
-                                Command="{Binding GenerateFromDirectCommand}"
-                                Content="生成编排" />
-                    </StackPanel>
-
-                    <StackPanel IsVisible="{Binding IsIntentMode}" Spacing="8">
-                        <TextBlock Text="输入一段自然语言需求，让 LLM 生成 DAG 编排。" Foreground="#6E727A" />
-                        <TextBox Text="{Binding IntentInputText, Mode=TwoWay}"
-                                 AcceptsReturn="True"
-                                 TextWrapping="Wrap"
-                                 MinHeight="120" />
-                        <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
-                            <ComboBox Grid.Column="0"
-                                      Width="180"
-                                      ItemsSource="{Binding Permissions}"
-                                      SelectedItem="{Binding SelectedPermission, Mode=TwoWay}">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate DataType="chat:PermissionOption">
-                                        <TextBlock Text="{Binding Title}" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                            <ComboBox Grid.Column="1"
-                                      Width="150"
-                                      ItemsSource="{Binding Models}"
-                                      SelectedItem="{Binding SelectedModel, Mode=TwoWay}" />
-                            <Button Grid.Column="2"
-                                    HorizontalAlignment="Left"
-                                    Command="{Binding GenerateFromIntentCommand}"
-                                    Content="智能编排" />
-                        </Grid>
-                    </StackPanel>
-
-                    <StackPanel IsVisible="{Binding IsDocumentMode}" Spacing="8">
-                        <TextBlock Text="导入 `.md` / `.txt` 文档，基于文档内容生成编排。" Foreground="#6E727A" />
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                            <TextBox Grid.Column="0"
-                                     Text="{Binding DocumentFilePath, Mode=TwoWay}"
-                                     PlaceholderText="输入或拖入文档路径" />
-                            <Button Grid.Column="1"
-                                    Click="OnBrowseDocumentClick"
-                                    Content="选择文档" />
-                        </Grid>
-                        <TextBox Text="{Binding DocumentPreviewText, Mode=TwoWay}"
-                                 AcceptsReturn="True"
-                                 TextWrapping="Wrap"
-                                 MinHeight="120" />
-                        <Button HorizontalAlignment="Left"
-                                Command="{Binding GenerateFromDocumentCommand}"
-                                Content="从文档编排" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <Border Grid.Row="3"
                     IsVisible="{Binding IsWaitingForUserConfirmation}"
                     Background="#FFF8E7"
                     BorderBrush="#F0D59A"
@@ -178,315 +179,318 @@
                 </StackPanel>
             </Border>
 
-            <Border Grid.Row="4"
+            <!-- ============================================================ -->
+            <!-- Graph surface                                                -->
+            <!-- ============================================================ -->
+            <Border Grid.Row="3"
                     Background="#F7F8FA"
                     BorderBrush="#E2E5EA"
                     BorderThickness="{Binding GraphSurfaceBorderThickness}"
                     CornerRadius="{Binding GraphSurfaceCornerRadius}">
-                <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                              VerticalScrollBarVisibility="Auto">
-                    <Grid>
-                        <Canvas Width="{Binding GraphCanvasWidth}"
-                                Height="{Binding GraphCanvasHeight}"
-                                PointerMoved="OnCanvasPointerMoved"
-                                PointerReleased="OnCanvasPointerReleased"
-                                Background="#F7F8FA"
-                                RenderTransformOrigin="0,0">
-                            <Canvas.RenderTransform>
-                                <ScaleTransform ScaleX="{Binding GraphZoom}" ScaleY="{Binding GraphZoom}" />
-                            </Canvas.RenderTransform>
-
-                            <ItemsControl ItemsSource="{Binding GraphEdges}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <Canvas />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="vm:TaskGraphEdgeViewModel">
-                                        <Path>
-                                            <Path.Data>
-                                                <GeometryGroup>
-                                                    <LineGeometry StartPoint="{Binding StartPoint}" EndPoint="{Binding EndPoint}" />
-                                                </GeometryGroup>
-                                            </Path.Data>
-                                            <Path.Stroke>#B8C1CC</Path.Stroke>
-                                            <Path.StrokeThickness>2</Path.StrokeThickness>
-                                        </Path>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-
-                            <Path IsVisible="{Binding IsCanvasLinking}"
-                                  Stroke="#2459B8"
-                                  StrokeThickness="2"
-                                  StrokeDashArray="6,4">
-                                <Path.Data>
-                                    <GeometryGroup>
-                                        <LineGeometry StartPoint="{Binding LinkPreviewStartPoint}"
-                                                      EndPoint="{Binding LinkPreviewEndPoint}" />
-                                    </GeometryGroup>
-                                </Path.Data>
-                            </Path>
-
-                            <ItemsControl ItemsSource="{Binding GraphNodes}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <Canvas />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemContainerTheme>
-                                    <ControlTheme TargetType="ContentPresenter" x:DataType="tg:TaskNode">
-                                        <Setter Property="Canvas.Left" Value="{Binding Position.X}" />
-                                        <Setter Property="Canvas.Top" Value="{Binding Position.Y}" />
-                                    </ControlTheme>
-                                </ItemsControl.ItemContainerTheme>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="tg:TaskNode">
-                                        <Border Width="240"
-                                                MinHeight="132"
-                                                Canvas.Left="{Binding Position.X}"
-                                                Canvas.Top="{Binding Position.Y}"
-                                                PointerPressed="OnNodePointerPressed"
-                                                PointerMoved="OnNodePointerMoved"
-                                                PointerReleased="OnNodePointerReleased"
-                                                Background="{Binding NodeBackground}"
-                                                BorderBrush="{Binding NodeBorderBrush}"
-                                                BorderThickness="1.5"
-                                                CornerRadius="8"
-                                                Padding="12">
-                                            <StackPanel Spacing="8">
-                                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-                                                    <Ellipse Width="12" Height="12" Fill="#D6DEEA" VerticalAlignment="Center" />
-                                                    <TextBlock Grid.Column="1" Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                                    <TextBlock Grid.Column="2"
-                                                               Text="{Binding StatusText}"
-                                                               Foreground="#6E727A" />
-                                                </Grid>
-                                                <Grid ColumnDefinitions="*,Auto">
-                                                    <TextBlock Text="{Binding Kind}" Foreground="#2459B8" />
-                                                    <Ellipse Grid.Column="1" Width="12" Height="12" Fill="#2459B8" VerticalAlignment="Center" />
-                                                </Grid>
-                                                <TextBlock Text="{Binding Description}"
-                                                           Foreground="#40444B"
-                                                           MaxHeight="54"
-                                                           TextWrapping="Wrap"
-                                                           TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Text="{Binding OutputSummary}"
-                                                           IsVisible="{Binding OutputSummary, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
-                                                           Foreground="#6E727A"
-                                                           MaxHeight="40"
-                                                           TextWrapping="Wrap"
-                                                           TextTrimming="CharacterEllipsis" />
-                                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                                    <Button Command="{Binding #Root.DataContext.SelectNodeCommand}"
-                                                            CommandParameter="{Binding}"
-                                                            Content="选中" />
-                                                    <Border Width="28"
-                                                            Height="28"
-                                                            CornerRadius="14"
-                                                            Background="#EEF3FF"
-                                                            BorderBrush="#BDD0F5"
-                                                            BorderThickness="1"
-                                                            PointerPressed="OnLinkHandlePointerPressed">
-                                                        <TextBlock Text="+"
-                                                                   HorizontalAlignment="Center"
-                                                                   VerticalAlignment="Center"
-                                                                   FontWeight="SemiBold"
-                                                                   Foreground="#2459B8" />
-                                                    </Border>
-                                                    <Button Command="{Binding #Root.DataContext.OpenNodeDetailCommand}"
-                                                            CommandParameter="{Binding}"
-                                                            Content="详情"
-                                                            IsEnabled="{Binding CanOpenDetail}" />
-                                                </StackPanel>
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </Canvas>
-
-                        <Border IsVisible="{Binding HasNoCurrentGraph}"
-                                Background="#F7F8FA">
-                            <StackPanel HorizontalAlignment="Center"
-                                        VerticalAlignment="Center"
-                                        Spacing="10"
-                                        MaxWidth="420">
-                                <TextBlock Text="这里是 TaskGraph 图编辑区"
-                                           FontSize="22"
+                <Grid RowDefinitions="Auto,*">
+                    <!-- Top bar — "图编辑" title (left) + fullscreen toggle (right). -->
+                    <Border Grid.Row="0"
+                            Background="#FFFFFF"
+                            BorderBrush="#E2E5EA"
+                            BorderThickness="0,0,0,1"
+                            Padding="16,8">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                            <StackPanel Grid.Column="0"
+                                        Orientation="Horizontal"
+                                        Spacing="8"
+                                        VerticalAlignment="Center">
+                                <Path Classes="graph-editor-title-icon"
+                                      VerticalAlignment="Center" />
+                                <TextBlock Text="图编辑"
+                                           FontSize="15"
                                            FontWeight="SemiBold"
-                                           HorizontalAlignment="Center" />
-                                <TextBlock Text="先用上方模板新建或智能编排生成一张图。生成后可以拖动节点、从右侧圆点拉线建立依赖、自动布局和编辑节点内容。"
-                                           TextWrapping="Wrap"
-                                           TextAlignment="Center"
-                                           Foreground="#6E727A" />
+                                           Foreground="#1F2328"
+                                           VerticalAlignment="Center" />
                             </StackPanel>
-                        </Border>
-                    </Grid>
-                </ScrollViewer>
+
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding CurrentGraphName}"
+                                       Foreground="#6E727A"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+
+                            <Button Grid.Column="2"
+                                    Command="{Binding ToggleGraphMaximizeCommand}"
+                                    Classes="graph-fullscreen-btn"
+                                    ToolTip.Tip="{Binding GraphMaximizeButtonText}">
+                                <Panel>
+                                    <Path Classes="graph-fullscreen-enter-icon"
+                                          IsVisible="{Binding !IsGraphMaximized}" />
+                                    <Path Classes="graph-fullscreen-exit-icon"
+                                          IsVisible="{Binding IsGraphMaximized}" />
+                                </Panel>
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <ScrollViewer Grid.Row="1"
+                                  x:Name="GraphScrollViewer"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Auto">
+                        <Grid>
+                            <Canvas x:Name="GraphCanvas"
+                                    Width="{Binding GraphCanvasWidth}"
+                                    Height="{Binding GraphCanvasHeight}"
+                                    PointerMoved="OnCanvasPointerMoved"
+                                    PointerReleased="OnCanvasPointerReleased"
+                                    Background="#F7F8FA"
+                                    RenderTransformOrigin="0,0">
+                                <Canvas.RenderTransform>
+                                    <ScaleTransform ScaleX="{Binding GraphZoom}" ScaleY="{Binding GraphZoom}" />
+                                </Canvas.RenderTransform>
+                            </Canvas>
+
+                            <Border IsVisible="{Binding HasNoCurrentGraph}"
+                                    Background="#F7F8FA">
+                                <StackPanel HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Spacing="10"
+                                            MaxWidth="420">
+                                    <TextBlock Text="这里是 TaskGraph 图编辑区"
+                                               FontSize="22"
+                                               FontWeight="SemiBold"
+                                               HorizontalAlignment="Center" />
+                                    <TextBlock Text="先点击「更多 → 按模板创建」或拖动空白处生成新节点。生成后可以拖动节点、从右侧圆点拉线建立依赖、自动布局和编辑节点内容。"
+                                               TextWrapping="Wrap"
+                                               TextAlignment="Center"
+                                               Foreground="#6E727A" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </ScrollViewer>
+                </Grid>
             </Border>
         </Grid>
 
-        <Border Grid.Column="1"
-                IsVisible="{Binding IsGraphSidebarVisible}"
-                Background="#FCFCFD"
-                BorderBrush="#E2E5EA"
-                BorderThickness="1,0,0,0">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel Margin="16" Spacing="12">
-                    <TextBlock Text="节点详情" FontSize="15" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding StatusText}" Foreground="#6E727A" TextWrapping="Wrap" />
-
-                    <Border Background="#FFFFFF"
-                            BorderBrush="#E2E5EA"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="12">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="新增节点" FontWeight="SemiBold" />
-                            <TextBox Text="{Binding NewNodeTitle, Mode=TwoWay}"
-                                     PlaceholderText="节点标题" />
-                            <TextBox Text="{Binding NewNodeDescription, Mode=TwoWay}"
-                                     AcceptsReturn="True"
-                                     TextWrapping="Wrap"
-                                     MinHeight="72"
-                                     PlaceholderText="节点说明" />
-                            <ComboBox ItemsSource="{Binding NodeKinds}"
-                                      SelectedItem="{Binding NewNodeKind, Mode=TwoWay}" />
-                            <Button Command="{Binding AddNodeCommand}"
-                                    Content="添加到画布"
-                                    IsEnabled="{Binding CanAddNode}" />
+        <!-- ============================================================ -->
+        <!-- "More" popup — opens from the toolbar's ⋯ button.             -->
+        <!--   Houses the less-frequently-used actions (create from        -->
+        <!--   template, link mode, remove links, link-mode toggle, etc.). -->
+        <!-- ============================================================ -->
+        <Popup x:Name="MorePopup"
+               Placement="Bottom"
+               PlacementTarget="MoreButton"
+               IsLightDismissEnabled="True"
+               HorizontalOffset="0"
+               VerticalOffset="6">
+            <Border Background="#FFFFFF"
+                    BorderBrush="#E3E5E9"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="6"
+                    BoxShadow="0 8 20 0 #20000000">
+                <StackPanel Spacing="2" MinWidth="220">
+                    <Button Classes="more-popup-item" Click="OnCreateFromTemplateClick">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Path Classes="toolbar-icon-path toolbar-icon-template" />
+                            <TextBlock Text="按模板创建" VerticalAlignment="Center" />
                         </StackPanel>
-                    </Border>
+                    </Button>
+                    <Button Classes="more-popup-item" Click="OnCreateFromDirectClick">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Path Classes="toolbar-icon-path toolbar-icon-direct" />
+                            <TextBlock Text="直接输入创建" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="more-popup-item" Click="OnCreateFromIntentClick">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Path Classes="toolbar-icon-path toolbar-icon-intent" />
+                            <TextBlock Text="智能编排" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="more-popup-item" Click="OnCreateFromDocumentClick">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Path Classes="toolbar-icon-path toolbar-icon-document" />
+                            <TextBlock Text="从文档编排" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Border Background="#E2E5EA" Height="1" Margin="0,4" />
+                    <Button Classes="more-popup-item"
+                            Command="{Binding ToggleLinkModeCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Path Classes="toolbar-icon-path toolbar-icon-link" />
+                            <TextBlock Text="{Binding LinkModeButtonText}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="more-popup-item"
+                            Command="{Binding RemoveSelectedNodeLinksCommand}"
+                            IsEnabled="{Binding CanRemoveSelectedNodeLinks}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Path Classes="toolbar-icon-path toolbar-icon-link-broken" />
+                            <TextBlock Text="清空连线" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Popup>
 
-                    <Border Background="#FFFFFF"
-                            BorderBrush="#E2E5EA"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="12">
+        <!-- ============================================================ -->
+        <!-- "Create graph" dialog (template / direct / intent / document) -->
+        <!--   Pops up over the workspace. Dismissed via ✕ or backdrop.    -->
+        <!-- ============================================================ -->
+        <Grid x:Name="CreateDialog"
+              IsVisible="{Binding IsCreateDialogVisible}"
+              Background="#66000000"
+              PointerPressed="OnCreateDialogBackdropPressed">
+            <Border Classes="create-dialog-card"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+                <Grid RowDefinitions="Auto,Auto,*">
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Classes="create-dialog-title"
+                                       Text="创建任务编排" />
+                            <TextBlock Classes="create-dialog-subtitle"
+                                       Text="选择一种创建方式，生成后可在右侧栏或图上直接编辑节点。" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Classes="task-toolbar-btn"
+                                Click="OnCreateDialogClose"
+                                ToolTip.Tip="关闭"
+                                Margin="8,0,0,0">
+                            <Path Classes="toolbar-icon-path window-close-icon" />
+                        </Button>
+                    </Grid>
+
+                    <!-- Mode selector -->
+                    <StackPanel Grid.Row="1"
+                                Orientation="Horizontal"
+                                Spacing="8"
+                                Margin="0,16,0,12">
+                        <ToggleButton Classes="create-dialog-mode"
+                                      IsChecked="{Binding IsTemplateModeSelected, Mode=OneWay}"
+                                      Click="OnCreateModeClick"
+                                      Tag="Template">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Path Classes="toolbar-icon-path toolbar-icon-template" />
+                                <TextBlock Text="模板新建" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </ToggleButton>
+                        <ToggleButton Classes="create-dialog-mode"
+                                      IsChecked="{Binding IsDirectModeSelected, Mode=OneWay}"
+                                      Click="OnCreateModeClick"
+                                      Tag="Direct">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Path Classes="toolbar-icon-path toolbar-icon-direct" />
+                                <TextBlock Text="直接输入" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </ToggleButton>
+                        <ToggleButton Classes="create-dialog-mode"
+                                      IsChecked="{Binding IsIntentModeSelected, Mode=OneWay}"
+                                      Click="OnCreateModeClick"
+                                      Tag="Intent">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Path Classes="toolbar-icon-path toolbar-icon-intent" />
+                                <TextBlock Text="智能编排" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </ToggleButton>
+                        <ToggleButton Classes="create-dialog-mode"
+                                      IsChecked="{Binding IsDocumentModeSelected, Mode=OneWay}"
+                                      Click="OnCreateModeClick"
+                                      Tag="Document">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Path Classes="toolbar-icon-path toolbar-icon-document" />
+                                <TextBlock Text="文档编排" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </ToggleButton>
+                    </StackPanel>
+
+                    <!-- Body — one panel visible at a time -->
+                    <Border Grid.Row="2" Classes="create-dialog-body">
                         <Grid>
-                            <StackPanel Spacing="8" IsVisible="{Binding HasSelectedNode}">
-                                <TextBlock Text="{Binding SelectedNode.Title}" FontWeight="SemiBold" />
-                                <TextBlock Text="{Binding SelectedNode.StatusText}" Foreground="#2459B8" />
-                                <TextBlock Text="{Binding SelectedNode.Description}" TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding SelectedNode.OutputSummary}"
-                                           IsVisible="{Binding SelectedNode.OutputSummary, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
-                                           Foreground="#40444B"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding SelectedNode.LastError}"
-                                           IsVisible="{Binding SelectedNode.LastError, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
-                                           Foreground="#C53B27"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Text="节点编辑" FontWeight="SemiBold" Margin="0,8,0,0" />
-                                <TextBox Text="{Binding SelectedNodeTitleDraft, Mode=TwoWay}"
-                                         PlaceholderText="节点标题" />
-                                <TextBox Text="{Binding SelectedNodeDescriptionDraft, Mode=TwoWay}"
-                                         AcceptsReturn="True"
-                                         TextWrapping="Wrap"
-                                         MinHeight="72"
-                                         PlaceholderText="节点说明" />
-                                <Button Command="{Binding SaveSelectedNodeEditsCommand}"
-                                        Content="保存节点编辑" />
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <Button Command="{Binding ToggleLinkModeCommand}"
-                                            Content="{Binding LinkModeButtonText}" />
-                                    <Button Command="{Binding RemoveSelectedNodeLinksCommand}"
-                                            Content="移除连线"
-                                            IsEnabled="{Binding CanRemoveSelectedNodeLinks}" />
-                                </StackPanel>
-                                <StackPanel Spacing="8" IsVisible="{Binding IsLinkMode}">
-                                    <TextBlock Text="为当前节点选择前置依赖" Foreground="#6E727A" />
-                                    <ComboBox ItemsSource="{Binding LinkableTargetNodes}"
-                                              SelectedItem="{Binding SelectedLinkTarget, Mode=TwoWay}">
+                            <StackPanel Spacing="10" IsVisible="{Binding IsTemplateMode}">
+                                <Grid ColumnDefinitions="220,*" ColumnSpacing="8">
+                                    <ComboBox Grid.Column="0"
+                                              ItemsSource="{Binding Templates}"
+                                              SelectedItem="{Binding SelectedTemplate, Mode=TwoWay}">
                                         <ComboBox.ItemTemplate>
-                                            <DataTemplate DataType="vm:TaskGraphNodeReferenceViewModel">
+                                            <DataTemplate DataType="vm:TaskGraphTemplateOptionViewModel">
                                                 <TextBlock Text="{Binding Title}" />
                                             </DataTemplate>
                                         </ComboBox.ItemTemplate>
                                     </ComboBox>
-                                    <Button Command="{Binding CreateLinkCommand}"
-                                            Content="添加依赖连线"
-                                            IsEnabled="{Binding CanCreateLink}" />
-                                </StackPanel>
-                                <ItemsControl ItemsSource="{Binding SelectedNode.ResultTags}"
-                                              IsVisible="{Binding SelectedNodeHasTags}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Background="#EEF3FF"
-                                                    CornerRadius="6"
-                                                    Padding="8,4"
-                                                    Margin="0,0,0,4">
-                                                <TextBlock Text="{Binding .}" Foreground="#2459B8" />
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <ItemsControl ItemsSource="{Binding SelectedNode.TouchedFiles}"
-                                              IsVisible="{Binding SelectedNodeHasFiles}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding .}"
-                                                       Foreground="#9096A0"
-                                                       FontFamily="{DynamicResource CodeFontFamily}"
-                                                       FontSize="{DynamicResource CodeFontSize}" />
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <Button Command="{Binding OpenNodeDetailCommand}"
-                                        CommandParameter="{Binding SelectedNode}"
-                                        Content="打开执行详情"
-                                        IsEnabled="{Binding SelectedNode.CanOpenDetail}" />
+                                    <TextBox Grid.Column="1"
+                                             Text="{Binding TemplateGraphName, Mode=TwoWay}"
+                                             PlaceholderText="编排名称（可选）" />
+                                </Grid>
+                                <TextBlock Text="{Binding SelectedTemplate.Description}" Foreground="#6E727A" TextWrapping="Wrap" />
+                                <TextBox Text="{Binding TemplateInputText, Mode=TwoWay}"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="120" />
                             </StackPanel>
-                            <TextBlock Text="选择图中的节点后，这里会显示它的执行摘要、错误和产物。"
-                                       Foreground="#9096A0"
-                                       TextWrapping="Wrap"
-                                       IsVisible="{Binding HasNoSelectedNode}" />
+
+                            <StackPanel Spacing="10" IsVisible="{Binding IsDirectMode}">
+                                <TextBlock Text="支持 Markdown 列表、`depends on:` 依赖声明和 JSON 输入。" Foreground="#6E727A" />
+                                <TextBox Text="{Binding DirectInputText, Mode=TwoWay}"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="180" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="10" IsVisible="{Binding IsIntentMode}">
+                                <TextBlock Text="输入一段自然语言需求，让 LLM 生成 DAG 编排。" Foreground="#6E727A" />
+                                <TextBox Text="{Binding IntentInputText, Mode=TwoWay}"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="120" />
+                                <Grid ColumnDefinitions="220,180,*" ColumnSpacing="8">
+                                    <ComboBox Grid.Column="0"
+                                              ItemsSource="{Binding Permissions}"
+                                              SelectedItem="{Binding SelectedPermission, Mode=TwoWay}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate DataType="chat:PermissionOption">
+                                                <TextBlock Text="{Binding Title}" />
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <ComboBox Grid.Column="1"
+                                              ItemsSource="{Binding Models}"
+                                              SelectedItem="{Binding SelectedModel, Mode=TwoWay}" />
+                                </Grid>
+                            </StackPanel>
+
+                            <StackPanel Spacing="10" IsVisible="{Binding IsDocumentMode}">
+                                <TextBlock Text="导入 `.md` / `.txt` 文档，基于文档内容生成编排。" Foreground="#6E727A" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBox Grid.Column="0"
+                                             Text="{Binding DocumentFilePath, Mode=TwoWay}"
+                                             PlaceholderText="输入或拖入文档路径" />
+                                    <Button Grid.Column="1"
+                                            Classes="task-toolbar-btn"
+                                            Click="OnBrowseDocumentClick"
+                                            ToolTip.Tip="选择文档">
+                                        <Path Classes="toolbar-icon-path toolbar-icon-document" />
+                                    </Button>
+                                </Grid>
+                                <TextBox Text="{Binding DocumentPreviewText, Mode=TwoWay}"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="120" />
+                            </StackPanel>
                         </Grid>
                     </Border>
 
-                    <Border Background="#FFFFFF"
-                            BorderBrush="#E2E5EA"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="12"
-                            IsVisible="{Binding HasBugReport}">
-                        <StackPanel Spacing="8">
-                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                                <TextBlock Grid.Column="0" Text="Bug 报告" FontWeight="SemiBold" />
-                                <Button Grid.Column="1"
-                                        Command="{Binding ExportBugReportMarkdownCommand}"
-                                        Content="导出 Markdown" />
-                                <Button Grid.Column="2"
-                                        Command="{Binding ExportBugReportJsonCommand}"
-                                        Content="导出 JSON" />
-                            </Grid>
-                            <ScrollViewer MaxHeight="340"
-                                          HorizontalScrollBarVisibility="Auto"
-                                          VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding BugReportRows}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="vm:BugReportRowViewModel">
-                                            <Border BorderBrush="#EEF1F4"
-                                                    BorderThickness="0,0,0,1"
-                                                    Padding="0,0,0,8"
-                                                    Margin="0,0,0,8">
-                                                <StackPanel Spacing="4">
-                                                    <TextBlock Text="{Binding ProblemDescription}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                                    <TextBlock Text="{Binding ResolvedText, StringFormat=已解决：{0}}" Foreground="#2459B8" />
-                                                    <TextBlock Text="{Binding ReliabilityText, StringFormat=可靠性：{0}}" Foreground="#6E727A" />
-                                                    <TextBlock Text="{Binding Reason, StringFormat=原因：{0}}" TextWrapping="Wrap" />
-                                                    <TextBlock Text="{Binding Verification, StringFormat=验证方案：{0}}" TextWrapping="Wrap" />
-                                                </StackPanel>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-            </ScrollViewer>
-        </Border>
+                    <StackPanel Grid.Row="3"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                Spacing="8"
+                                Margin="0,16,0,0">
+                        <Button Classes="create-dialog-secondary"
+                                Click="OnCreateDialogClose"
+                                Content="取消" />
+                        <Button Classes="create-dialog-primary"
+                                Click="OnCreateDialogConfirm"
+                                Content="创建" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

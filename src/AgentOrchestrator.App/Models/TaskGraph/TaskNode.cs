@@ -85,6 +85,13 @@ public sealed partial class TaskNode : ObservableObject
         }
     }
 
+    /// <summary>True when the user dragged on empty canvas to spawn this
+    /// node — it lives in the graph but is not yet "real" (no prompt, no
+    /// agent). Clicking the node promotes it to a real, editable node.</summary>
+    [ObservableProperty]
+    [property: JsonIgnore]
+    private bool _isPending;
+
     [JsonIgnore]
     public string NodeBorderBrush => IsSelected ? "#2459B8" : "#E2E5EA";
 
@@ -117,5 +124,11 @@ public sealed partial class TaskNode : ObservableObject
     partial void OnAgentSessionIdChanged(string? value)
     {
         OnPropertyChanged(nameof(CanOpenDetail));
+    }
+
+    partial void OnIsPendingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(NodeBorderBrush));
+        OnPropertyChanged(nameof(NodeBackground));
     }
 }

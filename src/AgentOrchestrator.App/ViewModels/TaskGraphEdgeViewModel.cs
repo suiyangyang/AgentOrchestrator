@@ -4,13 +4,19 @@ namespace AgentOrchestrator.App.ViewModels;
 
 public sealed class TaskGraphEdgeViewModel
 {
-    public TaskGraphEdgeViewModel(double x1, double y1, double x2, double y2)
+    public TaskGraphEdgeViewModel(string sourceId, string targetId, double x1, double y1, double x2, double y2)
     {
+        SourceId = sourceId;
+        TargetId = targetId;
         X1 = x1;
         Y1 = y1;
         X2 = x2;
         Y2 = y2;
     }
+
+    public string SourceId { get; }
+
+    public string TargetId { get; }
 
     public double X1 { get; }
 

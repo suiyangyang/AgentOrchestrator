@@ -1313,6 +1313,63 @@
             <Setter Property="Background" Value="#C5C8CE" />
         </Style>
 
+        <!-- TaskGraph top-bar title + fullscreen icons -->
+        <Style Selector="Path.graph-editor-title-icon">
+            <!-- Stylized DAG glyph: one root node connected to two children via a T-junction.
+                 Inherits visual defaults from the icon-path family above. -->
+            <Setter Property="Data" Value="M 7,1.5 A 1.2,1.2 0 1 1 4.6,1.5 A 1.2,1.2 0 1 1 7,1.5 Z M 5.8,2.7 L 2.5,7 M 5.8,2.7 L 5.8,7 M 5.8,2.7 L 9.1,7 M 3.4,8.6 A 1.2,1.2 0 1 1 1,8.6 A 1.2,1.2 0 1 1 3.4,8.6 Z M 6.6,8.6 A 1.2,1.2 0 1 1 4.2,8.6 A 1.2,1.2 0 1 1 6.6,8.6 Z M 9.8,8.6 A 1.2,1.2 0 1 1 7.4,8.6 A 1.2,1.2 0 1 1 9.8,8.6 Z M 1.9,11.4 A 1.2,1.2 0 1 1 -0.5,11.4 A 1.2,1.2 0 1 1 1.9,11.4 Z M 8.3,11.4 A 1.2,1.2 0 1 1 5.9,11.4 A 1.2,1.2 0 1 1 8.3,11.4 Z M 14.5,11.4 A 1.2,1.2 0 1 1 12.1,11.4 A 1.2,1.2 0 1 1 14.5,11.4 Z M 2.7,9.8 L 1.9,11.4 M 5.8,9.8 L 5.8,11.4 M 8.7,9.8 L 8.3,11.4 M 11.5,9.8 L 14.5,11.4" />
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="Stroke" Value="#1F2328" />
+            <Setter Property="StrokeThickness" Value="1.1" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Fill" Value="Transparent" />
+        </Style>
+        <Style Selector="Path.graph-fullscreen-enter-icon">
+            <!-- Four corner brackets pointing outward (enter fullscreen). -->
+            <Setter Property="Data" Value="M 2.2,5.6 V 2.6 A 0.4,0.4 0 0 1 2.6,2.2 H 5.6 M 11.4,2.2 H 14.4 A 0.4,0.4 0 0 1 14.8,2.6 V 5.6 M 14.8,11.4 V 14.4 A 0.4,0.4 0 0 1 14.4,14.8 H 11.4 M 5.6,14.8 H 2.6 A 0.4,0.4 0 0 1 2.2,14.4 V 11.4" />
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="Stroke" Value="#1F2328" />
+            <Setter Property="StrokeThickness" Value="1.4" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Fill" Value="Transparent" />
+        </Style>
+        <Style Selector="Path.graph-fullscreen-exit-icon">
+            <!-- Four corner brackets pointing inward (exit fullscreen). -->
+            <Setter Property="Data" Value="M 5.6,2.2 V 4.2 A 1,1 0 0 1 4.6,5.2 H 2.2 M 11.4,2.2 H 13.4 A 1,1 0 0 1 14.4,3.2 V 5.2 M 14.8,11.4 V 13.4 A 1,1 0 0 1 13.8,14.4 H 11.4 M 5.6,14.8 H 3.6 A 1,1 0 0 1 2.6,13.8 V 11.4" />
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="Stroke" Value="#1F2328" />
+            <Setter Property="StrokeThickness" Value="1.4" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Fill" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.graph-fullscreen-btn">
+            <Setter Property="Background" Value="#F3F5F8" />
+            <Setter Property="BorderBrush" Value="#DCE1E8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="MinWidth" Value="34" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.graph-fullscreen-btn:pointerover">
+            <Setter Property="Background" Value="#E8ECF2" />
+            <Setter Property="BorderBrush" Value="#C5C8CE" />
+        </Style>
+        <Style Selector="Button.graph-fullscreen-btn:pressed">
+            <Setter Property="Background" Value="#DCE1E8" />
+        </Style>
+
         <!-- TaskGraph placeholder -->
         <Style Selector="Border.task-graph-placeholder-icon">
             <Setter Property="Width" Value="80" />
@@ -1320,6 +1377,319 @@
             <Setter Property="CornerRadius" Value="20" />
             <Setter Property="Background" Value="#FFF5ED" />
             <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+
+        <!-- ============================================================ -->
+        <!-- TaskGraph toolbar — icon-only buttons                        -->
+        <!--   Defaults: 14x14 path, stroke #1F2328, transparent fill.     -->
+        <!--   The toolbar Button styles in front of each icon control    -->
+        <!--   the hit-test area and hover state.                          -->
+        <!-- ============================================================ -->
+        <Style Selector="Path.toolbar-icon-path">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="Stroke" Value="#1F2328" />
+            <Setter Property="StrokeThickness" Value="1.4" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Fill" Value="Transparent" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.task-toolbar-btn:disabled Path.toolbar-icon-path">
+            <Setter Property="Opacity" Value="0.4" />
+        </Style>
+        <!-- Save (floppy) -->
+        <Style Selector="Path.toolbar-icon-save">
+            <Setter Property="Data" Value="M 2.5,2.5 H 10.5 L 12.5,4.5 V 12.5 H 2.5 Z M 4.5,2.5 V 6.5 H 9.5 V 2.5 M 4.5,9 H 10.5 V 12.5 H 4.5 Z" />
+        </Style>
+        <!-- Play (execute) -->
+        <Style Selector="Path.toolbar-icon-execute">
+            <Setter Property="Data" Value="M 3.5,2.5 L 12.5,7.5 L 3.5,12.5 Z" />
+            <Setter Property="Fill" Value="#1F2328" />
+        </Style>
+        <!-- Resume (continue) — two bars then triangle -->
+        <Style Selector="Path.toolbar-icon-continue">
+            <Setter Property="Data" Value="M 2.5,3.5 H 3.5 V 11.5 H 2.5 Z M 5,3.5 H 6 V 11.5 H 5 Z M 7.5,3 L 12.5,7.5 L 7.5,12 Z" />
+        </Style>
+        <!-- Retry (refresh arrow) -->
+        <Style Selector="Path.toolbar-icon-retry">
+            <Setter Property="Data" Value="M 12.5,4.5 A 5,5 0 1 0 12.5,10.5 M 12.5,2 V 4.5 H 10" />
+        </Style>
+        <!-- Stop (cancel) — square -->
+        <Style Selector="Path.toolbar-icon-cancel">
+            <Setter Property="Data" Value="M 3.5,3.5 H 11.5 V 11.5 H 3.5 Z" />
+            <Setter Property="Fill" Value="#1F2328" />
+        </Style>
+        <!-- Plus (add node) -->
+        <Style Selector="Path.toolbar-icon-add-node">
+            <Setter Property="Data" Value="M 7.5,2.5 V 12.5 M 2.5,7.5 H 12.5" />
+        </Style>
+        <!-- Trash (delete node) -->
+        <Style Selector="Path.toolbar-icon-delete">
+            <Setter Property="Data" Value="M 3,4 H 12 M 5,4 V 2.5 H 10 V 4 M 4,4 L 4.5,12.5 H 10.5 L 11,4 M 6.5,6.5 V 11 M 8.5,6.5 V 11" />
+        </Style>
+        <!-- Auto layout (grid of 4 squares) -->
+        <Style Selector="Path.toolbar-icon-auto-layout">
+            <Setter Property="Data" Value="M 2.5,2.5 H 6.5 V 6.5 H 2.5 Z M 8.5,2.5 H 12.5 V 6.5 H 8.5 Z M 2.5,8.5 H 6.5 V 12.5 H 2.5 Z M 8.5,8.5 H 12.5 V 12.5 H 8.5 Z" />
+        </Style>
+        <!-- Zoom in -->
+        <Style Selector="Path.toolbar-icon-zoom-in">
+            <Setter Property="Data" Value="M 5.5,2.5 A 3.5,3.5 0 1 1 5.5,9.5 A 3.5,3.5 0 1 1 5.5,2.5 Z M 8.5,8.5 L 12.5,12.5 M 5.5,3.5 V 6.5 M 4,5 H 7" />
+        </Style>
+        <!-- Zoom out -->
+        <Style Selector="Path.toolbar-icon-zoom-out">
+            <Setter Property="Data" Value="M 5.5,2.5 A 3.5,3.5 0 1 1 5.5,9.5 A 3.5,3.5 0 1 1 5.5,2.5 Z M 8.5,8.5 L 12.5,12.5 M 4,5 H 7" />
+        </Style>
+        <!-- Reset zoom (1:1) -->
+        <Style Selector="Path.toolbar-icon-zoom-reset">
+            <Setter Property="Data" Value="M 2.5,4.5 A 3,3 0 1 0 5.5,1.5 V 3.5 M 2.5,3.5 H 4.5 M 7,3.5 H 12.5 V 9 M 12.5,11.5 V 9 M 5,7 H 9.5 A 2.5,2.5 0 0 1 12,9.5 V 12.5 H 5 Z" />
+        </Style>
+        <!-- Link (chain) -->
+        <Style Selector="Path.toolbar-icon-link">
+            <Setter Property="Data" Value="M 6,5.5 L 4.5,7 A 2.5,2.5 0 0 0 8,10.5 L 9.5,9 M 9,9.5 L 10.5,8 A 2.5,2.5 0 0 0 7,4.5 L 5.5,6 M 5,9.5 L 10,4.5" />
+        </Style>
+        <!-- Link broken -->
+        <Style Selector="Path.toolbar-icon-link-broken">
+            <Setter Property="Data" Value="M 6,5.5 L 4.5,7 A 2.5,2.5 0 0 0 8,10.5 L 9.5,9 M 9,9.5 L 10.5,8 A 2.5,2.5 0 0 0 7,4.5 L 5.5,6 M 5,9.5 L 10,4.5 M 1.5,12.5 L 3.5,11" />
+        </Style>
+        <!-- More (horizontal ellipsis) -->
+        <Style Selector="Path.toolbar-icon-more">
+            <Setter Property="Data" Value="M 3.5,7 A 0.9,0.9 0 1 1 3.49,7 M 7.5,7 A 0.9,0.9 0 1 1 7.49,7 M 11.5,7 A 0.9,0.9 0 1 1 11.49,7" />
+        </Style>
+        <!-- Plus circle (open create dialog) -->
+        <Style Selector="Path.toolbar-icon-create">
+            <Setter Property="Data" Value="M 7.5,2.5 A 5,5 0 1 1 7.5,12.5 A 5,5 0 1 1 7.5,2.5 Z M 7.5,5 V 10 M 5,7.5 H 10" />
+        </Style>
+        <!-- Template (stack of layers) -->
+        <Style Selector="Path.toolbar-icon-template">
+            <Setter Property="Data" Value="M 7.5,2.5 L 12.5,5 L 7.5,7.5 L 2.5,5 Z M 2.5,8 L 7.5,10.5 L 12.5,8 M 2.5,11 L 7.5,13.5 L 12.5,11" />
+        </Style>
+        <!-- Direct input (pencil) -->
+        <Style Selector="Path.toolbar-icon-direct">
+            <Setter Property="Data" Value="M 2.5,12.5 L 4,10 L 10,4 L 11.5,5.5 L 5.5,11.5 Z M 8.5,5.5 L 10,4" />
+        </Style>
+        <!-- Intent (sparkle) -->
+        <Style Selector="Path.toolbar-icon-intent">
+            <Setter Property="Data" Value="M 7.5,2 L 9,5.5 L 12.5,7 L 9,8.5 L 7.5,12 L 6,8.5 L 2.5,7 L 6,5.5 Z M 11.5,2 L 12,3.5 L 13.5,4 L 12,4.5 L 11.5,6 L 11,4.5 L 9.5,4 L 11,3.5 Z" />
+        </Style>
+        <!-- Document (file) -->
+        <Style Selector="Path.toolbar-icon-document">
+            <Setter Property="Data" Value="M 3.5,2.5 H 9 L 12.5,6 V 12.5 H 3.5 Z M 9,2.5 V 6 H 12.5 M 5.5,8 H 10.5 M 5.5,10 H 8.5" />
+        </Style>
+        <!-- Connection point — small filled circle on the right edge of a node -->
+        <Style Selector="Ellipse.node-connection-point">
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="Fill" Value="#1F2328" />
+            <Setter Property="Stroke" Value="#FFFFFF" />
+            <Setter Property="StrokeThickness" Value="2" />
+        </Style>
+        <Style Selector="Ellipse.node-connection-point:pointerover">
+            <Setter Property="Fill" Value="#FF6A00" />
+        </Style>
+
+        <!-- Graph node — generic chrome -->
+        <Style Selector="Border.graph-node">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#C5C8CE" />
+            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="12" />
+        </Style>
+        <Style Selector="Border.graph-node-selected">
+            <Setter Property="BorderBrush" Value="#1F2328" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+        <Style Selector="Border.graph-node-pending">
+            <Setter Property="BorderBrush" Value="#FF6A00" />
+            <Setter Property="BorderThickness" Value="1.5,1.5,1.5,3" />
+            <Setter Property="Background" Value="#FFFCF6" />
+        </Style>
+
+        <!-- Edge styles — drawn via the code-behind. These selectors let us
+             override the Line visuals based on data context if needed. -->
+        <Style Selector="Line.graph-edge">
+            <Setter Property="Stroke" Value="#B8C1CC" />
+            <Setter Property="StrokeThickness" Value="2" />
+        </Style>
+        <Style Selector="Line.graph-edge-highlighted">
+            <Setter Property="Stroke" Value="#FF6A00" />
+            <Setter Property="StrokeThickness" Value="3" />
+        </Style>
+        <Style Selector="Line.graph-link-preview">
+            <Setter Property="Stroke" Value="#2459B8" />
+            <Setter Property="StrokeThickness" Value="2" />
+            <Setter Property="StrokeDashArray" Value="4,3" />
+        </Style>
+        <Style Selector="Border.graph-link-preview-target">
+            <Setter Property="Background" Value="#1A2459B8" />
+            <Setter Property="BorderBrush" Value="#2459B8" />
+            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+
+        <!-- ============================================================ -->
+        <!-- Icon-only task-toolbar buttons                                -->
+        <!--   Used in the TaskGraph control's main toolbar.               -->
+        <!--   Hit-test box: 32×32, icon centered, 14×14.                  -->
+        <!-- ============================================================ -->
+        <Style Selector="Button.task-toolbar-btn">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#DCE1E8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#1F2328" />
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.task-toolbar-btn:pointerover">
+            <Setter Property="Background" Value="#F3F4F6" />
+            <Setter Property="BorderBrush" Value="#C5C8CE" />
+        </Style>
+        <Style Selector="Button.task-toolbar-btn:pressed">
+            <Setter Property="Background" Value="#E8E9EB" />
+        </Style>
+        <Style Selector="Button.task-toolbar-btn-primary">
+            <Setter Property="Background" Value="#1F2328" />
+            <Setter Property="BorderBrush" Value="#1F2328" />
+        </Style>
+        <Style Selector="Button.task-toolbar-btn-primary:pointerover">
+            <Setter Property="Background" Value="#15181D" />
+            <Setter Property="BorderBrush" Value="#15181D" />
+        </Style>
+        <Style Selector="Button.task-toolbar-btn-primary:pressed">
+            <Setter Property="Background" Value="#0F1216" />
+            <Setter Property="BorderBrush" Value="#0F1216" />
+        </Style>
+        <Style Selector="Button.task-toolbar-btn-primary Path.toolbar-icon-path">
+            <Setter Property="Stroke" Value="#FFFFFF" />
+            <Setter Property="Fill" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.task-toolbar-btn-primary Path.toolbar-icon-execute">
+            <Setter Property="Fill" Value="#FFFFFF" />
+        </Style>
+        <Style Selector="Button.task-toolbar-btn-danger">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#F2C5C5" />
+        </Style>
+        <Style Selector="Button.task-toolbar-btn-danger:pointerover">
+            <Setter Property="Background" Value="#FFF5F5" />
+            <Setter Property="BorderBrush" Value="#E99A9A" />
+        </Style>
+        <Style Selector="Button.task-toolbar-btn-danger Path.toolbar-icon-path">
+            <Setter Property="Stroke" Value="#C53B27" />
+        </Style>
+
+        <!-- ============================================================ -->
+        <!-- Creation dialog (popup)                                       -->
+        <!--   Card: white background, 16px corner radius, 720px max width.-->
+        <!--   Used for the "Create from template/direct/intent/document"  -->
+        <!--   flow so it doesn't eat a big chunk of the workspace.        -->
+        <!-- ============================================================ -->
+        <Style Selector="Border.create-dialog-backdrop">
+            <Setter Property="Background" Value="#66000000" />
+        </Style>
+        <Style Selector="Border.create-dialog-card">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Padding" Value="20" />
+            <Setter Property="BorderBrush" Value="#E3E5E9" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BoxShadow" Value="0 12 32 0 #40000000" />
+            <Setter Property="MaxWidth" Value="760" />
+            <Setter Property="MaxHeight" Value="720" />
+        </Style>
+        <Style Selector="TextBlock.create-dialog-title">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#1F2328" />
+        </Style>
+        <Style Selector="TextBlock.create-dialog-subtitle">
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
+            <Setter Property="Foreground" Value="#6E727A" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="Button.create-dialog-mode">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#DCE1E8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.create-dialog-mode:pointerover">
+            <Setter Property="Background" Value="#F3F4F6" />
+            <Setter Property="BorderBrush" Value="#C5C8CE" />
+        </Style>
+        <Style Selector="Button.create-dialog-mode:checked">
+            <Setter Property="Background" Value="#1F2328" />
+            <Setter Property="BorderBrush" Value="#1F2328" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+        </Style>
+        <Style Selector="Button.create-dialog-mode:checked Path.toolbar-icon-path">
+            <Setter Property="Stroke" Value="#FFFFFF" />
+        </Style>
+        <Style Selector="Button.create-dialog-mode:checked Path.toolbar-icon-execute">
+            <Setter Property="Fill" Value="#FFFFFF" />
+        </Style>
+        <Style Selector="Border.create-dialog-body">
+            <Setter Property="Background" Value="#FAFBFC" />
+            <Setter Property="BorderBrush" Value="#E2E5EA" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="14" />
+        </Style>
+        <Style Selector="Button.create-dialog-primary">
+            <Setter Property="Background" Value="#1F2328" />
+            <Setter Property="BorderBrush" Value="#1F2328" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Padding" Value="16,0" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button.create-dialog-primary:pointerover">
+            <Setter Property="Background" Value="#15181D" />
+            <Setter Property="BorderBrush" Value="#15181D" />
+        </Style>
+        <Style Selector="Button.create-dialog-secondary">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#DCE1E8" />
+            <Setter Property="Foreground" Value="#1F2328" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Padding" Value="16,0" />
+        </Style>
+        <Style Selector="Button.create-dialog-secondary:pointerover">
+            <Setter Property="Background" Value="#F3F4F6" />
+            <Setter Property="BorderBrush" Value="#C5C8CE" />
+        </Style>
+
+        <!-- ============================================================ -->
+        <!-- "More" popup menu items                                       -->
+        <!-- ============================================================ -->
+        <Style Selector="Button.more-popup-item">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="#1F2328" />
+            <Setter Property="FontSize" Value="{DynamicResource UiFontSize}" />
+        </Style>
+        <Style Selector="Button.more-popup-item:pointerover">
+            <Setter Property="Background" Value="#F3F4F6" />
+        </Style>
+        <Style Selector="Button.more-popup-item:disabled">
+            <Setter Property="Opacity" Value="0.5" />
         </Style>
     </Application.Styles>
 </Application>

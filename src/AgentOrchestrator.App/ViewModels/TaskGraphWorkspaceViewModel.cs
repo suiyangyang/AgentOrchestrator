@@ -179,6 +179,9 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isGraphMaximized;
 
+    [ObservableProperty]
+    private bool _isCreateDialogVisible;
+
     public event EventHandler<TaskGraphNodeDetailRequest>? NodeDetailRequested;
 
     public IReadOnlyList<TaskNodeKind> NodeKinds { get; } =
@@ -272,6 +275,14 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
 
     public bool IsDocumentMode => SelectedInputMode == TaskGraphInputMode.Document;
 
+    public bool IsTemplateModeSelected => IsTemplateMode;
+
+    public bool IsDirectModeSelected => IsDirectMode;
+
+    public bool IsIntentModeSelected => IsIntentMode;
+
+    public bool IsDocumentModeSelected => IsDocumentMode;
+
     public bool HasSelectedNode => SelectedNode is not null;
 
     public bool HasNoSelectedNode => SelectedNode is null;
@@ -345,6 +356,172 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
         DocumentFilePath = filePath;
         DocumentPreviewText = await _documentReader.ReadAsync(filePath, ct).ConfigureAwait(true);
         SelectedInputMode = TaskGraphInputMode.Document;
+    }
+
+    // ============================================================
+    // Create dialog (popup) flow
+    // ============================================================
+
+    public void BeginCreateDialog(TaskGraphInputMode mode)
+    {
+        SelectedInputMode = mode;
+        IsCreateDialogVisible = true;
+    }
+
+    public void CancelCreateDialog()
+    {
+        IsCreateDialogVisible = false;
+    }
+
+    public async Task ConfirmCreateDialogAsync()
+    {
+        var mode = SelectedInputMode;
+        IsCreateDialogVisible = false;
+        try
+        {
+            switch (mode)
+            {
+                case TaskGraphInputMode.Template:
+                    await CreateTemplateGraphAsync().ConfigureAwait(true);
+                    break;
+                case TaskGraphInputMode.Direct:
+                    await GenerateFromDirectAsync().ConfigureAwait(true);
+                    break;
+                case TaskGraphInputMode.Intent:
+                    await GenerateFromIntentAsync().ConfigureAwait(true);
+                    break;
+                case TaskGraphInputMode.Document:
+                    await GenerateFromDocumentAsync().ConfigureAwait(true);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+        }
+    }
+
+    public void SelectInputModeByName(string name)
+    {
+        SelectedInputMode = name switch
+        {
+            "Template" => TaskGraphInputMode.Template,
+            "Direct" => TaskGraphInputMode.Direct,
+            "Intent" => TaskGraphInputMode.Intent,
+            "Document" => TaskGraphInputMode.Document,
+            _ => SelectedInputMode,
+        };
+    }
+
+    // ============================================================
+    // Pending node flow (drag on empty canvas to spawn a node)
+    // ============================================================
+
+    /// <summary>
+    /// Creates a new "pending" node at the given canvas position. The node
+    /// lives in the graph but is not selectable as a real one until the user
+    /// promotes it (by clicking). Used by the drag-on-empty-canvas gesture.
+    /// </summary>
+    public Task<TaskNode?> BeginPendingNodeDragAsync(double x, double y)
+    {
+        return CreatePendingNodeInternalAsync(x, y, transient: true);
+    }
+
+    /// <summary>
+    /// Creates a real (non-pending) node at the given canvas position. Used
+    /// when the user releases a connection-drag on empty canvas — the
+    /// resulting node becomes the link target.
+    /// </summary>
+    public Task<TaskNode?> CreatePendingNodeAsync(double x, double y)
+    {
+        return CreatePendingNodeInternalAsync(x, y, transient: false);
+    }
+
+    private async Task<TaskNode?> CreatePendingNodeInternalAsync(double x, double y, bool transient)
+    {
+        if (CurrentGraph is null)
+        {
+            // No graph yet — auto-create a blank one so the user has a target.
+            var blank = new TaskGraph
+            {
+                Name = "未命名编排",
+            };
+            blank.Nodes.Add(MakePendingNode(x, y, transient));
+            await ActivateGraphAsync(blank, "已创建新编排。").ConfigureAwait(true);
+            return CurrentGraph?.Nodes.FirstOrDefault();
+        }
+
+        var node = MakePendingNode(x, y, transient);
+        CurrentGraph.Nodes.Add(node);
+        CurrentGraph.RebuildEdges();
+        await _store.SaveAsync(CurrentGraph).ConfigureAwait(true);
+        RefreshGraphSurface();
+        return node;
+    }
+
+    private static TaskNode MakePendingNode(double x, double y, bool transient)
+    {
+        return new TaskNode
+        {
+            Id = $"pending_{Guid.NewGuid():N}",
+            Title = "新节点",
+            Description = "点击此处直接编辑节点内容。",
+            Kind = TaskNodeKind.Execute,
+            Status = TaskNodeStatus.Pending,
+            Position = new NodePosition(Math.Max(20, x), Math.Max(20, y)),
+            IsPending = transient,
+        };
+    }
+
+    public void PromotePendingNode(TaskNode node)
+    {
+        if (!node.IsPending)
+        {
+            return;
+        }
+
+        node.IsPending = false;
+        // Reassign to a "manual_N" id so it doesn't keep the temporary
+        // "pending_*" namespace — but only if the user hasn't edited it.
+        if (CurrentGraph is not null)
+        {
+            node.Id = BuildNextNodeId(CurrentGraph);
+            _ = _store.SaveAsync(CurrentGraph);
+        }
+        StatusText = $"已提升节点 “{node.Title}”。在右侧栏或图上直接编辑其内容。";
+    }
+
+    public async Task FinalizePendingNodeAsync(TaskNode? node, double x, double y)
+    {
+        if (node is null || CurrentGraph is null)
+        {
+            return;
+        }
+
+        // Update position to where the user dragged to.
+        node.Position = new NodePosition(Math.Max(20, x), Math.Max(20, y));
+        await _store.SaveAsync(CurrentGraph).ConfigureAwait(true);
+        RefreshGraphSurface();
+    }
+
+    public async Task ConnectNodesAsync(TaskNode source, TaskNode target)
+    {
+        if (CurrentGraph is null || ReferenceEquals(source, target))
+        {
+            return;
+        }
+
+        if (source.DependsOn.Contains(target.Id))
+        {
+            StatusText = "该依赖已存在。";
+            return;
+        }
+
+        source.DependsOn.Add(target.Id);
+        CurrentGraph.RebuildEdges();
+        await _store.SaveAsync(CurrentGraph).ConfigureAwait(true);
+        RefreshGraphSurface();
+        StatusText = $"已为节点 “{source.Title}” 添加依赖 “{target.Title}”。";
     }
 
     [RelayCommand]
@@ -845,14 +1022,6 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
         SelectedInputMode = mode;
     }
 
-    partial void OnSelectedInputModeChanged(TaskGraphInputMode value)
-    {
-        OnPropertyChanged(nameof(IsTemplateMode));
-        OnPropertyChanged(nameof(IsDirectMode));
-        OnPropertyChanged(nameof(IsIntentMode));
-        OnPropertyChanged(nameof(IsDocumentMode));
-    }
-
     partial void OnSelectedNodeChanged(TaskNode? value)
     {
         OnPropertyChanged(nameof(HasSelectedNode));
@@ -905,6 +1074,23 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
         OnPropertyChanged(nameof(WorkspaceMargin));
         OnPropertyChanged(nameof(GraphSurfaceCornerRadius));
         OnPropertyChanged(nameof(GraphSurfaceBorderThickness));
+    }
+
+    partial void OnSelectedInputModeChanged(TaskGraphInputMode value)
+    {
+        OnPropertyChanged(nameof(IsTemplateMode));
+        OnPropertyChanged(nameof(IsDirectMode));
+        OnPropertyChanged(nameof(IsIntentMode));
+        OnPropertyChanged(nameof(IsDocumentMode));
+        OnPropertyChanged(nameof(IsTemplateModeSelected));
+        OnPropertyChanged(nameof(IsDirectModeSelected));
+        OnPropertyChanged(nameof(IsIntentModeSelected));
+        OnPropertyChanged(nameof(IsDocumentModeSelected));
+    }
+
+    partial void OnIsCreateDialogVisibleChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsCreateDialogVisible));
     }
 
     private async Task ActivateGraphAsync(TaskGraph graph, string statusMessage)
@@ -1071,6 +1257,8 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
             }
 
             GraphEdges.Add(new TaskGraphEdgeViewModel(
+                edge.SourceId,
+                edge.TargetId,
                 source.Position.X + NodeWidth,
                 source.Position.Y + (NodeHeight / 2),
                 target.Position.X,

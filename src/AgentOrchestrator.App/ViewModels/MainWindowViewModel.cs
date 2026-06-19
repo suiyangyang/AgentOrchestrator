@@ -34,6 +34,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private GridLength _leftSidebarExpandedWidth = DefaultLeftSidebarWidth;
     private GridLength _rightSidebarExpandedWidth = DefaultRightSidebarWidth;
     private bool _isRestoringTaskGraphShell;
+    private StartupOptions? _startupOptions;
 
     public MainWindowViewModel(
         ChatWorkspaceViewModel chat,
@@ -92,6 +93,17 @@ public partial class MainWindowViewModel : ViewModelBase
         _ = InitializeAsync();
     }
 
+    /// <summary>
+    /// Optional startup options supplied via command-line flags. When set, the
+    /// shell will auto-open the referenced task graph (and optionally maximize
+    /// the graph workspace) after the sidebar finishes loading.
+    /// </summary>
+    public StartupOptions? StartupOptions
+    {
+        get => _startupOptions;
+        set => _startupOptions = value;
+    }
+
     public ChatWorkspaceViewModel Chat { get; }
     public TaskGraphWorkspaceViewModel TaskGraph { get; }
     public SidebarViewModel Sidebar { get; }
@@ -120,6 +132,15 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool HasConnectedServices => ConnectedServiceCount > 0;
 
+    /// <summary>True when the active workspace is the chat. Drives the right
+    /// sidebar to show the Subagent panel.</summary>
+    public bool IsChatMode => ActiveWorkspace == Chat;
+
+    /// <summary>True when the active workspace is the task graph. Drives the
+    /// right sidebar to show node details + bug report instead of the chat
+    /// subagent panel.</summary>
+    public bool IsTaskGraphMode => ActiveWorkspace == TaskGraph;
+
     /// <summary>The MainWindow sets this on Opened so dialogs and pickers can find it.</summary>
     public IStorageProvider? Storage { get; set; }
 
@@ -145,6 +166,67 @@ public partial class MainWindowViewModel : ViewModelBase
         if (!string.IsNullOrEmpty(settings.LastProjectId))
         {
             Sidebar.RestoreCurrentProject(settings.LastProjectId);
+        }
+
+        // Drive any non-interactive auto-open (e.g. for screenshot tests).
+        if (_startupOptions is { OpenGraphToken: { Length: > 0 } token })
+        {
+            await OpenTaskGraphByTokenAsync(token, _startupOptions.MaximizeGraph).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Resolves a task graph by id / 1-based index / name (same lookup order
+    /// used by the CLI's <c>taskgraph select</c>) and loads it into the graph
+    /// workspace. Optionally maximizes the workspace so the graph fills the
+    /// whole window — this is the canonical "select from sidebar → display in
+    /// graph → fullscreen" flow exercised by tests.
+    /// </summary>
+    public async Task OpenTaskGraphByTokenAsync(string token, bool maximize)
+    {
+        var store = _services.GetRequiredService<Services.TaskGraph.ITaskGraphStore>();
+        Models.TaskGraph.TaskGraph? graph = null;
+
+        // 1) Direct id.
+        graph = await store.LoadAsync(token).ConfigureAwait(true);
+
+        // 2) 1-based index — mirrors `taskgraph list` output.
+        if (graph is null && int.TryParse(token, out var index) && index > 0)
+        {
+            var items = await store.ListAsync().ConfigureAwait(true);
+            if (index <= items.Count)
+            {
+                graph = await store.LoadAsync(items[index - 1].Id).ConfigureAwait(true);
+            }
+        }
+
+        // 3) Name match.
+        if (graph is null)
+        {
+            var items = await store.ListAsync().ConfigureAwait(true);
+            var match = items.FirstOrDefault(x => string.Equals(x.Name, token, StringComparison.OrdinalIgnoreCase))
+                        ?? items.FirstOrDefault(x => x.Name.Contains(token, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+            {
+                graph = await store.LoadAsync(match.Id).ConfigureAwait(true);
+            }
+        }
+
+        if (graph is null)
+        {
+            return;
+        }
+
+        // Ensure sidebar reflects the selected graph and refreshes its tree.
+        await Sidebar.RefreshTaskGraphsAsync().ConfigureAwait(true);
+        Sidebar.SelectTaskGraphCommand.Execute(graph.Id);
+
+        ActiveWorkspace = TaskGraph;
+        await TaskGraph.OpenGraphByIdAsync(graph.Id).ConfigureAwait(true);
+
+        if (maximize && !TaskGraph.IsGraphMaximized)
+        {
+            TaskGraph.ToggleGraphMaximizeCommand.Execute(null);
         }
     }
 
@@ -202,6 +284,8 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnActiveWorkspaceChanged(ViewModelBase value)
     {
         OnPropertyChanged(nameof(ActiveWorkspaceTitle));
+        OnPropertyChanged(nameof(IsChatMode));
+        OnPropertyChanged(nameof(IsTaskGraphMode));
 
         if (value == TaskGraph)
         {

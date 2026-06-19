@@ -125,22 +125,14 @@
 
             <Grid Grid.Row="1" Grid.Column="2" Background="#FBFBFC" IsVisible="{Binding IsRightSidebarVisible}">
                 <Border BorderBrush="#E2E5EA" BorderThickness="1,0,0,0" />
+
+                <!-- ============================================================ -->
+                <!-- Chat-mode right sidebar: Subagent activity                  -->
+                <!-- ============================================================ -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
+                              HorizontalScrollBarVisibility="Disabled"
+                              IsVisible="{Binding IsChatMode}">
                     <StackPanel Margin="16,16,24,16" Spacing="14">
-                        <StackPanel Spacing="10"
-                                    IsVisible="{Binding IsTaskOrchestrationVisible}">
-                            <TextBlock Text="任务编排"
-                                       Classes="right-panel-title" />
-
-                            <Border Classes="right-panel-placeholder">
-                                <TextBlock Text="占位中"
-                                           Classes="right-panel-placeholder-text"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center" />
-                            </Border>
-                        </StackPanel>
-
                         <TextBlock Text="Subagent"
                                    Classes="right-panel-section-title" />
 
@@ -161,6 +153,103 @@
                         <TextBlock Text="当前对话还没有 subagent 消息"
                                    Classes="right-panel-empty"
                                    IsVisible="{Binding !Chat.HasSubagentActivities}" />
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ============================================================ -->
+                <!-- TaskGraph-mode right sidebar: Node details + Bug report     -->
+                <!-- ============================================================ -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              IsVisible="{Binding IsTaskGraphMode}">
+                    <StackPanel Margin="16,16,24,16" Spacing="12">
+                        <TextBlock Text="节点详情" Classes="right-panel-title" />
+                        <TextBlock Text="{Binding TaskGraph.StatusText}"
+                                   Foreground="#6E727A"
+                                   TextWrapping="Wrap" />
+
+                        <!-- Selected node details / inline editor -->
+                        <Border Background="#FFFFFF"
+                                BorderBrush="#E2E5EA"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12">
+                            <Grid>
+                                <StackPanel Spacing="8" IsVisible="{Binding TaskGraph.HasSelectedNode}">
+                                    <TextBlock Text="{Binding TaskGraph.SelectedNode.Title}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding TaskGraph.SelectedNode.StatusText}" Foreground="#2459B8" />
+                                    <TextBlock Text="{Binding TaskGraph.SelectedNode.Description}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding TaskGraph.SelectedNode.OutputSummary}"
+                                               IsVisible="{Binding TaskGraph.SelectedNode.OutputSummary, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
+                                               Foreground="#40444B"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding TaskGraph.SelectedNode.LastError}"
+                                               IsVisible="{Binding TaskGraph.SelectedNode.LastError, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
+                                               Foreground="#C53B27"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Text="节点编辑" FontWeight="SemiBold" Margin="0,8,0,0" />
+                                    <TextBox Text="{Binding TaskGraph.SelectedNodeTitleDraft, Mode=TwoWay}"
+                                             PlaceholderText="节点标题" />
+                                    <TextBox Text="{Binding TaskGraph.SelectedNodeDescriptionDraft, Mode=TwoWay}"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             MinHeight="72"
+                                             PlaceholderText="节点说明" />
+                                    <Button Command="{Binding TaskGraph.SaveSelectedNodeEditsCommand}"
+                                            Content="保存节点编辑" />
+                                    <Button Command="{Binding TaskGraph.OpenNodeDetailCommand}"
+                                            CommandParameter="{Binding TaskGraph.SelectedNode}"
+                                            Content="打开执行详情"
+                                            IsEnabled="{Binding TaskGraph.SelectedNode.CanOpenDetail}" />
+                                </StackPanel>
+                                <TextBlock Text="选择图中的节点后，这里会显示它的执行摘要、错误和产物。"
+                                           Foreground="#9096A0"
+                                           TextWrapping="Wrap"
+                                           IsVisible="{Binding TaskGraph.HasNoSelectedNode}" />
+                            </Grid>
+                        </Border>
+
+                        <!-- Bug report (only for bug-list template) -->
+                        <Border Background="#FFFFFF"
+                                BorderBrush="#E2E5EA"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12"
+                                IsVisible="{Binding TaskGraph.HasBugReport}">
+                            <StackPanel Spacing="8">
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Text="Bug 报告" FontWeight="SemiBold" />
+                                    <Button Grid.Column="1"
+                                            Command="{Binding TaskGraph.ExportBugReportMarkdownCommand}"
+                                            Content="导出 Markdown" />
+                                    <Button Grid.Column="2"
+                                            Command="{Binding TaskGraph.ExportBugReportJsonCommand}"
+                                            Content="导出 JSON" />
+                                </Grid>
+                                <ScrollViewer MaxHeight="340"
+                                              HorizontalScrollBarVisibility="Auto"
+                                              VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding TaskGraph.BugReportRows}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="vm:BugReportRowViewModel">
+                                                <Border BorderBrush="#EEF1F4"
+                                                        BorderThickness="0,0,0,1"
+                                                        Padding="0,0,0,8"
+                                                        Margin="0,0,0,8">
+                                                    <StackPanel Spacing="4">
+                                                        <TextBlock Text="{Binding ProblemDescription}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{Binding ResolvedText, StringFormat=已解决：{0}}" Foreground="#2459B8" />
+                                                        <TextBlock Text="{Binding ReliabilityText, StringFormat=可靠性：{0}}" Foreground="#6E727A" />
+                                                        <TextBlock Text="{Binding Reason, StringFormat=原因：{0}}" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{Binding Verification, StringFormat=验证方案：{0}}" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </Grid>

@@ -48,7 +48,12 @@ public partial class SidebarControl : UserControl
         {
             sidebar.SelectTaskGraphCommand.Execute(vm.Id);
             sidebar.RequestTaskGraphCommand.Execute(null);
-            sidebar.OpenTaskGraphCommand.Execute(vm.Id);
+            // Note: OpenTaskGraphCommand is intentionally NOT executed here.
+            // SelectTaskGraphCommand already triggers OpenGraphByIdAsync via
+            // TaskGraphSelected; firing OpenTaskGraphCommand again kicks off a
+            // second concurrent OpenGraphByIdAsync, which races on
+            // CurrentGraph = ... and RefreshGraphSurface, leaving the ItemsControl
+            // empty even though GraphNodes has 19 entries.
         }
     }
 
