@@ -10,7 +10,9 @@
 - Local persistence: SQLite via `Microsoft.Data.Sqlite`
 - Local DB lives at `{AppContext.BaseDirectory}/Datas/OrchestratorDb.db`
 - User settings (including `LastProjectId`) live at
-  `%LOCALAPPDATA%/AgentOrchestrator/appsettings.local.json`
+  `%LOCALAPPDATA%/AgentOrchestrator/appsettings.local.json`; the layered
+  default flow is `new AppSettings()` → embedded `appsettings.json` (compile-time)
+  → local override file (later wins)
 
 ## Code Layout
 
@@ -36,7 +38,7 @@
   用户主动上拉后不会强制拉回底部，只有接近底部时才继续贴底
 - 输入区主按钮会根据当前草稿状态在“发送”和“停止”之间切换；
   发送过程中按钮仍保持可用，这样既能取消当前回复，也能继续把新草稿加入队列
-- 当流式回复尚未结束时，新的发送请求会先进入输入区上方的可见队列，
+- 当发送管线已经启动但当前回复尚未结束时，新的发送请求会先进入输入区上方的可见队列，
   当前回复完成后按顺序自动续发；队列项支持回填到输入框继续编辑或直接移除
 - Assistant 流式消息在收尾同步远端历史时，必须以按 `partId`
   增量合并为准，不能用一份可能尚未完全落稳的远端块列表直接整包替换
@@ -60,8 +62,9 @@
   `questions / options / custom` 的挂起 question 列表；当前 UI 使用悬浮在主窗口内容区上方的确认面板，
   不再占用标题栏下方的固定布局高度，用户勾选或输入答案后再统一提交
 - `SidebarViewModel` owns the project + session tree, the search
-  overlay state, search result list, current-project focus, and the
-  per-row "..." actions
+  overlay state, search result list, current-project focus, the
+  per-row "..." actions, and the project-session paging state that
+  shows at most 5 chats per project by default
 - `MainWindow.axaml` hosts a 3-column shell with resizable left and
   right sidebars; the center column contains a fixed header area that
   spans the workspace and right sidebar top edge, plus the active
@@ -77,11 +80,27 @@
 - `ChatWorkspaceControl` adds a fixed header strip inside the chat
   workspace for task orchestration and subagent activity
 - `SettingsWindow.axaml` is a fixed-size settings dialog with a left
-  two-level navigation rail. The current top-level groups are `个人`
-  and `集成`; `个人 / 常规` shows a placeholder page, and
-  `集成 / 服务` shows a service list. `OpenCode` exposes enable state,
-  connection status, URL, username, and password; `codex` is present
-  as a disabled placeholder entry.
+  two-level navigation rail. The top-level groups are `个人` and `集成`;
+  the second level currently exposes `常规` (placeholder), `外观` and
+  `服务`. `外观` exposes UI / code font family and font size (in px);
+  `服务` renders one card per integration. `OpenCode` exposes enable
+  state, live connection status, derived URL, username, and password
+  (with show/hide toggle); `codex` is a disabled placeholder entry.
+- 标题栏左侧的服务按钮触发 `MainWindowViewModel` 打开 `SettingsWindow`
+  并直接定位到 `集成 / 服务` 页，与左侧服务卡片形成快速回环
+- Appearance values are read once on app startup and pushed into
+  `Application.Current.Resources["UiFontFamily" | "UiFontSize" |
+  "CodeFontFamily" | "CodeFontSize"]` as DynamicResource tokens, so
+  every view that references those tokens picks up the saved values
+  automatically
+- UI 默认字体链是 `Segoe UI, Microsoft YaHei UI, Microsoft YaHei`，
+  以尽量贴近 Windows 浏览器和系统文本观感；旧配置里若仍保存
+  `Source Han Sans`，加载设置时会自动迁移到这条系统字体链
+- 若要启用嵌入式 Source Han Sans VF 字体，请将
+  `SourceHanSans-VF.otf`（约 32 MB）手动放置到
+  `src/AgentOrchestrator.App/Assets/Fonts/`，然后在
+  `设置 / 外观 / UI 字体` 中填入 `Source Han Sans`。该目录
+  已被 `.gitignore` 排除，避免把可选的大体积 OT 直接签入仓库
 
 ## Binding And Styling
 
@@ -106,6 +125,10 @@
   `TextBlock.sidebar-*` classes (see `App.axaml`)
 - Per-row hover-revealed action buttons: `sidebar-row-action-btn` and
   `sidebar-section-action-btn`
+- Project session list paging buttons: `sidebar-session-page-action`
+- Session rows show at most one compact runtime badge on the left:
+  spinner for streaming, blue dot for completed-but-unviewed, and keep the
+  `...` action hidden until hover
 - "..." menu items: `sidebar-menu-item`
 
 ## CLI Tool

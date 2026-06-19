@@ -379,3 +379,23 @@ FodyWeavers.xsd
 # if a developer copies one into the project tree for debugging.
 **/appsettings.local.json
 appsettings.local.json
+
+# ============================================================
+# Bundled CJK font asset (developer-supplied)
+# ============================================================
+# The default UI font chain (`Segoe UI, Microsoft YaHei UI,
+# Microsoft YaHei`) ships with Windows. To opt in to the embedded
+# `Source Han Sans` font, drop `SourceHanSans-VF.otf` into
+# `src/AgentOrchestrator.App/Assets/Fonts/` and set the appearance
+# font to `Source Han Sans` in Settings. The file is ignored here
+# because the upstream OT is ~32 MB and not appropriate for a
+# default Git checkout.
+src/AgentOrchestrator.App/Assets/Fonts/
+
+# ============================================================
+# Agent working directories (not part of the build)
+# ============================================================
+# `.omo/` holds Sisyphus / orchestrator agent local state (plans,
+# background task output, scratch notes). It is regenerated on every
+# agent run, so it never needs to be checked in.
+.omo/
