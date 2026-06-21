@@ -1034,8 +1034,17 @@ public partial class TaskGraphWorkspaceControl : UserControl
         // Content "follows" the pointer — dragging right by N moves the
         // visible window left by N (which is what makes the content
         // appear to slide right with the cursor).
-        var newX = _panStartScrollOffset.X - delta.X;
-        var newY = _panStartScrollOffset.Y - delta.Y;
+        //
+        // Divide by GraphZoom because the canvas inside the ScrollViewer
+        // carries a ScaleTransform: at 200% zoom, 1 canvas-pixel renders
+        // as 2 screen-pixels, so to move the content by N screen-pixels
+        // we only need to change the offset by N / zoom canvas-pixels.
+        // Without this division, panning at non-100% zoom would feel
+        // accelerated (the further from 100%, the faster the pan).
+        var zoom = _vm?.GraphZoom ?? 1.0;
+        if (zoom <= 0) zoom = 1.0;
+        var newX = _panStartScrollOffset.X - delta.X / zoom;
+        var newY = _panStartScrollOffset.Y - delta.Y / zoom;
         // Clamp to the scrollable range. Avalonia's ScrollViewer exposes
         // this as Extent - Viewport (ScrollableWidth/Height are
         // platform-availability-dependent, so compute it directly).
