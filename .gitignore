@@ -399,3 +399,12 @@ src/AgentOrchestrator.App/Assets/Fonts/
 # background task output, scratch notes). It is regenerated on every
 # agent run, so it never needs to be checked in.
 .omo/
+
+# ============================================================
+# Runtime screenshot output (not part of the build)
+# ============================================================
+# `--render-graph-test` / `--render-drag-test` / `--perf-test`
+# write rendered frames into `src/screenshots/`. The folder is
+# regenerated on every run; only the verification scripts in
+# `scripts/` care about its contents, and they read it locally.
+src/screenshots/
