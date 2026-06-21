@@ -45,12 +45,20 @@ public partial class TaskGraphWorkspaceControl : UserControl
     private Point _panStartPointer;
     private Vector _panStartScrollOffset;
 
+    // Last graph id for which we already reset the scroll viewer to (0, 0).
+    // Used to gate the one-shot scroll reset in RebuildGraphSurface so node
+    // selections (which rebuild the surface) don't yank the viewport back to
+    // the top-left every time the user clicks a card.
+    private string? _lastResetGraphId;
+
     // Visual children synced manually with the ViewModel because Avalonia's
     // ItemsControl + Canvas ItemsPanel does not size / arrange its items
     // correctly in this scenario. We maintain a small lookup so we can
     // remove the right Border when a node is removed from the collection.
     private readonly Dictionary<string, Border> _nodeVisuals = new(StringComparer.Ordinal);
     private readonly Dictionary<string, EdgeVisual> _edgeVisuals = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (Ellipse Input, Ellipse Output)> _portVisuals = new(StringComparer.Ordinal);
+    private TaskGraphEdgeViewModel? _menuEdge;
     private TaskGraphWorkspaceViewModel? _vm;
 
     /// <summary>
@@ -159,12 +167,19 @@ public partial class TaskGraphWorkspaceControl : UserControl
         SyncNodeVisuals();
         SyncEdgeVisuals();
 
-        if (GraphCanvas.Parent is not null)
+        // Only reset the scroll viewer when a NEW graph (one we haven't reset
+        // for yet) is loaded. Without this guard, every node click rebuilds
+        // the surface and re-arms OnFirstLayoutResetScroll, which on the next
+        // layout pass yanks the viewport back to (0, 0). Symptom: scroll right,
+        // click a node → canvas jumps back to the top-left.
+        var currentGraphId = _vm.CurrentGraph?.Id;
+        if (currentGraphId is not null && currentGraphId != _lastResetGraphId)
         {
-            // Reset scroll to (0, 0) whenever a fresh graph is loaded so users
-            // see the top-left of the canvas, not whatever the last focused
-            // node happened to be at.
-            GraphCanvas.LayoutUpdated += OnFirstLayoutResetScroll;
+            _lastResetGraphId = currentGraphId;
+            if (GraphCanvas.Parent is not null)
+            {
+                GraphCanvas.LayoutUpdated += OnFirstLayoutResetScroll;
+            }
         }
     }
 
@@ -209,6 +224,47 @@ public partial class TaskGraphWorkspaceControl : UserControl
             GraphCanvas.Children.Remove(_nodeVisuals[id]);
             _nodeVisuals.Remove(id);
         }
+
+        // Port visuals — overlay children of GraphCanvas, positioned so their
+        // center lands on the line endpoint (same Y as the line's anchor).
+        foreach (var node in _vm.GraphNodes)
+        {
+            if (!_portVisuals.TryGetValue(node.Id, out var ports))
+            {
+                var portKindClass = PortKindClass(node);
+                var inputPort = new Ellipse
+                {
+                    Classes = { "node-connection-point", portKindClass },
+                    Tag = node,
+                };
+                var outputPort = new Ellipse
+                {
+                    Classes = { "node-connection-point", portKindClass },
+                    Tag = node,
+                };
+                outputPort.PointerPressed += OnLinkHandlePointerPressed;
+                _portVisuals[node.Id] = (inputPort, outputPort);
+
+                // Insert behind everything else so the card's white border
+                // shows on top and the half-circle that extends beyond the
+                // card edge is still hit-testable.
+                GraphCanvas.Children.Insert(0, inputPort);
+                GraphCanvas.Children.Insert(0, outputPort);
+
+                ports = (inputPort, outputPort);
+            }
+
+            UpdatePortVisual(ports.Input, ports.Output, node);
+        }
+
+        var portToRemove = _portVisuals.Keys.Where(id => !presentIds.Contains(id)).ToList();
+        foreach (var id in portToRemove)
+        {
+            var (input, output) = _portVisuals[id];
+            GraphCanvas.Children.Remove(input);
+            GraphCanvas.Children.Remove(output);
+            _portVisuals.Remove(id);
+        }
     }
 
     private Border BuildNodeVisual(TaskNode node)
@@ -236,7 +292,8 @@ public partial class TaskGraphWorkspaceControl : UserControl
     {
         Canvas.SetLeft(border, node.Position.X);
         Canvas.SetTop(border, node.Position.Y);
-        border.Background = new SolidColorBrush(Color.Parse(node.NodeBackground));
+        var baseColor = Color.Parse(node.NodeBackground);
+        border.Background = new SolidColorBrush(baseColor);
         border.BorderBrush = new SolidColorBrush(Color.Parse(node.NodeBorderBrush));
 
         // Apply selected / pending style classes.
@@ -244,6 +301,12 @@ public partial class TaskGraphWorkspaceControl : UserControl
         SyncClass(border.Classes, "graph-node-pending", node.IsPending);
 
         border.Child = BuildNodeContent(node);
+
+        // Keep port overlay positions in sync when the node moves.
+        if (_portVisuals.TryGetValue(node.Id, out var ports))
+        {
+            UpdatePortVisual(ports.Input, ports.Output, node);
+        }
     }
 
     private static void SyncClass(Avalonia.Controls.Classes classes, string name, bool present)
@@ -264,51 +327,35 @@ public partial class TaskGraphWorkspaceControl : UserControl
         // Title row.
         var titleRow = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
             ColumnSpacing = 8,
         };
-        titleRow.Children.Add(new Ellipse
-        {
-            Width = 12,
-            Height = 12,
-            Fill = new SolidColorBrush(Color.Parse("#D6DEEA")),
-            VerticalAlignment = VerticalAlignment.Center,
-        });
         var titleText = new TextBlock
         {
             FontWeight = FontWeight.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             [!TextBlock.TextProperty] = new Binding("Title"),
         };
-        Grid.SetColumn(titleText, 1);
+        Grid.SetColumn(titleText, 0);
         titleRow.Children.Add(titleText);
         var statusText = new TextBlock
         {
             Foreground = new SolidColorBrush(Color.Parse("#6E727A")),
             [!TextBlock.TextProperty] = new Binding("StatusText"),
         };
-        Grid.SetColumn(statusText, 2);
+        Grid.SetColumn(statusText, 1);
         titleRow.Children.Add(statusText);
         Grid.SetRow(titleRow, 0);
         root.Children.Add(titleRow);
 
         // Kind row.
-        var kindRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var kindRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*") };
         var kindText = new TextBlock
         {
             Foreground = new SolidColorBrush(Color.Parse("#2459B8")),
             [!TextBlock.TextProperty] = new Binding("Kind"),
         };
         kindRow.Children.Add(kindText);
-        var kindDot = new Ellipse
-        {
-            Width = 12,
-            Height = 12,
-            Fill = new SolidColorBrush(Color.Parse("#2459B8")),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(kindDot, 1);
-        kindRow.Children.Add(kindDot);
         Grid.SetRow(kindRow, 1);
         root.Children.Add(kindRow);
 
@@ -340,35 +387,17 @@ public partial class TaskGraphWorkspaceControl : UserControl
         Grid.SetRow(output, 3);
         root.Children.Add(output);
 
-        // Action row — left INPUT port + detail button + right OUTPUT port.
-        // Layout: [Auto port-in][* spacer][Auto detail-btn][Auto port-out]
-        // The right port is the drag source for new edges (matches the
-        // existing OnLinkHandlePointerPressed flow). The left port is the
-        // matching visual sink so each card shows both endpoints of its
-        // data-flow contract — the requirement driving this layout is
-        // "卡片两侧需要各有一个点来连接曲线; 左侧的点代表输入, 右侧的点代表输出"
-        // from the 2026-06-20 fix doc.
+        // Action row — detail button only (ports are now overlay children
+        // of GraphCanvas, positioned via Canvas.Left/Top).
         var actions = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"),
+            ColumnDefinitions = new ColumnDefinitions("*"),
         };
-
-        var portKindClass = $"port-port-{KindToCssClass(node.Kind)}";
-
-        var inputPort = new Ellipse
-        {
-            Classes = { "node-connection-point", portKindClass },
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Left,
-        };
-        ToolTip.SetTip(inputPort, $"输入端口 · {TaskNodePortStyle.For(node.Kind).Label}");
-        inputPort.Tag = node;
-        Grid.SetColumn(inputPort, 0);
-        actions.Children.Add(inputPort);
 
         var detailBtn = new Button
         {
             Classes = { "task-toolbar-btn" },
+            HorizontalAlignment = HorizontalAlignment.Center,
             [!Button.CommandParameterProperty] = new Binding(),
         };
         ToolTip.SetTip(detailBtn, "打开执行详情");
@@ -380,20 +409,8 @@ public partial class TaskGraphWorkspaceControl : UserControl
             },
         });
         detailBtn.Bind(Button.IsEnabledProperty, new Binding("CanOpenDetail"));
-        Grid.SetColumn(detailBtn, 2);
+        Grid.SetColumn(detailBtn, 0);
         actions.Children.Add(detailBtn);
-
-        var outputPort = new Ellipse
-        {
-            Classes = { "node-connection-point", portKindClass },
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Right,
-        };
-        ToolTip.SetTip(outputPort, "输出端口 — 从此处拖动以连接其他节点");
-        outputPort.PointerPressed += OnLinkHandlePointerPressed;
-        outputPort.Tag = node;
-        Grid.SetColumn(outputPort, 3);
-        actions.Children.Add(outputPort);
 
         Grid.SetRow(actions, 4);
         root.Children.Add(actions);
@@ -415,6 +432,22 @@ public partial class TaskGraphWorkspaceControl : UserControl
         TaskNodeKind.HumanInput => "humaninput",
         _ => "execute",
     };
+
+    private static string PortKindClass(TaskNode node) => $"port-port-{KindToCssClass(node.Kind)}";
+
+    private static void UpdatePortVisual(Ellipse inputPort, Ellipse outputPort, TaskNode node)
+    {
+        var y = node.Position.Y + TaskNodePortStyle.PortAnchorOffsetY;
+        // Width/Height = 11 from the Ellipse.node-connection-point style.
+        // Center the port on the card edge so its inner half sits over the
+        // card surface (and is drawn underneath the card's border) while
+        // its outer half is still hit-testable as the drag source/target.
+        const double half = 5.5;
+        Canvas.SetLeft(inputPort, node.Position.X - half);
+        Canvas.SetTop(inputPort, y - half);
+        Canvas.SetLeft(outputPort, node.Position.X + NodeWidth - half);
+        Canvas.SetTop(outputPort, y - half);
+    }
 
     private void SyncEdgeVisuals()
     {
@@ -488,7 +521,9 @@ public partial class TaskGraphWorkspaceControl : UserControl
             Classes = { "graph-edge-midpoint" },
             Width = MidpointSize,
             Height = MidpointSize,
+            Tag = edge,
         };
+        mid.PointerPressed += OnEdgeMidpointPointerPressed;
         var visual = new EdgeVisual { Path = path, Mid = mid };
         ApplyEdgeStyle(visual, edge, isHighlighted);
         return visual;
@@ -829,6 +864,7 @@ public partial class TaskGraphWorkspaceControl : UserControl
         _linkHandleEllipse = null;
         _linkSourceNode = null;
         _linkTargetNode = null;
+        _menuEdge = null;
         UpdateLinkTargetHighlight(null);
     }
 
@@ -1058,15 +1094,36 @@ public partial class TaskGraphWorkspaceControl : UserControl
     }
 
     /// <summary>
-    /// Edge midpoint popup "delete edge" click handler. Stub: the real
-    /// wiring lives in the control's <c>OnEdgeMidpointPointerPressed</c>
-    /// path which drives the VM directly. Forwarding here too would race
-    /// on the selected edge, so the click handler is intentionally a
-    /// no-op (the popup is dismissed by the caller after the VM action).
+    /// Opens the edge action menu when the mid-edge dot is clicked.
     /// </summary>
-    private void OnDeleteEdgeMenuItemClick(object? sender, RoutedEventArgs e)
+    private void OnEdgeMidpointPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        // Intentionally no-op.
+        if (sender is not Ellipse ellipse || ellipse.Tag is not TaskGraphEdgeViewModel edge || _vm is null)
+        {
+            return;
+        }
+
+        _menuEdge = edge;
+        // EdgeActionMenu uses Placement="Pointer" so it appears at the click
+        // position automatically.
+        EdgeActionMenu.IsOpen = true;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Edge midpoint popup "delete edge" click handler.
+    /// </summary>
+    private async void OnDeleteEdgeMenuItemClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm is null || _menuEdge is null)
+        {
+            return;
+        }
+
+        var edge = _menuEdge;
+        _menuEdge = null;
+        EdgeActionMenu.IsOpen = false;
+        await _vm.RemoveEdgeAsync(edge).ConfigureAwait(true);
     }
 
     private void OnCreateFromTemplateClick(object? sender, RoutedEventArgs e)

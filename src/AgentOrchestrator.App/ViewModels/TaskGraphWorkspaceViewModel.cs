@@ -782,6 +782,34 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
         }).ConfigureAwait(true);
     }
 
+    [RelayCommand]
+    public async Task RemoveEdgeAsync(TaskGraphEdgeViewModel? edge)
+    {
+        if (CurrentGraph is null || edge is null)
+        {
+            return;
+        }
+
+        await ExecuteBusyAsync(async () =>
+        {
+            var source = CurrentGraph.Nodes.FirstOrDefault(n => n.Id == edge.SourceId);
+            var target = CurrentGraph.Nodes.FirstOrDefault(n => n.Id == edge.TargetId);
+            if (source is null || target is null)
+            {
+                return;
+            }
+
+            // Semantic: target depends on source. Drop the corresponding
+            // DependsOn entry, then rebuild the edge list so the visual
+            // surface picks up the deletion.
+            target.DependsOn.Remove(source.Id);
+            CurrentGraph.RebuildEdges();
+            await _store.SaveAsync(CurrentGraph).ConfigureAwait(true);
+            RefreshGraphSurface();
+            StatusText = $"已删除连线 \u201C{source.Title} \u2192 {target.Title}\u201D\u3002";
+        }).ConfigureAwait(true);
+    }
+
     public void PreviewNodeMove(TaskNode node, double x, double y)
     {
         if (CurrentGraph is null)
