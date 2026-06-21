@@ -35,7 +35,6 @@ public partial class TaskGraphWorkspaceControl : UserControl
     private TaskNode? _linkSourceNode;
     private TaskNode? _linkTargetNode;
     private Path? _linkPreviewPath;
-    private Polygon? _linkPreviewArrow;
     private Border? _linkPreviewTargetHighlight;
 
     // Pan (drag on empty canvas → scrolls the underlying ScrollViewer).
@@ -63,7 +62,6 @@ public partial class TaskGraphWorkspaceControl : UserControl
     private sealed class EdgeVisual
     {
         public Path Path { get; init; } = null!;
-        public Polygon Arrow { get; init; } = null!;
         public Ellipse Mid { get; init; } = null!;
     }
 
@@ -448,10 +446,9 @@ public partial class TaskGraphWorkspaceControl : UserControl
             {
                 var visual = CreateEdgeVisual(edge, isHighlighted);
                 _edgeVisuals[id] = visual;
-                // Insert order: Path (back) → Arrow (mid) → Mid dot (front).
+                // Insert order: Path (back) → Mid dot (front).
                 GraphCanvas.Children.Insert(0, visual.Path);
-                GraphCanvas.Children.Insert(1, visual.Arrow);
-                GraphCanvas.Children.Insert(2, visual.Mid);
+                GraphCanvas.Children.Insert(1, visual.Mid);
             }
         }
 
@@ -461,7 +458,6 @@ public partial class TaskGraphWorkspaceControl : UserControl
             if (_edgeVisuals.TryGetValue(id, out var visual))
             {
                 GraphCanvas.Children.Remove(visual.Path);
-                GraphCanvas.Children.Remove(visual.Arrow);
                 GraphCanvas.Children.Remove(visual.Mid);
             }
             _edgeVisuals.Remove(id);
@@ -487,18 +483,13 @@ public partial class TaskGraphWorkspaceControl : UserControl
             Classes = { "graph-edge" },
             Data = BuildBezierGeometry(edge.StartPoint, edge.EndPoint),
         };
-        var arrow = new Polygon
-        {
-            Classes = { "graph-edge-arrow" },
-            Points = BuildArrowheadPoints(edge.EndPoint, edge.StartPoint, ArrowSize),
-        };
         var mid = new Ellipse
         {
             Classes = { "graph-edge-midpoint" },
             Width = MidpointSize,
             Height = MidpointSize,
         };
-        var visual = new EdgeVisual { Path = path, Arrow = arrow, Mid = mid };
+        var visual = new EdgeVisual { Path = path, Mid = mid };
         ApplyEdgeStyle(visual, edge, isHighlighted);
         return visual;
     }
@@ -514,7 +505,6 @@ public partial class TaskGraphWorkspaceControl : UserControl
         bool isHighlighted)
     {
         visual.Path.Data = BuildBezierGeometry(edge.StartPoint, edge.EndPoint);
-        visual.Arrow.Points = BuildArrowheadPoints(edge.EndPoint, edge.StartPoint, ArrowSize);
 
         // Mid-edge hit-test dot at the Bezier midpoint. Must use the
         // 4-arg EvaluateBezier overload — the 3-arg one falls back to
@@ -537,7 +527,6 @@ public partial class TaskGraphWorkspaceControl : UserControl
     {
         SyncClass(visual.Path.Classes, "graph-edge", !isHighlighted);
         SyncClass(visual.Path.Classes, "graph-edge-highlighted", isHighlighted);
-        SyncClass(visual.Arrow.Classes, "graph-edge-arrow-highlighted", isHighlighted);
 
         // Stroke / fill are set programmatically (the styles in App.axaml
         // only carry the thickness / dash defaults). Source-kind color
@@ -547,13 +536,11 @@ public partial class TaskGraphWorkspaceControl : UserControl
             ? new SolidColorBrush(Color.Parse("#FF6A00"))
             : new SolidColorBrush(Color.Parse(edge.SourcePortColors.FillHex));
         visual.Path.Stroke = strokeBrush;
-        visual.Arrow.Fill = strokeBrush;
         visual.Mid.Fill = strokeBrush;
     }
 
     // ── Bezier geometry helpers ─────────────────────────────────────
 
-    private const double ArrowSize = 9.0;
     private const double MidpointSize = 9.0;
     private const double BezierHandleScale = 0.55; // ComfyUI-style horizontal handles
 
@@ -612,49 +599,6 @@ public partial class TaskGraphWorkspaceControl : UserControl
     // but kept so future callers can hit a midpoint without computing
     // c1/c2 twice.
     private static readonly Point BezierEndFallback = new(0, 0);
-
-    /// <summary>
-    /// Build a triangular arrowhead at <paramref name="tip"/> pointing
-    /// away from <paramref name="from"/>. The triangle is symmetric about
-    /// the (tip→from) axis with width <paramref name="size"/>. Returned
-    /// as a <see cref="Points"/> collection suitable for
-    /// <see cref="Polygon.Points"/>.
-    /// </summary>
-    private static List<Point> BuildArrowheadPoints(Point tip, Point from, double size)
-    {
-        var dx = tip.X - from.X;
-        var dy = tip.Y - from.Y;
-        var len = Math.Sqrt(dx * dx + dy * dy);
-        if (len < 0.0001)
-        {
-            // Degenerate (zero-length) edge — collapse to a tiny triangle
-            // around the tip so we still render something rather than
-            // throwing.
-            return new List<Point>
-            {
-                new(tip.X - size / 2, tip.Y - size / 2),
-                new(tip.X + size / 2, tip.Y - size / 2),
-                tip,
-            };
-        }
-
-        // Unit vector tip → from (i.e. backward along the curve).
-        var ux = -dx / len;
-        var uy = -dy / len;
-        // Perpendicular for the base width.
-        var px = -uy;
-        var py = ux;
-
-        var baseX = tip.X + ux * size;
-        var baseY = tip.Y + uy * size;
-        var halfW = size * 0.55;
-        return new List<Point>
-        {
-            tip,
-            new(baseX + px * halfW, baseY + py * halfW),
-            new(baseX - px * halfW, baseY - py * halfW),
-        };
-    }
 
     // ============================================================
     // Document picker (for the create-from-document dialog body)
@@ -801,13 +745,11 @@ public partial class TaskGraphWorkspaceControl : UserControl
             var srcY = _linkSourceNode.Position.Y + TaskNodePortStyle.PortAnchorOffsetY;
             var srcPoint = new Point(srcX, srcY);
             _linkPreviewPath!.Data = BuildBezierGeometry(srcPoint, point);
-            _linkPreviewArrow!.Points = BuildArrowheadPoints(point, srcPoint, ArrowSize);
             // Preview stroke / fill inherit the source port color so the
             // user can predict what the committed edge will look like.
             var previewBrush = new SolidColorBrush(Color.Parse(
                 TaskNodePortStyle.For(_linkSourceNode.Kind).FillHex));
             _linkPreviewPath.Stroke = previewBrush;
-            _linkPreviewArrow.Fill = previewBrush;
 
             _linkTargetNode = FindNodeAt(point);
             UpdateLinkTargetHighlight(_linkTargetNode);
@@ -836,15 +778,6 @@ public partial class TaskGraphWorkspaceControl : UserControl
                 Classes = { "graph-link-preview" },
             };
             GraphCanvas.Children.Insert(0, _linkPreviewPath);
-        }
-
-        if (_linkPreviewArrow is null)
-        {
-            _linkPreviewArrow = new Polygon
-            {
-                Classes = { "graph-edge-arrow" },
-            };
-            GraphCanvas.Children.Insert(1, _linkPreviewArrow);
         }
     }
 
@@ -892,12 +825,7 @@ public partial class TaskGraphWorkspaceControl : UserControl
         {
             GraphCanvas.Children.Remove(_linkPreviewPath);
         }
-        if (_linkPreviewArrow is not null && GraphCanvas is not null)
-        {
-            GraphCanvas.Children.Remove(_linkPreviewArrow);
-        }
         _linkPreviewPath = null;
-        _linkPreviewArrow = null;
         _linkHandleEllipse = null;
         _linkSourceNode = null;
         _linkTargetNode = null;
