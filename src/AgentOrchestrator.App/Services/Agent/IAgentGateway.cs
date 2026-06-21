@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -5,6 +6,21 @@ using AgentOrchestrator.App.Models.Chat;
 using AgentOrchestrator.App.Models.Sidebar;
 
 namespace AgentOrchestrator.App.Services.Agent;
+
+/// <summary>Event args for agent connectivity / HTTP errors surfaced to UI.</summary>
+public sealed class AgentErrorEventArgs : EventArgs
+{
+    public string Operation { get; }
+    public string UserMessage { get; }
+    public Exception Exception { get; }
+
+    public AgentErrorEventArgs(string operation, string userMessage, Exception exception)
+    {
+        Operation = operation;
+        UserMessage = userMessage;
+        Exception = exception;
+    }
+}
 
 /// <summary>Request payload for sending a message to a known Agent session.</summary>
 public sealed record ChatRequest(
@@ -32,6 +48,12 @@ public interface IAgentGateway
 {
     /// <summary>Identifier for the active backend (e.g. "opencode").</summary>
     string AgentKind { get; }
+
+    /// <summary>Fired when a public method throws due to connectivity / HTTP error.</summary>
+    event EventHandler<AgentErrorEventArgs>? AgentErrorOccurred;
+
+    /// <summary>Report an agent connectivity error from outside the gateway (ViewModel side-effect).</summary>
+    void ReportAgentError(string operation, Exception ex);
 
     /// <summary>
     /// Creates a new Agent session rooted at <paramref name="request"/>.<see cref="SessionCreateRequest.WorkingDirectory"/>.

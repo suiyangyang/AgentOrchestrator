@@ -18,6 +18,17 @@ public sealed class NotImplementedAgentGateway : IAgentGateway
 {
     public string AgentKind => "not-implemented";
 
+    /// <inheritdoc />
+    public event EventHandler<AgentErrorEventArgs>? AgentErrorOccurred;
+
+    /// <inheritdoc />
+    public void ReportAgentError(string operation, Exception ex)
+    {
+        // No-op: this gateway never performs real I/O, so connectivity
+        // errors cannot originate here. The event is declared to satisfy
+        // the interface contract.
+    }
+
     public Task<string> CreateSessionAsync(
         SessionCreateRequest request,
         CancellationToken ct = default)

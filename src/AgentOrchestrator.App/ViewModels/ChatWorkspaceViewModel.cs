@@ -467,9 +467,23 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         try
         {
             var nextWindowSize = ComputeNextHistoryWindowSize(state.HistoryWindowSize);
-            var remote = await _agent
-                .GetMessagesAsync(state.AgentSessionId, limit: nextWindowSize, ct)
-                .ConfigureAwait(true);
+            IReadOnlyList<RemoteMessage> remote;
+            try
+            {
+                remote = await _agent
+                    .GetMessagesAsync(state.AgentSessionId, limit: nextWindowSize, ct)
+                    .ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                // Surface upstream HTTP errors (e.g. 502) so loading older history doesn't crash the UI.
+                state.HasOlderHistory = false;
+                if (ReferenceEquals(state, _activeState))
+                {
+                    StatusMessage = $"加载更多历史消息失败: {ex.Message}";
+                }
+                return false;
+            }
 
             var mapped = remote.Select(MapRemoteMessage).ToList();
             var existingIds = new HashSet<string>(state.Messages.Select(m => m.Id), StringComparer.Ordinal);
@@ -660,6 +674,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            _agent.ReportAgentError("发送消息", ex);
             assistantMessage.StreamingStatusText = $"发送失败:{ex.Message}";
         }
         finally
@@ -890,6 +905,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            _agent.ReportAgentError("提交问题答案", ex);
             PendingQuestionStatus = $"提交失败:{ex.Message}";
         }
     }
@@ -928,9 +944,26 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             return;
         }
 
-        var remote = await _agent
-            .GetMessagesAsync(state.AgentSessionId, limit: InitialHistoryWindowSize, ct)
-            .ConfigureAwait(true);
+        IReadOnlyList<RemoteMessage> remote;
+        try
+        {
+            remote = await _agent
+                .GetMessagesAsync(state.AgentSessionId, limit: InitialHistoryWindowSize, ct)
+                .ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            // Surface upstream HTTP errors (e.g. 502) so opening a session doesn't crash the UI.
+            state.HistoryWindowSize = 0;
+            state.HasOlderHistory = false;
+            state.IsLoadingOlderHistory = false;
+            if (ReferenceEquals(state, _activeState))
+            {
+                StatusMessage = $"加载历史消息失败: {ex.Message}";
+                NotifyHistoryStateChanged();
+            }
+            return;
+        }
 
         foreach (var msg in remote)
         {

@@ -35,6 +35,8 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
     private readonly OpenCodeClient _client;
     private readonly bool _ownsClient;
 
+    public event EventHandler<AgentErrorEventArgs>? AgentErrorOccurred;
+
     public OpenCodeAgentGateway(OpenCodeClient client, bool ownsClient = false)
     {
         _client = client;
@@ -50,34 +52,113 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
 
     public string AgentKind => "opencode";
 
+    /// <inheritdoc />
+    public void ReportAgentError(string operation, Exception ex)
+        => ReportError(operation, ex);
+
+    private void ReportError(string operation, Exception ex)
+    {
+        var userMessage = TranslateError(operation, ex);
+        AgentErrorOccurred?.Invoke(this, new AgentErrorEventArgs(operation, userMessage, ex));
+    }
+
+    private static string TranslateError(string operation, Exception ex)
+    {
+        if (ex is HttpRequestException hre)
+        {
+            var msg = hre.Message;
+            // Match the first 3-digit status code in the message.
+            if (TryMatchStatus(msg, "502", out var m502)) return m502;
+            if (TryMatchStatus(msg, "503", out var m503)) return m503;
+            if (TryMatchStatus(msg, "504", out var m504)) return m504;
+            if (TryMatchStatus(msg, "500", out var m500)) return m500;
+
+            // Connection refused / unreachable.
+            if (msg.Contains("Connection refused", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("无法连接", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("No connection could be made", StringComparison.OrdinalIgnoreCase))
+            {
+                return "无法连接 Agent 服务。请确认 OpenCode 已启动并可在设置中访问。";
+            }
+
+            return $"无法连接 Agent 服务。请确认 OpenCode 已启动并可在设置中访问。";
+        }
+
+        if (ex is TaskCanceledException && ex is not OperationCanceledException)
+        {
+            return "Agent 服务响应超时。";
+        }
+
+        return $"{operation}失败: {ex.Message}";
+    }
+
+    private static bool TryMatchStatus(string message, string code, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? result)
+    {
+        var idx = message.IndexOf(code, StringComparison.Ordinal);
+        if (idx < 0) { result = null; return false; }
+        // Ensure it's a standalone 3-digit code, not part of a longer number.
+        var before = idx > 0 ? (char?)message[idx - 1] : null;
+        var after = idx + 3 < message.Length ? (char?)message[idx + 3] : null;
+        if (before is >= '0' and <= '9' || after is >= '0' and <= '9')
+        {
+            result = null;
+            return false;
+        }
+        result = code switch
+        {
+            "502" => "Agent 服务返回 502（Bad Gateway），可能是上游 LLM provider 不可达。请稍后重试或检查网络。",
+            "503" => "Agent 服务暂不可用（503 Service Unavailable），请稍后重试。",
+            "504" => "Agent 服务响应超时（504 Gateway Timeout）。",
+            "500" => "Agent 服务内部错误（500）。",
+            _ => null,
+        };
+        return result is not null;
+    }
+
     public async Task<string> CreateSessionAsync(
         SessionCreateRequest request,
         CancellationToken ct = default)
     {
-        var body = new OcSessionCreateRequest
+        try
         {
-            Title = request.Title,
-        };
-        var created = await _client.Sessions
-            .CreateAsync(body, directory: request.WorkingDirectory, ct: ct)
-            .ConfigureAwait(false);
-        return created.Id;
+            var body = new OcSessionCreateRequest
+            {
+                Title = request.Title,
+            };
+            var created = await _client.Sessions
+                .CreateAsync(body, directory: request.WorkingDirectory, ct: ct)
+                .ConfigureAwait(false);
+            return created.Id;
+        }
+        catch (Exception ex)
+        {
+            ReportError("创建会话", ex);
+            throw;
+        }
     }
 
     public async Task<IReadOnlyList<RemoteSessionInfo>> ListSessionsAsync(
         CancellationToken ct = default)
     {
-        var list = await _client.Sessions.ListAsync(directory: null, ct: ct).ConfigureAwait(false);
-        var result = new List<RemoteSessionInfo>(list.Count);
-        foreach (var s in list)
+        try
         {
-            result.Add(new RemoteSessionInfo(
-                AgentSessionId: s.Id,
-                Title: s.Title,
-                CreatedAt: s.Time.Created,
-                UpdatedAt: s.Time.Updated));
+            var list = await _client.Sessions.ListAsync(directory: null, ct: ct).ConfigureAwait(false);
+            var result = new List<RemoteSessionInfo>(list.Count);
+            foreach (var s in list)
+            {
+                result.Add(new RemoteSessionInfo(
+                    AgentSessionId: s.Id,
+                    Title: s.Title,
+                    CreatedAt: s.Time.Created,
+                    UpdatedAt: s.Time.Updated));
+            }
+            return result;
         }
-        return result;
+        catch (Exception ex)
+        {
+            ReportError("列出会话", ex);
+            throw;
+        }
     }
 
     public async Task DeleteSessionAsync(
@@ -92,85 +173,114 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         {
             // Idempotent: missing session is not an error.
         }
+        catch (Exception ex)
+        {
+            ReportError("删除会话", ex);
+            throw;
+        }
     }
 
     public async Task<string> GetSessionTitleAsync(
         string agentSessionId,
         CancellationToken ct = default)
     {
-        var s = await _client.Sessions
-            .GetAsync(agentSessionId, directory: null, ct: ct)
-            .ConfigureAwait(false);
-        return s.Title ?? string.Empty;
+        try
+        {
+            var s = await _client.Sessions
+                .GetAsync(agentSessionId, directory: null, ct: ct)
+                .ConfigureAwait(false);
+            return s.Title ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            ReportError("获取会话标题", ex);
+            throw;
+        }
     }
 
     public async Task<IReadOnlyList<SubagentActivitySnapshot>> GetSubagentActivitiesAsync(
         string agentSessionId,
         CancellationToken ct = default)
     {
-        var session = await _client.Sessions
-            .GetAsync(agentSessionId, directory: null, ct: ct)
-            .ConfigureAwait(false);
-
-        var children = await _client.Sessions
-            .ChildrenAsync(agentSessionId, directory: session.Directory, ct: ct)
-            .ConfigureAwait(false);
-        var statuses = await _client.Sessions
-            .StatusAsync(directory: session.Directory, ct: ct)
-            .ConfigureAwait(false);
-
-        var result = new List<SubagentActivitySnapshot>(children.Count);
-        foreach (var child in children.OrderByDescending(x => x.Time.Updated))
+        try
         {
-            statuses.TryGetValue(child.Id, out var status);
-            var details = await GetSubagentDetailsAsync(child.Id, session.Directory, child.Time.Created, child.Time.Updated, ct)
+            var session = await _client.Sessions
+                .GetAsync(agentSessionId, directory: null, ct: ct)
                 .ConfigureAwait(false);
-            result.Add(new SubagentActivitySnapshot(
-                SessionId: child.Id,
-                Title: string.IsNullOrWhiteSpace(child.Title) ? child.Id : child.Title,
-                StatusText: ResolveSessionStatusText(status),
-                AgentName: details.AgentName,
-                ModelName: details.ModelName,
-                Content: details.Content,
-                IsBusy: status is SessionStatusBusy or SessionStatusRetry,
-                DurationMs: details.DurationMs,
-                UpdatedAt: child.Time.Updated));
-        }
 
-        return result;
+            var children = await _client.Sessions
+                .ChildrenAsync(agentSessionId, directory: session.Directory, ct: ct)
+                .ConfigureAwait(false);
+            var statuses = await _client.Sessions
+                .StatusAsync(directory: session.Directory, ct: ct)
+                .ConfigureAwait(false);
+
+            var result = new List<SubagentActivitySnapshot>(children.Count);
+            foreach (var child in children.OrderByDescending(x => x.Time.Updated))
+            {
+                statuses.TryGetValue(child.Id, out var status);
+                var details = await GetSubagentDetailsAsync(child.Id, session.Directory, child.Time.Created, child.Time.Updated, ct)
+                    .ConfigureAwait(false);
+                result.Add(new SubagentActivitySnapshot(
+                    SessionId: child.Id,
+                    Title: string.IsNullOrWhiteSpace(child.Title) ? child.Id : child.Title,
+                    StatusText: ResolveSessionStatusText(status),
+                    AgentName: details.AgentName,
+                    ModelName: details.ModelName,
+                    Content: details.Content,
+                    IsBusy: status is SessionStatusBusy or SessionStatusRetry,
+                    DurationMs: details.DurationMs,
+                    UpdatedAt: child.Time.Updated));
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            ReportError("获取子 Agent 活动", ex);
+            throw;
+        }
     }
 
     public async Task<IReadOnlyList<AgentQuestionRequest>> GetPendingQuestionsAsync(
         string agentSessionId,
         CancellationToken ct = default)
     {
-        var session = await _client.Sessions
-            .GetAsync(agentSessionId, directory: null, ct: ct)
-            .ConfigureAwait(false);
-        var questions = await _client.Sessions
-            .QuestionsAsync(agentSessionId, directory: session.Directory, ct: ct)
-            .ConfigureAwait(false);
-
-        var result = new List<AgentQuestionRequest>(questions.Count);
-        foreach (var question in questions)
+        try
         {
-            result.Add(new AgentQuestionRequest(
-                question.Id,
-                question.Title,
-                question.Questions.Select(q => new AgentQuestionItem(
-                    q.Id,
-                    q.Header,
-                    q.Question,
-                    q.Multiple,
-                    q.Custom,
-                    q.Options.Select(o => new AgentQuestionOption(
-                        o.Label,
-                        o.Description,
-                        o.Value?.ToString())).ToArray()
-                )).ToArray()));
-        }
+            var session = await _client.Sessions
+                .GetAsync(agentSessionId, directory: null, ct: ct)
+                .ConfigureAwait(false);
+            var questions = await _client.Sessions
+                .QuestionsAsync(agentSessionId, directory: session.Directory, ct: ct)
+                .ConfigureAwait(false);
 
-        return result;
+            var result = new List<AgentQuestionRequest>(questions.Count);
+            foreach (var question in questions)
+            {
+                result.Add(new AgentQuestionRequest(
+                    question.Id,
+                    question.Title,
+                    question.Questions.Select(q => new AgentQuestionItem(
+                        q.Id,
+                        q.Header,
+                        q.Question,
+                        q.Multiple,
+                        q.Custom,
+                        q.Options.Select(o => new AgentQuestionOption(
+                            o.Label,
+                            o.Description,
+                            o.Value?.ToString())).ToArray()
+                    )).ToArray()));
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            ReportError("获取待回答问题", ex);
+            throw;
+        }
     }
 
     public async Task SubmitQuestionAnswerAsync(
@@ -179,13 +289,21 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         IReadOnlyList<IReadOnlyList<string>> answers,
         CancellationToken ct = default)
     {
-        var session = await _client.Sessions
-            .GetAsync(agentSessionId, directory: null, ct: ct)
-            .ConfigureAwait(false);
+        try
+        {
+            var session = await _client.Sessions
+                .GetAsync(agentSessionId, directory: null, ct: ct)
+                .ConfigureAwait(false);
 
-        await _client.Sessions
-            .ReplyQuestionAsync(agentSessionId, requestId, new QuestionReplyRequest { Answers = answers }, directory: session.Directory, ct: ct)
-            .ConfigureAwait(false);
+            await _client.Sessions
+                .ReplyQuestionAsync(agentSessionId, requestId, new QuestionReplyRequest { Answers = answers }, directory: session.Directory, ct: ct)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            ReportError("提交问题答案", ex);
+            throw;
+        }
     }
 
     public async Task<IReadOnlyList<RemoteMessage>> GetMessagesAsync(
@@ -193,34 +311,67 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         int? limit = null,
         CancellationToken ct = default)
     {
-        var messages = await _client.Sessions
-            .MessagesAsync(agentSessionId, limit: limit, directory: null, ct: ct)
-            .ConfigureAwait(false);
-
-        var result = new List<RemoteMessage>(messages.Count);
-        foreach (var mp in messages)
+        try
         {
-            var role = ResolveRole(mp.Info);
-            if (role is null) continue;
+            var messages = await _client.Sessions
+                .MessagesAsync(agentSessionId, limit: limit, directory: null, ct: ct)
+                .ConfigureAwait(false);
 
-            var blocks = new List<RemoteBlock>();
-            foreach (var p in mp.Parts)
+            var result = new List<RemoteMessage>(messages.Count);
+            foreach (var mp in messages)
             {
-                if (TryConvertPart(p, out var convertedBlocks))
-                {
-                    blocks.AddRange(convertedBlocks);
-                }
-            }
+                var role = ResolveRole(mp.Info);
+                if (role is null) continue;
 
-            result.Add(new RemoteMessage(
-                Id: ExtractMessageId(mp.Info),
-                Role: role.Value,
-                Blocks: blocks));
+                var blocks = new List<RemoteBlock>();
+                foreach (var p in mp.Parts)
+                {
+                    if (TryConvertPart(p, out var convertedBlocks))
+                    {
+                        blocks.AddRange(convertedBlocks);
+                    }
+                }
+
+                result.Add(new RemoteMessage(
+                    Id: ExtractMessageId(mp.Info),
+                    Role: role.Value,
+                    Blocks: blocks));
+            }
+            return result;
         }
-        return result;
+        catch (Exception ex)
+        {
+            ReportError("加载历史消息", ex);
+            throw;
+        }
     }
 
     public async IAsyncEnumerable<ChatStreamChunk> SendMessageAsync(
+        string agentSessionId,
+        ChatRequest request,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var core = SendMessageCoreAsync(agentSessionId, request, ct);
+        await using var enumerator = core.WithCancellation(ct).ConfigureAwait(true).GetAsyncEnumerator();
+
+        while (true)
+        {
+            bool moved;
+            try
+            {
+                moved = await enumerator.MoveNextAsync();
+            }
+            catch (Exception ex)
+            {
+                ReportError("发送消息", ex);
+                throw;
+            }
+            if (!moved) yield break;
+            yield return enumerator.Current;
+        }
+    }
+
+    private async IAsyncEnumerable<ChatStreamChunk> SendMessageCoreAsync(
         string agentSessionId,
         ChatRequest request,
         [EnumeratorCancellation] CancellationToken ct = default)

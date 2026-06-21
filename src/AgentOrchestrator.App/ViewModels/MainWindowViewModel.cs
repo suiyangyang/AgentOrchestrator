@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using AgentOrchestrator.App.Models.Sidebar;
+using AgentOrchestrator.App.Services.Agent;
 using AgentOrchestrator.App.Services.Settings;
 using AgentOrchestrator.App.Services.Sidebar;
 using Avalonia;
@@ -31,6 +32,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly ISidebarRepository _repo;
     private readonly IAppSettingsService _settingsService;
     private readonly IServiceProvider _services;
+    private readonly IAgentGateway _agent;
     private GridLength _leftSidebarExpandedWidth = DefaultLeftSidebarWidth;
     private GridLength _rightSidebarExpandedWidth = DefaultRightSidebarWidth;
     private bool _isRestoringTaskGraphShell;
@@ -43,11 +45,13 @@ public partial class MainWindowViewModel : ViewModelBase
         SettingsViewModel settings,
         ISidebarRepository repo,
         IAppSettingsService settingsService,
-        IServiceProvider services)
+        IServiceProvider services,
+        IAgentGateway agent)
     {
         _repo = repo;
         _settingsService = settingsService;
         _services = services;
+        _agent = agent;
         Chat = chat;
         TaskGraph = graph;
         Sidebar = sidebar;
@@ -87,6 +91,8 @@ public partial class MainWindowViewModel : ViewModelBase
         Chat.PropertyChanged += OnWorkspacePropertyChanged;
         TaskGraph.PropertyChanged += OnWorkspacePropertyChanged;
         TaskGraph.NodeDetailRequested += OnTaskGraphNodeDetailRequested;
+
+        _agent.AgentErrorOccurred += OnAgentErrorOccurred;
 
         ActiveWorkspace = Chat;
         UpdateConnectedServiceCount();
@@ -129,6 +135,28 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private int _connectedServiceCount;
+
+    [ObservableProperty]
+    private string? _agentErrorMessage;
+
+    /// <summary>Derived visibility toggle for the error banner.</summary>
+    public bool HasAgentError => !string.IsNullOrEmpty(AgentErrorMessage);
+
+    partial void OnAgentErrorMessageChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasAgentError));
+    }
+
+    private void OnAgentErrorOccurred(object? sender, AgentErrorEventArgs e)
+    {
+        AgentErrorMessage = e.UserMessage;
+    }
+
+    [RelayCommand]
+    private void DismissAgentError()
+    {
+        AgentErrorMessage = null;
+    }
 
     public bool HasConnectedServices => ConnectedServiceCount > 0;
 

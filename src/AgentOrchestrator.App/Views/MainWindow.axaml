@@ -25,7 +25,7 @@
         <vm:MainWindowViewModel />
     </Design.DataContext>
 
-    <Grid RowDefinitions="Auto,*">
+    <Grid RowDefinitions="Auto,Auto,*">
         <!-- Title Bar (drag-to-move via PointerPressed + BeginMoveDrag) -->
         <Border Grid.Row="0" Classes="custom-title-bar"
                 PointerPressed="OnTitleBarPointerPressed"
@@ -78,8 +78,33 @@
             </Grid>
         </Border>
 
+        <!-- Agent Error Banner -->
+        <Border Grid.Row="1"
+                Classes="agent-error-banner"
+                IsVisible="{Binding HasAgentError}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Ellipse Grid.Column="0"
+                         Classes="agent-error-banner-dot"
+                         VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1"
+                           Text="{Binding AgentErrorMessage}"
+                           Classes="agent-error-banner-text"
+                           VerticalAlignment="Center"
+                           TextWrapping="Wrap" />
+                <Button Grid.Column="2"
+                        Classes="agent-error-banner-close"
+                        Command="{Binding DismissAgentErrorCommand}"
+                        VerticalAlignment="Center">
+                    <TextBlock Text="×"
+                               FontSize="18"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Button>
+            </Grid>
+        </Border>
+
         <!-- Main Content: 3 columns (Sidebar | Chat/Workspace | Right Sidebar) -->
-        <Grid Grid.Row="1" RowDefinitions="Auto,*">
+        <Grid Grid.Row="2" RowDefinitions="Auto,*">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="{Binding LeftSidebarWidth}" />
                 <ColumnDefinition Width="*" />
@@ -270,7 +295,7 @@
                           ShowsPreview="True" />
         </Grid>
 
-        <Grid Grid.RowSpan="2"
+        <Grid Grid.RowSpan="3"
               Background="#66000000"
               IsVisible="{Binding Sidebar.IsSearchOverlayVisible}"
               ZIndex="100"
@@ -338,7 +363,7 @@
             </Border>
         </Grid>
 
-        <Grid Grid.RowSpan="2"
+        <Grid Grid.RowSpan="3"
               Background="#26000000"
               IsVisible="{Binding Chat.HasPendingQuestion}"
               ZIndex="101"
