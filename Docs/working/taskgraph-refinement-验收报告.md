@@ -37,11 +37,16 @@
 
 ### 3. 创建弹窗
 "按模板创建 / 直接输入 / 智能编排 / 从文档编排" 已从内联工具栏移入 Popup 弹窗
-（`CreateDialog`）。弹窗显示为带半透明背景遮罩的卡片：
-- 标题区：标题、副标题、关闭按钮
-- 模式选择：4 个 ToggleButton（图标 + 文字）
-- 主体：当前模式对应的输入面板
-- 底部：取消、创建按钮
+（`CreateDialog`）。弹窗显示为带半透明背景遮罩的卡片，纵向分为四个区域：
+- **标题区**（Row 0）：标题、副标题、关闭按钮
+- **模式选择行**（Row 1）：4 个 ToggleButton（图标 + 文字），选中态深色填充
+- **表单主体**（Row 2）：`#F3F4F6` 背景 + `1.5px #DCE1E8` 边框，内部 TextBox/ComboBox
+  使用 `create-dialog-input` 样式（白色填充、可见边框、圆角），每个输入区有说明文字引导
+- **底部操作栏**（Row 3）：与表单主体用顶部分隔线隔开（`#E3E5E9`），背景 `#FAFBFC`，
+  右侧对齐的「取消」（`create-dialog-secondary`）和「创建」（`create-dialog-primary`）按钮，
+  尺寸参照 SettingsWindow footer（MinWidth 88、Padding 20,8、CornerRadius 8）
+
+卡片最大尺寸为 `960×820`（最小 `760×540`），比初版 `760×720` 更大，为多行输入和四模式 UI 提供充足空间。
 
 ### 4. 节点详情位置
 节点详情从 `TaskGraphWorkspaceControl` 内部右侧栏，迁移至 Shell 的右侧栏。
