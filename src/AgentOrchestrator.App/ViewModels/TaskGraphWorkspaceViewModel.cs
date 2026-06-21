@@ -1309,10 +1309,11 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
                 GraphEdges.Add(new TaskGraphEdgeViewModel(
                     edge.SourceId,
                     edge.TargetId,
-                    source.Position.X + NodeWidth,
+                    source.Position.X + NodeWidth - TaskNodePortStyle.PortAnchorOffsetX,
                     source.Position.Y + TaskNodePortStyle.PortAnchorOffsetY,
-                    target.Position.X,
-                    target.Position.Y + TaskNodePortStyle.PortAnchorOffsetY));
+                    target.Position.X + TaskNodePortStyle.PortAnchorOffsetX,
+                    target.Position.Y + TaskNodePortStyle.PortAnchorOffsetY,
+                    source.Kind));
             }
 
             GraphCanvasWidth = Math.Max(1200, CurrentGraph.Nodes.Max(x => x.Position.X) + NodeWidth + CanvasPadding);

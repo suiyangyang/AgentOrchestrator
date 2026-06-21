@@ -293,7 +293,17 @@ public partial class TaskGraphWorkspaceControl : UserControl
         Canvas.SetLeft(border, node.Position.X);
         Canvas.SetTop(border, node.Position.Y);
         var baseColor = Color.Parse(node.NodeBackground);
-        border.Background = new SolidColorBrush(baseColor);
+        var bottomColor = Darken(baseColor, 0.07);
+        border.Background = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+            GradientStops = new GradientStops
+            {
+                new GradientStop(baseColor, 0),
+                new GradientStop(bottomColor, 1),
+            },
+        };
         border.BorderBrush = new SolidColorBrush(Color.Parse(node.NodeBorderBrush));
 
         // Apply selected / pending style classes.
@@ -439,13 +449,15 @@ public partial class TaskGraphWorkspaceControl : UserControl
     {
         var y = node.Position.Y + TaskNodePortStyle.PortAnchorOffsetY;
         // Width/Height = 11 from the Ellipse.node-connection-point style.
-        // Center the port on the card edge so its inner half sits over the
-        // card surface (and is drawn underneath the card's border) while
-        // its outer half is still hit-testable as the drag source/target.
+        // Port center sits PortAnchorOffsetX (8) px inside the card edge so
+        // the port is fully on the card surface (no half-hidden by the border)
+        // and the line endpoint — placed at the same X in RefreshGraphSurface
+        // — lands exactly on the port center.
         const double half = 5.5;
-        Canvas.SetLeft(inputPort, node.Position.X - half);
+        var inset = TaskNodePortStyle.PortAnchorOffsetX;
+        Canvas.SetLeft(inputPort, node.Position.X + inset - half);
         Canvas.SetTop(inputPort, y - half);
-        Canvas.SetLeft(outputPort, node.Position.X + NodeWidth - half);
+        Canvas.SetLeft(outputPort, node.Position.X + NodeWidth - inset - half);
         Canvas.SetTop(outputPort, y - half);
     }
 
@@ -1065,6 +1077,20 @@ public partial class TaskGraphWorkspaceControl : UserControl
             && canvasPoint.Y >= 0
             && canvasPoint.X <= GraphCanvas.Width
             && canvasPoint.Y <= GraphCanvas.Height;
+    }
+
+    /// <summary>
+    /// Darken an Avalonia <see cref="Color"/> by mixing it toward black by
+    /// <paramref name="amount"/> (0..1). Used to derive the bottom stop of
+    /// the per-card vertical gradient so white-ish node backgrounds gain a
+    /// subtle "card-lift" depth without shifting hue.
+    /// </summary>
+    private static Color Darken(Color c, double amount)
+    {
+        var r = (byte)Math.Clamp(c.R * (1.0 - amount), 0, 255);
+        var g = (byte)Math.Clamp(c.G * (1.0 - amount), 0, 255);
+        var b = (byte)Math.Clamp(c.B * (1.0 - amount), 0, 255);
+        return Color.FromRgb(r, g, b);
     }
 
     // ============================================================

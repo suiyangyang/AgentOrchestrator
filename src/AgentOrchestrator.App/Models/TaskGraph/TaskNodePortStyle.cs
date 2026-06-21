@@ -30,4 +30,13 @@ public static class TaskNodePortStyle
     /// holds the kind label — visually consistent across all nodes.
     /// </summary>
     public const double PortAnchorOffsetY = 58.0;
+
+    /// <summary>
+    /// Horizontal inset from the card edge to the port center, so the port
+    /// sits entirely on the card surface rather than straddling the border.
+    /// Used by both the control layer (<c>UpdatePortVisual</c>) and the VM
+    /// (<c>RefreshGraphSurface</c>) to keep line endpoints in lockstep
+    /// with the port visuals.
+    /// </summary>
+    public const double PortAnchorOffsetX = 8.0;
 }
