@@ -6,13 +6,14 @@
              xmlns:conv="using:Avalonia.Data.Converters"
              x:Class="AgentOrchestrator.App.Controls.TaskGraphWorkspaceControl"
              x:Name="Root"
-             x:DataType="vm:TaskGraphWorkspaceViewModel">
+             x:DataType="vm:TaskGraphWorkspaceViewModel"
+             Focusable="True">
     <!-- Single-column workspace. The node-details panel that used to live
          here is now hosted by the shell's right sidebar; this control is
          dedicated to the graph surface and its inline toolbars. -->
     <Grid Background="#FFFFFF">
         <Grid Margin="{Binding WorkspaceMargin}"
-              RowDefinitions="Auto,Auto,Auto,*"
+              RowDefinitions="Auto,Auto,*"
               RowSpacing="12">
 
             <!-- ============================================================ -->
@@ -86,83 +87,14 @@
             </Grid>
 
             <!-- ============================================================ -->
-            <!-- Toolbar 2 — Canvas (Add / Delete / AutoLayout / Zoom / FS)   -->
-            <!--   Frequently used while editing the canvas — kept visible.   -->
+            <!-- (Toolbar 2 was merged into the graph editor title bar       -->
+            <!--  below — see the "图编辑" header inside the graph surface.) -->
             <!-- ============================================================ -->
-            <Border Grid.Row="1"
-                    IsVisible="{Binding IsGraphHeaderVisible}"
-                    Background="#F7F8FA"
-                    BorderBrush="#E2E5EA"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Padding="12">
-                <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto"
-                      ColumnSpacing="8">
-                    <Button Grid.Column="0"
-                            Classes="task-toolbar-btn"
-                            Command="{Binding AddNodeCommand}"
-                            IsEnabled="{Binding CanAddNode}"
-                            ToolTip.Tip="新增节点">
-                        <Path Classes="toolbar-icon-path toolbar-icon-add-node" />
-                    </Button>
-                    <Button Grid.Column="1"
-                            Classes="task-toolbar-btn"
-                            Command="{Binding DeleteSelectedNodeCommand}"
-                            IsEnabled="{Binding CanDeleteNode}"
-                            ToolTip.Tip="删除节点">
-                        <Path Classes="toolbar-icon-path toolbar-icon-delete" />
-                    </Button>
-                    <Button Grid.Column="2"
-                            Classes="task-toolbar-btn"
-                            Command="{Binding AutoLayoutCommand}"
-                            ToolTip.Tip="自动布局">
-                        <Path Classes="toolbar-icon-path toolbar-icon-auto-layout" />
-                    </Button>
-
-                    <TextBlock Grid.Column="3"
-                               Text="拖动空白处可创建新节点；从节点右侧圆点可拉线建立依赖。"
-                               VerticalAlignment="Center"
-                               Foreground="#6E727A"
-                               FontSize="12" />
-
-                    <Button Grid.Column="5"
-                            Classes="task-toolbar-btn"
-                            Command="{Binding ZoomOutCommand}"
-                            ToolTip.Tip="缩小">
-                        <Path Classes="toolbar-icon-path toolbar-icon-zoom-out" />
-                    </Button>
-                    <Button Grid.Column="6"
-                            Classes="task-toolbar-btn"
-                            Command="{Binding ResetZoomCommand}"
-                            ToolTip.Tip="还原缩放">
-                        <TextBlock Text="{Binding ZoomText}"
-                                   FontSize="12"
-                                   Foreground="#1F2328" />
-                    </Button>
-                    <Button Grid.Column="7"
-                            Classes="task-toolbar-btn"
-                            Command="{Binding ZoomInCommand}"
-                            ToolTip.Tip="放大">
-                        <Path Classes="toolbar-icon-path toolbar-icon-zoom-in" />
-                    </Button>
-                    <Button Grid.Column="8"
-                            Classes="task-toolbar-btn"
-                            Command="{Binding ToggleGraphMaximizeCommand}"
-                            ToolTip.Tip="{Binding GraphMaximizeButtonText}">
-                        <Panel>
-                            <Path Classes="toolbar-icon-path graph-fullscreen-enter-icon"
-                                  IsVisible="{Binding !IsGraphMaximized}" />
-                            <Path Classes="toolbar-icon-path graph-fullscreen-exit-icon"
-                                  IsVisible="{Binding IsGraphMaximized}" />
-                        </Panel>
-                    </Button>
-                </Grid>
-            </Border>
 
             <!-- ============================================================ -->
             <!-- Pending user confirmation banner                             -->
             <!-- ============================================================ -->
-            <Border Grid.Row="2"
+            <Border Grid.Row="1"
                     IsVisible="{Binding IsWaitingForUserConfirmation}"
                     Background="#FFF8E7"
                     BorderBrush="#F0D59A"
@@ -182,19 +114,23 @@
             <!-- ============================================================ -->
             <!-- Graph surface                                                -->
             <!-- ============================================================ -->
-            <Border Grid.Row="3"
+            <Border Grid.Row="2"
                     Background="#F7F8FA"
                     BorderBrush="#E2E5EA"
                     BorderThickness="{Binding GraphSurfaceBorderThickness}"
                     CornerRadius="{Binding GraphSurfaceCornerRadius}">
                 <Grid RowDefinitions="Auto,*">
-                    <!-- Top bar — "图编辑" title (left) + fullscreen toggle (right). -->
+                    <!-- Top bar — "图编辑" title (left) + Add/Delete/AutoLayout
+                         buttons + Graph name (centered) + Zoom + Fullscreen (right).
+                         This header now hosts the canvas controls that used to
+                         live in a standalone toolbar. -->
                     <Border Grid.Row="0"
                             Background="#FFFFFF"
                             BorderBrush="#E2E5EA"
                             BorderThickness="0,0,0,1"
                             Padding="16,8">
-                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                        <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto"
+                              ColumnSpacing="8">
                             <StackPanel Grid.Column="0"
                                         Orientation="Horizontal"
                                         Spacing="8"
@@ -208,21 +144,62 @@
                                            VerticalAlignment="Center" />
                             </StackPanel>
 
-                            <TextBlock Grid.Column="1"
+                            <Button Grid.Column="1"
+                                    Classes="task-toolbar-btn"
+                                    Command="{Binding AddNodeCommand}"
+                                    IsEnabled="{Binding CanAddNode}"
+                                    ToolTip.Tip="新增节点">
+                                <Path Classes="toolbar-icon-path toolbar-icon-add-node" />
+                            </Button>
+                            <Button Grid.Column="2"
+                                    Classes="task-toolbar-btn"
+                                    Click="OnDeleteNodeClick"
+                                    IsEnabled="{Binding CanDeleteNode}"
+                                    ToolTip.Tip="删除节点（Delete）">
+                                <Path Classes="toolbar-icon-path toolbar-icon-delete" />
+                            </Button>
+                            <Button Grid.Column="3"
+                                    Classes="task-toolbar-btn"
+                                    Command="{Binding AutoLayoutCommand}"
+                                    ToolTip.Tip="自动布局">
+                                <Path Classes="toolbar-icon-path toolbar-icon-auto-layout" />
+                            </Button>
+
+                            <TextBlock Grid.Column="4"
                                        Text="{Binding CurrentGraphName}"
                                        Foreground="#6E727A"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Center"
                                        TextTrimming="CharacterEllipsis" />
 
-                            <Button Grid.Column="2"
+                            <Button Grid.Column="5"
+                                    Classes="task-toolbar-btn"
+                                    Command="{Binding ZoomOutCommand}"
+                                    ToolTip.Tip="缩小">
+                                <Path Classes="toolbar-icon-path toolbar-icon-zoom-out" />
+                            </Button>
+                            <Button Grid.Column="6"
+                                    Classes="task-toolbar-btn"
+                                    Command="{Binding ResetZoomCommand}"
+                                    ToolTip.Tip="还原缩放">
+                                <TextBlock Text="{Binding ZoomText}"
+                                           FontSize="12"
+                                           Foreground="#7A7F87" />
+                            </Button>
+                            <Button Grid.Column="7"
+                                    Classes="task-toolbar-btn"
+                                    Command="{Binding ZoomInCommand}"
+                                    ToolTip.Tip="放大">
+                                <Path Classes="toolbar-icon-path toolbar-icon-zoom-in" />
+                            </Button>
+                            <Button Grid.Column="8"
+                                    Classes="task-toolbar-btn"
                                     Command="{Binding ToggleGraphMaximizeCommand}"
-                                    Classes="graph-fullscreen-btn"
                                     ToolTip.Tip="{Binding GraphMaximizeButtonText}">
                                 <Panel>
-                                    <Path Classes="graph-fullscreen-enter-icon"
+                                    <Path Classes="toolbar-icon-path graph-fullscreen-enter-icon"
                                           IsVisible="{Binding !IsGraphMaximized}" />
-                                    <Path Classes="graph-fullscreen-exit-icon"
+                                    <Path Classes="toolbar-icon-path graph-fullscreen-exit-icon"
                                           IsVisible="{Binding IsGraphMaximized}" />
                                 </Panel>
                             </Button>
@@ -237,9 +214,13 @@
                             <Canvas x:Name="GraphCanvas"
                                     Width="{Binding GraphCanvasWidth}"
                                     Height="{Binding GraphCanvasHeight}"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Top"
                                     PointerMoved="OnCanvasPointerMoved"
                                     PointerReleased="OnCanvasPointerReleased"
+                                    PointerWheelChanged="OnCanvasPointerWheelChanged"
                                     Background="#F7F8FA"
+                                    Cursor="Hand"
                                     RenderTransformOrigin="0,0">
                                 <Canvas.RenderTransform>
                                     <ScaleTransform ScaleX="{Binding GraphZoom}" ScaleY="{Binding GraphZoom}" />
@@ -256,7 +237,7 @@
                                                FontSize="22"
                                                FontWeight="SemiBold"
                                                HorizontalAlignment="Center" />
-                                    <TextBlock Text="先点击「更多 → 按模板创建」或拖动空白处生成新节点。生成后可以拖动节点、从右侧圆点拉线建立依赖、自动布局和编辑节点内容。"
+                                    <TextBlock Text="先点击「更多 → 按模板创建」或拖动空白处平移画布。生成节点后可以从右侧圆点拉线建立依赖，并使用标题栏的工具调整布局。"
                                                TextWrapping="Wrap"
                                                TextAlignment="Center"
                                                Foreground="#6E727A" />
@@ -331,6 +312,33 @@
         </Popup>
 
         <!-- ============================================================ -->
+        <!-- Edge midpoint action menu — shown on click. Contains only     -->
+        <!-- "删除连线". Dismisses on light-dismiss (click outside).       -->
+        <!-- ============================================================ -->
+        <Popup x:Name="EdgeActionMenu"
+               Placement="Pointer"
+               IsLightDismissEnabled="True"
+               IsOpen="False">
+            <Border Background="#FFFFFF"
+                    BorderBrush="#E3E5E9"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="4"
+                    BoxShadow="0 4 12 0 #20000000">
+                <Button Classes="more-popup-item"
+                        x:Name="DeleteEdgeButton"
+                        Click="OnDeleteEdgeMenuItemClick"
+                        Cursor="Hand">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="删除连线"
+                                   FontSize="13"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </Border>
+        </Popup>
+
+        <!-- ============================================================ -->
         <!-- "Create graph" dialog (template / direct / intent / document) -->
         <!--   Pops up over the workspace. Dismissed via ✕ or backdrop.    -->
         <!-- ============================================================ -->
@@ -341,7 +349,7 @@
             <Border Classes="create-dialog-card"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center">
-                <Grid RowDefinitions="Auto,Auto,*">
+                <Grid RowDefinitions="Auto,Auto,*,Auto">
                     <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
                         <StackPanel Grid.Column="0" Spacing="4">
                             <TextBlock Classes="create-dialog-title"
@@ -405,8 +413,10 @@
                     <Border Grid.Row="2" Classes="create-dialog-body">
                         <Grid>
                             <StackPanel Spacing="10" IsVisible="{Binding IsTemplateMode}">
+                                <TextBlock Text="选择模板后，可填写编排名称和输入数据。" Foreground="#6E727A" />
                                 <Grid ColumnDefinitions="220,*" ColumnSpacing="8">
                                     <ComboBox Grid.Column="0"
+                                              Classes="create-dialog-input"
                                               ItemsSource="{Binding Templates}"
                                               SelectedItem="{Binding SelectedTemplate, Mode=TwoWay}">
                                         <ComboBox.ItemTemplate>
@@ -416,11 +426,13 @@
                                         </ComboBox.ItemTemplate>
                                     </ComboBox>
                                     <TextBox Grid.Column="1"
+                                             Classes="create-dialog-input"
                                              Text="{Binding TemplateGraphName, Mode=TwoWay}"
                                              PlaceholderText="编排名称（可选）" />
                                 </Grid>
                                 <TextBlock Text="{Binding SelectedTemplate.Description}" Foreground="#6E727A" TextWrapping="Wrap" />
-                                <TextBox Text="{Binding TemplateInputText, Mode=TwoWay}"
+                                <TextBox Classes="create-dialog-input"
+                                         Text="{Binding TemplateInputText, Mode=TwoWay}"
                                          AcceptsReturn="True"
                                          TextWrapping="Wrap"
                                          MinHeight="120" />
@@ -428,7 +440,8 @@
 
                             <StackPanel Spacing="10" IsVisible="{Binding IsDirectMode}">
                                 <TextBlock Text="支持 Markdown 列表、`depends on:` 依赖声明和 JSON 输入。" Foreground="#6E727A" />
-                                <TextBox Text="{Binding DirectInputText, Mode=TwoWay}"
+                                <TextBox Classes="create-dialog-input"
+                                         Text="{Binding DirectInputText, Mode=TwoWay}"
                                          AcceptsReturn="True"
                                          TextWrapping="Wrap"
                                          MinHeight="180" />
@@ -436,12 +449,14 @@
 
                             <StackPanel Spacing="10" IsVisible="{Binding IsIntentMode}">
                                 <TextBlock Text="输入一段自然语言需求，让 LLM 生成 DAG 编排。" Foreground="#6E727A" />
-                                <TextBox Text="{Binding IntentInputText, Mode=TwoWay}"
+                                <TextBox Classes="create-dialog-input"
+                                         Text="{Binding IntentInputText, Mode=TwoWay}"
                                          AcceptsReturn="True"
                                          TextWrapping="Wrap"
                                          MinHeight="120" />
                                 <Grid ColumnDefinitions="220,180,*" ColumnSpacing="8">
                                     <ComboBox Grid.Column="0"
+                                              Classes="create-dialog-input"
                                               ItemsSource="{Binding Permissions}"
                                               SelectedItem="{Binding SelectedPermission, Mode=TwoWay}">
                                         <ComboBox.ItemTemplate>
@@ -451,6 +466,7 @@
                                         </ComboBox.ItemTemplate>
                                     </ComboBox>
                                     <ComboBox Grid.Column="1"
+                                              Classes="create-dialog-input"
                                               ItemsSource="{Binding Models}"
                                               SelectedItem="{Binding SelectedModel, Mode=TwoWay}" />
                                 </Grid>
@@ -460,6 +476,7 @@
                                 <TextBlock Text="导入 `.md` / `.txt` 文档，基于文档内容生成编排。" Foreground="#6E727A" />
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <TextBox Grid.Column="0"
+                                             Classes="create-dialog-input"
                                              Text="{Binding DocumentFilePath, Mode=TwoWay}"
                                              PlaceholderText="输入或拖入文档路径" />
                                     <Button Grid.Column="1"
@@ -469,7 +486,8 @@
                                         <Path Classes="toolbar-icon-path toolbar-icon-document" />
                                     </Button>
                                 </Grid>
-                                <TextBox Text="{Binding DocumentPreviewText, Mode=TwoWay}"
+                                <TextBox Classes="create-dialog-input"
+                                         Text="{Binding DocumentPreviewText, Mode=TwoWay}"
                                          AcceptsReturn="True"
                                          TextWrapping="Wrap"
                                          MinHeight="120" />
@@ -477,18 +495,23 @@
                         </Grid>
                     </Border>
 
-                    <StackPanel Grid.Row="3"
-                                Orientation="Horizontal"
-                                HorizontalAlignment="Right"
-                                Spacing="8"
-                                Margin="0,16,0,0">
-                        <Button Classes="create-dialog-secondary"
-                                Click="OnCreateDialogClose"
-                                Content="取消" />
-                        <Button Classes="create-dialog-primary"
-                                Click="OnCreateDialogConfirm"
-                                Content="创建" />
-                    </StackPanel>
+                    <!-- Footer bar: separated from form body with top border -->
+                    <Border Grid.Row="3"
+                            Background="#FAFBFC"
+                            BorderBrush="#E3E5E9"
+                            BorderThickness="0,1,0,0"
+                            Padding="0,12">
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    Spacing="8">
+                            <Button Classes="create-dialog-secondary"
+                                    Click="OnCreateDialogClose"
+                                    Content="取消" />
+                            <Button Classes="create-dialog-primary"
+                                    Click="OnCreateDialogConfirm"
+                                    Content="创建" />
+                        </StackPanel>
+                    </Border>
                 </Grid>
             </Border>
         </Grid>

@@ -182,6 +182,27 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isCreateDialogVisible;
 
+    /// <summary>
+    /// True while <see cref="RefreshGraphSurface"/> is bulk-replacing
+    /// <see cref="GraphNodes"/> and <see cref="GraphEdges"/>. The control
+    /// layer checks this flag and skips its per-item CollectionChanged
+    /// handlers during the bulk replace — otherwise the Clear() + N Adds
+    /// here produce N+1 calls to SyncNodeVisuals, each itself O(N), giving
+    /// an O(N²) visual rebuild that freezes the UI on graphs with 30+
+    /// nodes (visible symptom: clicking a task graph card in the sidebar,
+    /// or a node on the canvas, locks the window for many seconds).
+    /// </summary>
+    public bool IsBulkRefreshingSurface => _isBulkRefreshingSurface;
+
+    private bool _isBulkRefreshingSurface;
+
+    /// <summary>
+    /// Raised exactly once after <see cref="RefreshGraphSurface"/> finishes
+    /// its bulk replace. The control layer subscribes and re-syncs its
+    /// visual tree from the final collection state in a single pass.
+    /// </summary>
+    public event EventHandler? SurfaceRebuilt;
+
     public event EventHandler<TaskGraphNodeDetailRequest>? NodeDetailRequested;
 
     public IReadOnlyList<TaskNodeKind> NodeKinds { get; } =
@@ -414,94 +435,65 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
     }
 
     // ============================================================
-    // Pending node flow (drag on empty canvas to spawn a node)
+    // Connection helpers (called from the canvas control's link-drag flow)
     // ============================================================
 
     /// <summary>
-    /// Creates a new "pending" node at the given canvas position. The node
-    /// lives in the graph but is not selectable as a real one until the user
-    /// promotes it (by clicking). Used by the drag-on-empty-canvas gesture.
+    /// Creates a real (non-pending) node at the given canvas position and
+    /// returns it. Used by the canvas's link-drag flow when the user
+    /// releases on empty canvas — the new node becomes the link target.
+    /// Replaces the previous "pending node" two-step create (which required
+    /// a follow-up click to promote the node from pending → real); the new
+    /// node is real from the moment it's created.
     /// </summary>
-    public Task<TaskNode?> BeginPendingNodeDragAsync(double x, double y)
-    {
-        return CreatePendingNodeInternalAsync(x, y, transient: true);
-    }
-
-    /// <summary>
-    /// Creates a real (non-pending) node at the given canvas position. Used
-    /// when the user releases a connection-drag on empty canvas — the
-    /// resulting node becomes the link target.
-    /// </summary>
-    public Task<TaskNode?> CreatePendingNodeAsync(double x, double y)
-    {
-        return CreatePendingNodeInternalAsync(x, y, transient: false);
-    }
-
-    private async Task<TaskNode?> CreatePendingNodeInternalAsync(double x, double y, bool transient)
+    public async Task<TaskNode?> CreateNodeAtAsync(double x, double y)
     {
         if (CurrentGraph is null)
         {
-            // No graph yet — auto-create a blank one so the user has a target.
+            // No graph yet — auto-create a blank one so the user has a
+            // target. Mirrors the legacy "pending node on blank graph" path.
             var blank = new TaskGraph
             {
                 Name = "未命名编排",
             };
-            blank.Nodes.Add(MakePendingNode(x, y, transient));
+            var blankNode = new TaskNode
+            {
+                Id = BuildNextNodeId(blank),
+                Title = "新任务",
+                Description = string.Empty,
+                Kind = TaskNodeKind.Execute,
+                Prompt = TaskGraphFactory.BuildPrompt("新任务", string.Empty, TaskNodeKind.Execute),
+                Position = new NodePosition(Math.Max(20, x - NodeWidth / 2), Math.Max(20, y - NodeHeight / 2)),
+                Status = TaskNodeStatus.Pending,
+            };
+            blank.Nodes.Add(blankNode);
             await ActivateGraphAsync(blank, "已创建新编排。").ConfigureAwait(true);
             return CurrentGraph?.Nodes.FirstOrDefault();
         }
 
-        var node = MakePendingNode(x, y, transient);
-        CurrentGraph.Nodes.Add(node);
-        CurrentGraph.RebuildEdges();
-        await _store.SaveAsync(CurrentGraph).ConfigureAwait(true);
-        RefreshGraphSurface();
-        return node;
-    }
-
-    private static TaskNode MakePendingNode(double x, double y, bool transient)
-    {
-        return new TaskNode
+        var node = new TaskNode
         {
-            Id = $"pending_{Guid.NewGuid():N}",
-            Title = "新节点",
-            Description = "点击此处直接编辑节点内容。",
+            Id = BuildNextNodeId(CurrentGraph),
+            Title = "新任务",
+            Description = string.Empty,
             Kind = TaskNodeKind.Execute,
+            Prompt = TaskGraphFactory.BuildPrompt("新任务", string.Empty, TaskNodeKind.Execute),
+            // Center the new node on the drop point so the cursor lands
+            // in the middle of the new card.
+            Position = new NodePosition(Math.Max(20, x - NodeWidth / 2), Math.Max(20, y - NodeHeight / 2)),
             Status = TaskNodeStatus.Pending,
-            Position = new NodePosition(Math.Max(20, x), Math.Max(20, y)),
-            IsPending = transient,
         };
-    }
 
-    public void PromotePendingNode(TaskNode node)
-    {
-        if (!node.IsPending)
+        await ExecuteBusyAsync(async () =>
         {
-            return;
-        }
+            CurrentGraph!.Nodes.Add(node);
+            CurrentGraph.RebuildEdges();
+            await _store.SaveAsync(CurrentGraph).ConfigureAwait(true);
+            SelectNode(node);
+            StatusText = $"已新增节点“{node.Title}”。";
+        }).ConfigureAwait(true);
 
-        node.IsPending = false;
-        // Reassign to a "manual_N" id so it doesn't keep the temporary
-        // "pending_*" namespace — but only if the user hasn't edited it.
-        if (CurrentGraph is not null)
-        {
-            node.Id = BuildNextNodeId(CurrentGraph);
-            _ = _store.SaveAsync(CurrentGraph);
-        }
-        StatusText = $"已提升节点 “{node.Title}”。在右侧栏或图上直接编辑其内容。";
-    }
-
-    public async Task FinalizePendingNodeAsync(TaskNode? node, double x, double y)
-    {
-        if (node is null || CurrentGraph is null)
-        {
-            return;
-        }
-
-        // Update position to where the user dragged to.
-        node.Position = new NodePosition(Math.Max(20, x), Math.Max(20, y));
-        await _store.SaveAsync(CurrentGraph).ConfigureAwait(true);
-        RefreshGraphSurface();
+        return node;
     }
 
     public async Task ConnectNodesAsync(TaskNode source, TaskNode target)
@@ -995,15 +987,22 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
         OnPropertyChanged(nameof(LinkPreviewEndPoint));
     }
 
-    public Point NormalizeCanvasPoint(Point point)
-    {
-        if (GraphZoom <= 0)
-        {
-            return point;
-        }
-
-        return new Point(point.X / GraphZoom, point.Y / GraphZoom);
-    }
+    /// <summary>
+    /// Identity pass-through. Pointer handlers in <c>TaskGraphWorkspaceControl</c>
+    /// now call <c>e.GetPosition(GraphCanvas)</c> directly, which Avalonia 12
+    /// returns in the canvas's local coordinate system BEFORE its own
+    /// RenderTransform (ScaleTransform bound to <see cref="GraphZoom"/>) is
+    /// applied — i.e. the same coordinate system used by
+    /// <c>Canvas.SetLeft/Top</c>, by edge <c>X1/Y1/X2/Y2</c>, and by
+    /// <c>Path.StartPoint/PathGeometry</c>. Previously this method divided
+    /// by <see cref="GraphZoom"/>, which incorrectly compounded the canvas's
+    /// own RenderTransform (symptom: the drag-link preview tip landed
+    /// noticeably offset from the mouse). See
+    /// <c>Docs/working/TaskGraph-连线修复-2026-06-20.md</c> for the full
+    /// diagnosis. Kept as a method so existing call sites compile without
+    /// change — it is now a no-op.
+    /// </summary>
+    public Point NormalizeCanvasPoint(Point point) => point;
 
     [RelayCommand]
     private void OpenNodeDetail(TaskNode? node)
@@ -1233,41 +1232,67 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
 
     private void RefreshGraphSurface()
     {
-        GraphNodes.Clear();
-        GraphEdges.Clear();
-
-        if (CurrentGraph is null || CurrentGraph.Nodes.Count == 0)
+        // Bulk-replace GraphNodes / GraphEdges under a suppression flag so
+        // the control layer defers its per-item visual sync until the
+        // SurfaceRebuilt event fires. Without this, the Clear() + N Adds
+        // here produce N+1 CollectionChanged events, each of which the
+        // control turns into a full O(N) SyncNodeVisuals — an O(N²)
+        // visual rebuild that freezes the UI for several seconds on 30+
+        // node graphs (the symptom: clicking a node on the canvas or a
+        // task graph card in the sidebar hangs the window).
+        _isBulkRefreshingSurface = true;
+        try
         {
-            GraphCanvasWidth = 1200;
-            GraphCanvasHeight = 720;
-            return;
-        }
+            GraphNodes.Clear();
+            GraphEdges.Clear();
 
-        foreach (var node in CurrentGraph.Nodes)
-        {
-            GraphNodes.Add(node);
-        }
-
-        var byId = CurrentGraph.Nodes.ToDictionary(x => x.Id, StringComparer.Ordinal);
-        foreach (var edge in CurrentGraph.Edges)
-        {
-            if (!byId.TryGetValue(edge.SourceId, out var source) || !byId.TryGetValue(edge.TargetId, out var target))
+            if (CurrentGraph is null || CurrentGraph.Nodes.Count == 0)
             {
-                continue;
+                GraphCanvasWidth = 1200;
+                GraphCanvasHeight = 720;
+                return;
             }
 
-            GraphEdges.Add(new TaskGraphEdgeViewModel(
-                edge.SourceId,
-                edge.TargetId,
-                source.Position.X + NodeWidth,
-                source.Position.Y + (NodeHeight / 2),
-                target.Position.X,
-                target.Position.Y + (NodeHeight / 2)));
+            foreach (var node in CurrentGraph.Nodes)
+            {
+                GraphNodes.Add(node);
+            }
+
+            var byId = CurrentGraph.Nodes.ToDictionary(x => x.Id, StringComparer.Ordinal);
+            foreach (var edge in CurrentGraph.Edges)
+            {
+                if (!byId.TryGetValue(edge.SourceId, out var source) || !byId.TryGetValue(edge.TargetId, out var target))
+                {
+                    continue;
+                }
+
+                // Edge geometry: start at the OUTPUT port of the source
+                // (right side, on the kind-label row) and end at the INPUT
+                // port of the target (left side, on the same row). The Y
+                // coordinate is the per-kind port anchor (PortAnchorOffsetY)
+                // rather than the card's geometric center so the line lands
+                // exactly on the visual port dots.
+                GraphEdges.Add(new TaskGraphEdgeViewModel(
+                    edge.SourceId,
+                    edge.TargetId,
+                    source.Position.X + NodeWidth,
+                    source.Position.Y + TaskNodePortStyle.PortAnchorOffsetY,
+                    target.Position.X,
+                    target.Position.Y + TaskNodePortStyle.PortAnchorOffsetY));
+            }
+
+            GraphCanvasWidth = Math.Max(1200, CurrentGraph.Nodes.Max(x => x.Position.X) + NodeWidth + CanvasPadding);
+            GraphCanvasHeight = Math.Max(720, CurrentGraph.Nodes.Max(x => x.Position.Y) + NodeHeight + CanvasPadding);
+            RefreshLinkableTargets();
+        }
+        finally
+        {
+            _isBulkRefreshingSurface = false;
         }
 
-        GraphCanvasWidth = Math.Max(1200, CurrentGraph.Nodes.Max(x => x.Position.X) + NodeWidth + CanvasPadding);
-        GraphCanvasHeight = Math.Max(720, CurrentGraph.Nodes.Max(x => x.Position.Y) + NodeHeight + CanvasPadding);
-        RefreshLinkableTargets();
+        // Always raise exactly once per call so the control can re-sync
+        // from the final state.
+        SurfaceRebuilt?.Invoke(this, EventArgs.Empty);
     }
 
     private void DetachSelection()
