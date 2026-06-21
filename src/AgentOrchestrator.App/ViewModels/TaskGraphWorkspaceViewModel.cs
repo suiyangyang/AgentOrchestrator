@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
@@ -503,17 +503,17 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
             return;
         }
 
-        if (source.DependsOn.Contains(target.Id))
+        if (target.DependsOn.Contains(source.Id))
         {
             StatusText = "该依赖已存在。";
             return;
         }
 
-        source.DependsOn.Add(target.Id);
+        target.DependsOn.Add(source.Id);
         CurrentGraph.RebuildEdges();
         await _store.SaveAsync(CurrentGraph).ConfigureAwait(true);
         RefreshGraphSurface();
-        StatusText = $"已为节点 “{source.Title}” 添加依赖 “{target.Title}”。";
+        StatusText = $"已为节点 “{target.Title}” 添加依赖 “{source.Title}”。";
     }
 
     [RelayCommand]
@@ -738,16 +738,22 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
 
         await ExecuteBusyAsync(async () =>
         {
-            if (SelectedNode.DependsOn.Contains(SelectedLinkTarget.Id))
+            var targetTaskNode = CurrentGraph.Nodes.FirstOrDefault(x => x.Id == SelectedLinkTarget.Id);
+            if (targetTaskNode is null)
             {
-                throw new TaskGraphValidationException("当前节点已经依赖该目标节点。");
+                return;
             }
 
-            SelectedNode.DependsOn.Add(SelectedLinkTarget.Id);
+            if (targetTaskNode.DependsOn.Contains(SelectedNode.Id))
+            {
+                throw new TaskGraphValidationException("该依赖已存在。");
+            }
+
+            targetTaskNode.DependsOn.Add(SelectedNode.Id);
             TaskGraphTopology.TopologicalSort(CurrentGraph);
             await _store.SaveAsync(CurrentGraph).ConfigureAwait(true);
             RefreshGraphSurface();
-            StatusText = $"已为节点“{SelectedNode.Title}”添加前置依赖。";
+            StatusText = $"已为节点“{SelectedLinkTarget.Title}”添加前置依赖。";
             IsLinkMode = false;
             SelectedLinkTarget = null;
         }).ConfigureAwait(true);
@@ -952,23 +958,23 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
                 return;
             }
 
-            if (LinkSourceNode.DependsOn.Contains(targetNode.Id))
+            if (targetNode.DependsOn.Contains(LinkSourceNode.Id))
             {
                 StatusText = "该依赖已存在。";
                 return;
             }
 
-            LinkSourceNode.DependsOn.Add(targetNode.Id);
+            targetNode.DependsOn.Add(LinkSourceNode.Id);
             TaskGraphTopology.TopologicalSort(CurrentGraph);
             await _store.SaveAsync(CurrentGraph).ConfigureAwait(true);
             RefreshGraphSurface();
-            StatusText = $"已通过画布为节点“{LinkSourceNode.Title}”添加依赖。";
+            StatusText = $"已通过画布为节点“{targetNode.Title}”添加依赖。";
         }
         catch (Exception ex)
         {
             if (targetNode is not null)
             {
-                LinkSourceNode.DependsOn.Remove(targetNode.Id);
+                targetNode.DependsOn.Remove(LinkSourceNode.Id);
             }
 
             StatusText = ex.Message;
