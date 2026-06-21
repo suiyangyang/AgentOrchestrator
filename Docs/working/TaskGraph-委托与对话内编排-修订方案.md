@@ -57,6 +57,7 @@ v3 只解决两件事:
 - 完整的图结构自我重写系统
 - 基于历史学习的自动策略优化
 - OpenCode plugin 集成
+- OpenCode subagent 集成
 
 ---
 
@@ -84,6 +85,25 @@ v3 首版优先做:
 
 高不确定性能力延后。
 
+### 3.5 不依赖 OpenCode subagent
+
+v3 明确不依赖 OpenCode subagent。
+
+原因:
+
+- TaskGraph 作为应用层编排器已经具备独立成立条件
+- 当前项目的核心目标是图调度、上下文交接、状态回写和 Chat 集成
+- 引入 subagent 会把执行语义绑定到额外的运行时机制，增加双重编排复杂度
+
+因此 v3 的执行模型只基于:
+
+- `NewSession`
+- `ChildSession`
+- `InSessionExecution`
+- `Inline`
+
+后续如需接入 subagent，应作为可选后端能力单独设计，而不是 v3 的基础前提。
+
 ---
 
 ## 4. 当前能力基线
@@ -104,6 +124,11 @@ v3 首版优先做:
 - `IAgentGateway.SendMessageAsync(...)`
 - `OpenCodeAgentGateway.GetSubagentActivitiesAsync(...)` 已使用 children 接口
 - `TaskGraphExecutor` 当前固定为每节点创建新 session 再执行
+
+说明:
+
+- `GetSubagentActivitiesAsync(...)` 是现有命名，底层使用的是 child session 列表能力
+- 在 v3 语义中，不将其视为 TaskGraph 的基础执行抽象
 
 ### 4.3 当前项目未建模的能力
 
@@ -136,6 +161,7 @@ v3 首版优先做:
 - 节点运行期间任意切换执行策略
 - 自动删除节点、重写全图结构
 - 在右侧侧栏构建完整的多层子图浏览器
+- 基于 OpenCode subagent 的节点执行路径
 
 ---
 
@@ -209,6 +235,7 @@ public enum TaskNodeDelegationStrategy
 注意:
 
 - 本策略不等价于“原生子代理”
+- v3 不以 OpenCode subagent 作为该策略的实现基础
 - 它不会天然产生独立 child session
 - 不应直接复用“子会话活动”这套语义
 
@@ -811,4 +838,3 @@ v3 采用以下落地方向:
 5. 动态扩图在 v3 仅支持受控追加
 
 这一路线可以在不高估底层能力的前提下，把 TaskGraph 真正带入 Chat 主工作流，同时保持现有实现可演进、可验证、可回退。
-
