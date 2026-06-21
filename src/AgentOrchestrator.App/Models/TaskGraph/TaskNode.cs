@@ -7,6 +7,21 @@ namespace AgentOrchestrator.App.Models.TaskGraph;
 
 public sealed partial class TaskNode : ObservableObject
 {
+    /// <summary>
+    /// Default visual width for a freshly created node. Must match the
+    /// <c>NodeWidth</c> constant in <c>TaskGraphWorkspaceControl</c> so the
+    /// first render before any per-node width is set still lines up with the
+    /// port positions. The control falls back to this value when a node's
+    /// persisted <c>Width</c> is &lt;= 0 (e.g. older saved graphs).
+    /// </summary>
+    public const double DefaultWidth = 220;
+
+    /// <summary>
+    /// Default visual height for a freshly created node. See
+    /// <see cref="DefaultWidth"/> for the rationale.
+    /// </summary>
+    public const double DefaultHeight = 132;
+
     private bool _isSelected;
 
     [ObservableProperty]
@@ -29,6 +44,22 @@ public sealed partial class TaskNode : ObservableObject
 
     [ObservableProperty]
     private NodePosition _position = new(40, 40);
+
+    /// <summary>
+    /// Visual width of the node's card. Defaults to the standard node width
+    /// so freshly created nodes match the rest of the canvas. Persisted so a
+    /// user's manual resize survives a save/load cycle.
+    /// </summary>
+    [ObservableProperty]
+    private double _width = TaskNode.DefaultWidth;
+
+    /// <summary>
+    /// Visual height of the node's card. Defaults to the standard node height
+    /// so freshly created nodes match the rest of the canvas. Persisted so a
+    /// user's manual resize survives a save/load cycle.
+    /// </summary>
+    [ObservableProperty]
+    private double _height = TaskNode.DefaultHeight;
 
     [ObservableProperty]
     private string _prompt = string.Empty;
@@ -91,6 +122,12 @@ public sealed partial class TaskNode : ObservableObject
     [ObservableProperty]
     [property: JsonIgnore]
     private bool _isPending;
+
+    /// <summary>True while the node is in inline-edit mode (TextBox/ComboBox
+    /// replacing static text). Only one node should be editing at a time.</summary>
+    [ObservableProperty]
+    [property: JsonIgnore]
+    private bool _isEditing;
 
     [JsonIgnore]
     public string NodeBorderBrush => IsSelected ? "#2459B8" : "#E2E5EA";
