@@ -4,4 +4,7 @@
     <Project Path="src/AgentOrchestrator.Cli/AgentOrchestrator.Cli.csproj" />
     <Project Path="src/OpenCode.Client/OpenCode.Client.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AgentOrchestrator.App.Tests/AgentOrchestrator.App.Tests.csproj" />
+  </Folder>
 </Solution>
