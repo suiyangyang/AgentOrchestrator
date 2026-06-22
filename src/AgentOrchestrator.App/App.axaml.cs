@@ -194,10 +194,16 @@ public partial class App : Application
         services.AddSingleton<INodeOutputInjector, DefaultNodeOutputInjector>();
         services.AddSingleton<ITaskGraphRuntimeHub, TaskGraphRuntimeHub>();
         services.AddSingleton<ITaskGraphExecutor, TaskGraphExecutor>();
+        services.AddSingleton<ITaskGraphExecutionController>(sp => (ITaskGraphExecutionController)sp.GetRequiredService<ITaskGraphExecutor>());
 
         // ── ViewModels ──
         services.AddSingleton<SidebarViewModel>();
-        services.AddSingleton<ChatWorkspaceViewModel>();
+        services.AddSingleton<ChatWorkspaceViewModel>(sp => new ChatWorkspaceViewModel(
+            sp.GetRequiredService<IAgentGateway>(),
+            sp.GetRequiredService<ISidebarRepository>(),
+            sp.GetRequiredService<SidebarViewModel>(),
+            sp.GetRequiredService<ITaskGraphExecutionController>(),
+            sp.GetRequiredService<ITaskGraphRuntimeHub>()));
         services.AddSingleton<TaskGraphWorkspaceViewModel>();
         services.AddTransient<TaskGraphNodeDetailViewModel>();
         services.AddSingleton<MainWindowViewModel>();

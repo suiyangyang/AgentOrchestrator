@@ -7,95 +7,155 @@
              x:Class="AgentOrchestrator.App.Controls.ChatWorkspaceControl"
              x:Name="Root"
              x:DataType="vm:ChatWorkspaceViewModel">
-    <Grid RowDefinitions="*,Auto" Background="#FFFFFF">
-        <ScrollViewer x:Name="MessagesScrollViewer" Grid.Row="0" VerticalScrollBarVisibility="Auto">
-                <ItemsControl ItemsSource="{Binding Messages}" Margin="38,18,38,16">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="vm:ChatMessageViewModel">
-                        <Grid Margin="0,0,0,14">
-                            <StackPanel Spacing="10" MaxWidth="900">
-                                <Border Classes="user-bubble"
-                                        IsVisible="{Binding IsUser}"
-                                        HorizontalAlignment="Right">
-                                    <ItemsControl ItemsSource="{Binding Blocks}">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <StackPanel Spacing="14" />
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate DataType="vm:ChatBlockViewModel">
-                                                <StackPanel>
-                                                    <controls:MarkdownBlockControl IsVisible="{Binding IsText}" DataContext="{Binding}" />
-                                                    <controls:CollapsibleBlockControl IsVisible="{Binding IsThought}" DataContext="{Binding}" />
-                                                    <controls:CollapsibleBlockControl IsVisible="{Binding IsTool}" DataContext="{Binding}" />
-                                                    <controls:CollapsibleBlockControl IsVisible="{Binding IsTask}" DataContext="{Binding}" />
-                                                    <Border Classes="inline-attachment"
-                                                            IsVisible="{Binding IsImage}">
-                                                        <StackPanel Orientation="Horizontal" Spacing="10">
-                                                            <Border Classes="mini-file-icon">
-                                                                <TextBlock Text="+" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                            </Border>
-                                                            <TextBlock Text="{Binding Text}" VerticalAlignment="Center" FontSize="{DynamicResource UiFontSize}" />
-                                                        </StackPanel>
-                                                    </Border>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </Border>
+     <Grid RowDefinitions="*,Auto,Auto" Background="#FFFFFF">
+         <ScrollViewer x:Name="MessagesScrollViewer" Grid.Row="0" VerticalScrollBarVisibility="Auto">
+                 <ItemsControl ItemsSource="{Binding Messages}" Margin="38,18,38,16">
+                 <ItemsControl.ItemTemplate>
+                     <DataTemplate DataType="vm:ChatMessageViewModel">
+                         <Grid Margin="0,0,0,14">
+                             <StackPanel Spacing="10" MaxWidth="900">
+                                 <Border Classes="user-bubble"
+                                         IsVisible="{Binding IsUser}"
+                                         HorizontalAlignment="Right">
+                                     <ItemsControl ItemsSource="{Binding Blocks}">
+                                         <ItemsControl.ItemsPanel>
+                                             <ItemsPanelTemplate>
+                                                 <StackPanel Spacing="14" />
+                                             </ItemsPanelTemplate>
+                                         </ItemsControl.ItemsPanel>
+                                         <ItemsControl.ItemTemplate>
+                                             <DataTemplate DataType="vm:ChatBlockViewModel">
+                                                 <StackPanel>
+                                                     <controls:MarkdownBlockControl IsVisible="{Binding IsText}" DataContext="{Binding}" />
+                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsThought}" DataContext="{Binding}" />
+                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsTool}" DataContext="{Binding}" />
+                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsTask}" DataContext="{Binding}" />
+                                                     <Border Classes="inline-attachment"
+                                                             IsVisible="{Binding IsImage}">
+                                                         <StackPanel Orientation="Horizontal" Spacing="10">
+                                                             <Border Classes="mini-file-icon">
+                                                                 <TextBlock Text="+" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                             </Border>
+                                                             <TextBlock Text="{Binding Text}" VerticalAlignment="Center" FontSize="{DynamicResource UiFontSize}" />
+                                                         </StackPanel>
+                                                     </Border>
+                                                 </StackPanel>
+                                             </DataTemplate>
+                                         </ItemsControl.ItemTemplate>
+                                     </ItemsControl>
+                                 </Border>
 
-                                <StackPanel Spacing="14"
-                                            IsVisible="{Binding IsAssistant}">
-                                    <StackPanel Orientation="Horizontal"
-                                                Spacing="10"
-                                                IsVisible="{Binding ShowStreamingPlaceholder}">
-                                        <Border Classes="assistant-loading-dot-shell">
-                                            <Border Classes="assistant-loading-dot" />
-                                        </Border>
-                                        <TextBlock Text="Codex"
-                                                   Classes="assistant-loading-text"
-                                                   VerticalAlignment="Center" />
-                                    </StackPanel>
-                                    <TextBlock Text="{Binding StreamingStatusText}"
-                                               IsVisible="{Binding StreamingStatusText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
-                                               Classes="assistant-loading-text"
-                                               VerticalAlignment="Center" />
-                                    <ItemsControl ItemsSource="{Binding Blocks}">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <StackPanel Spacing="14" />
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate DataType="vm:ChatBlockViewModel">
-                                                <StackPanel>
-                                                    <controls:MarkdownBlockControl IsVisible="{Binding IsText}" DataContext="{Binding}" />
-                                                    <controls:CollapsibleBlockControl IsVisible="{Binding IsThought}" DataContext="{Binding}" />
-                                                    <controls:CollapsibleBlockControl IsVisible="{Binding IsTool}" DataContext="{Binding}" />
-                                                    <controls:CollapsibleBlockControl IsVisible="{Binding IsTask}" DataContext="{Binding}" />
-                                                    <Border Classes="inline-attachment"
-                                                            IsVisible="{Binding IsImage}">
-                                                        <StackPanel Orientation="Horizontal" Spacing="10">
-                                                            <Border Classes="mini-file-icon">
-                                                                <TextBlock Text="+" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                            </Border>
-                                                            <TextBlock Text="{Binding Text}" VerticalAlignment="Center" FontSize="{DynamicResource UiFontSize}" />
-                                                        </StackPanel>
-                                                    </Border>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </StackPanel>
-                        </Grid>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+                                 <StackPanel Spacing="14"
+                                             IsVisible="{Binding IsAssistant}">
+                                     <StackPanel Orientation="Horizontal"
+                                                 Spacing="10"
+                                                 IsVisible="{Binding ShowStreamingPlaceholder}">
+                                         <Border Classes="assistant-loading-dot-shell">
+                                             <Border Classes="assistant-loading-dot" />
+                                         </Border>
+                                         <TextBlock Text="Codex"
+                                                    Classes="assistant-loading-text"
+                                                    VerticalAlignment="Center" />
+                                     </StackPanel>
+                                     <TextBlock Text="{Binding StreamingStatusText}"
+                                                IsVisible="{Binding StreamingStatusText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
+                                                Classes="assistant-loading-text"
+                                                VerticalAlignment="Center" />
+                                     <ItemsControl ItemsSource="{Binding Blocks}">
+                                         <ItemsControl.ItemsPanel>
+                                             <ItemsPanelTemplate>
+                                                 <StackPanel Spacing="14" />
+                                             </ItemsPanelTemplate>
+                                         </ItemsControl.ItemsPanel>
+                                         <ItemsControl.ItemTemplate>
+                                             <DataTemplate DataType="vm:ChatBlockViewModel">
+                                                 <StackPanel>
+                                                     <controls:MarkdownBlockControl IsVisible="{Binding IsText}" DataContext="{Binding}" />
+                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsThought}" DataContext="{Binding}" />
+                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsTool}" DataContext="{Binding}" />
+                                                     <controls:CollapsibleBlockControl IsVisible="{Binding IsTask}" DataContext="{Binding}" />
+                                                     <Border Classes="inline-attachment"
+                                                             IsVisible="{Binding IsImage}">
+                                                         <StackPanel Orientation="Horizontal" Spacing="10">
+                                                             <Border Classes="mini-file-icon">
+                                                                 <TextBlock Text="+" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                             </Border>
+                                                             <TextBlock Text="{Binding Text}" VerticalAlignment="Center" FontSize="{DynamicResource UiFontSize}" />
+                                                         </StackPanel>
+                                                     </Border>
+                                                 </StackPanel>
+                                             </DataTemplate>
+                                         </ItemsControl.ItemTemplate>
+                                     </ItemsControl>
+                                 </StackPanel>
+                             </StackPanel>
+                         </Grid>
+                     </DataTemplate>
+                 </ItemsControl.ItemTemplate>
+             </ItemsControl>
+         </ScrollViewer>
 
-        <Border Grid.Row="1"
+         <!-- Row 1: TaskGraph orchestration strip -->
+         <Border Grid.Row="1" Classes="taskgraph-strip" Margin="38,8,38,0" Padding="12,10">
+             <Panel>
+                 <!-- Auto-pilot strip: visible when no active graph -->
+                 <StackPanel Spacing="8" Orientation="Horizontal" VerticalAlignment="Center"
+                             IsVisible="{Binding ShowAutoPilotStrip}">
+                     <TextBlock Text="编排:" VerticalAlignment="Center" FontWeight="SemiBold" />
+                     <Button Content="自动编排" Command="{Binding TriggerAutoTaskGraphCommand}"
+                             Classes="taskgraph-strip-button" />
+                     <Separator Width="1" Height="20" Background="#E0E3E8" />
+                     <Button Content="任务列表" Command="{Binding TriggerTaskListTemplateCommand}"
+                             Classes="taskgraph-strip-button" />
+                     <Button Content="功能开发" Command="{Binding TriggerFeatureDevTemplateCommand}"
+                             Classes="taskgraph-strip-button" />
+                     <Button Content="Bug 列表" Command="{Binding TriggerBugListTemplateCommand}"
+                             Classes="taskgraph-strip-button" />
+                 </StackPanel>
+
+                 <!-- Status card: visible when HasActiveGraph -->
+                 <Border IsVisible="{Binding HasActiveGraph}" Padding="4,0">
+                     <Grid ColumnDefinitions="*,Auto">
+                         <StackPanel Spacing="3" VerticalAlignment="Center">
+                             <TextBlock Text="{Binding ActiveGraph.Name}"
+                                        FontWeight="SemiBold" FontSize="{DynamicResource UiFontSize}" Foreground="#1F2328" />
+                             <StackPanel Orientation="Horizontal" Spacing="12">
+                                 <TextBlock FontSize="12" Foreground="#6E727A"
+                                            Text="{Binding ActiveExecutionContext.CurrentRunningNodeId}" />
+                             </StackPanel>
+                             <StackPanel Orientation="Horizontal" Spacing="16">
+                                 <TextBlock FontSize="11" Foreground="#18A558">
+                                     <Run Text="已完成: " />
+                                     <Run Text="{Binding ActiveExecutionContext.RecentCompletedNodes.Count}" />
+                                 </TextBlock>
+                                 <TextBlock FontSize="11" Foreground="#D73A49">
+                                     <Run Text="已失败: " />
+                                     <Run Text="{Binding ActiveExecutionContext.RecentFailedNodes.Count}" />
+                                 </TextBlock>
+                                 <TextBlock FontSize="11" Foreground="#FF6A00">
+                                     <Run Text="待决策: " />
+                                     <Run Text="{Binding ActiveExecutionContext.PendingDecisions.Count}" />
+                                 </TextBlock>
+                             </StackPanel>
+                         </StackPanel>
+                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                             <Button Content="暂停" Command="{Binding PauseActiveGraphCommand}"
+                                     Classes="taskgraph-strip-button" />
+                             <Button Content="取消" Command="{Binding CancelActiveGraphCommand}"
+                                     Classes="taskgraph-strip-button" />
+                             <Button Content="继续" Command="{Binding ResumeContinueGraphCommand}"
+                                     Classes="taskgraph-strip-button" />
+                             <Button Content="汇总" Command="{Binding ResumeSummarizeGraphCommand}"
+                                     Classes="taskgraph-strip-button" />
+                             <Button Content="分离" Command="{Binding ExecuteDetachActiveGraphCommand}"
+                                     Classes="taskgraph-strip-button" />
+                         </StackPanel>
+                     </Grid>
+                 </Border>
+             </Panel>
+         </Border>
+
+         <Border Grid.Row="2"
                 Classes="composer-shell"
                 HorizontalAlignment="Stretch"
                 MaxWidth="900"
