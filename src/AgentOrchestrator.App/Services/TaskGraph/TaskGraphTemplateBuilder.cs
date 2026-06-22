@@ -278,6 +278,48 @@ public static class TaskGraphTemplateBuilder
         return true;
     }
 
+    /// <summary>
+    /// Generic entry point that dispatches to the appropriate template builder
+    /// based on <paramref name="kind"/>. For unsupported kinds, returns a
+    /// minimal 2-node linear graph suitable for v3 first-version testing.
+    /// </summary>
+    public static TaskGraphModel Build(TaskGraphTemplateKind kind, string rawInput = "")
+    {
+        return kind switch
+        {
+            TaskGraphTemplateKind.TaskList => BuildTaskListGraph(rawInput),
+            TaskGraphTemplateKind.FeatureDevelopment => BuildFeatureDevelopmentGraph(rawInput),
+            TaskGraphTemplateKind.BugList => BuildBugListGraph(rawInput),
+            _ => BuildMinimalStub(rawInput),
+        };
+    }
+
+    private static TaskGraphModel BuildMinimalStub(string rawInput)
+    {
+        var graph = new TaskGraphModel { Name = "最小模板图" };
+        var node1 = new TaskNode
+        {
+            Id = "stub_parse",
+            Title = "解析输入",
+            Kind = TaskNodeKind.Plan,
+            DelegationStrategy = TaskNodeDelegationStrategy.Inline,
+            Prompt = string.IsNullOrWhiteSpace(rawInput) ? "无输入" : rawInput,
+        };
+        var node2 = new TaskNode
+        {
+            Id = "stub_execute",
+            Title = "执行",
+            Kind = TaskNodeKind.Execute,
+            DelegationStrategy = TaskNodeDelegationStrategy.NewSession,
+            Prompt = $"基于以下输入执行：\n{rawInput}",
+        };
+        node2.DependsOn.Add(node1.Id);
+        graph.Nodes.Add(node1);
+        graph.Nodes.Add(node2);
+        graph.RebuildEdges();
+        return graph;
+    }
+
     private static TaskGraphModel CreateBaseGraph(
         string name,
         TaskGraphTemplateKind templateKind,
