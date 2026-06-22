@@ -73,6 +73,17 @@ public sealed class NotImplementedAgentGateway : IAgentGateway
         CancellationToken ct = default)
         => throw new NotImplementedException();
 
+    public Task<string> CreateChildSessionAsync(
+        string parentSessionId,
+        SessionCreateRequest request,
+        CancellationToken ct = default)
+        => throw new NotImplementedException();
+
+    public Task<IReadOnlyList<RemoteSessionInfo>> ListChildSessionsAsync(
+        string parentSessionId,
+        CancellationToken ct = default)
+        => throw new NotImplementedException();
+
     public async IAsyncEnumerable<ChatStreamChunk> SendMessageAsync(
         string agentSessionId,
         ChatRequest request,

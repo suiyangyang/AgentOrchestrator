@@ -1561,6 +1561,64 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         return parts;
     }
 
+    public async Task<string> CreateChildSessionAsync(
+        string parentSessionId,
+        SessionCreateRequest request,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var parent = await _client.Sessions
+                .GetAsync(parentSessionId, directory: null, ct: ct)
+                .ConfigureAwait(false);
+
+            var body = new OcSessionCreateRequest
+            {
+                Title = request.Title,
+            };
+            var created = await _client.Sessions
+                .CreateAsync(body, directory: parent.Directory, ct: ct)
+                .ConfigureAwait(false);
+            return created.Id;
+        }
+        catch (Exception ex)
+        {
+            ReportError("创建子会话", ex);
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyList<RemoteSessionInfo>> ListChildSessionsAsync(
+        string parentSessionId,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var parent = await _client.Sessions
+                .GetAsync(parentSessionId, directory: null, ct: ct)
+                .ConfigureAwait(false);
+
+            var children = await _client.Sessions
+                .ChildrenAsync(parentSessionId, directory: parent.Directory, ct: ct)
+                .ConfigureAwait(false);
+            var result = new List<RemoteSessionInfo>(children.Count);
+            foreach (var child in children)
+            {
+                result.Add(new RemoteSessionInfo(
+                    AgentSessionId: child.Id,
+                    Title: child.Title,
+                    CreatedAt: child.Time.Created,
+                    UpdatedAt: child.Time.Updated));
+            }
+            return result;
+        }
+        catch (Exception ex)
+        {
+            ReportError("列出子会话", ex);
+            throw;
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_ownsClient)

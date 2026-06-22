@@ -109,4 +109,20 @@ public interface IAgentGateway
         string agentSessionId,
         ChatRequest request,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Creates a child session under the given parent. The child session is
+    /// rooted at <paramref name="request"/>.<see cref="SessionCreateRequest.WorkingDirectory"/>
+    /// and is associated with <paramref name="parentSessionId"/>.
+    /// Returns the child Agent-side session id.
+    /// </summary>
+    Task<string> CreateChildSessionAsync(
+        string parentSessionId,
+        SessionCreateRequest request,
+        CancellationToken ct = default);
+
+    /// <summary>Lists the child sessions for the given parent.</summary>
+    Task<IReadOnlyList<RemoteSessionInfo>> ListChildSessionsAsync(
+        string parentSessionId,
+        CancellationToken ct = default);
 }
