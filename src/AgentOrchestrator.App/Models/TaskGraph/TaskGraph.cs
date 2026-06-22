@@ -40,6 +40,18 @@ public sealed partial class TaskGraph : ObservableObject
     [ObservableProperty]
     private DateTimeOffset? _executionCompletedAt;
 
+    [ObservableProperty]
+    private TaskGraphOriginHint _originHint = TaskGraphOriginHint.WorkspaceDirect;
+
+    [ObservableProperty]
+    private string? _conversationSessionId;
+
+    [ObservableProperty]
+    private bool _isCheckpointPending;
+
+    [ObservableProperty]
+    private string? _activeCheckpointNodeId;
+
     public ObservableCollection<TaskNode> Nodes { get; set; } = [];
 
     public ObservableCollection<TaskEdge> Edges { get; set; } = [];

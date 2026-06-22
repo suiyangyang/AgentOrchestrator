@@ -85,6 +85,21 @@ public sealed partial class TaskNode : ObservableObject
     [ObservableProperty]
     private DateTimeOffset? _completedAt;
 
+    [ObservableProperty]
+    private TaskNodeDelegationStrategy _delegationStrategy = TaskNodeDelegationStrategy.NewSession;
+
+    [ObservableProperty]
+    private string? _parentSessionId;
+
+    [ObservableProperty]
+    private bool _mutationEnabled;
+
+    [ObservableProperty]
+    private bool _checkpointAfterCompletion;
+
+    [ObservableProperty]
+    private string? _structuredSummary;
+
     public ObservableCollection<string> Tags { get; set; } = [];
 
     public ObservableCollection<string> DependsOn { get; set; } = [];
