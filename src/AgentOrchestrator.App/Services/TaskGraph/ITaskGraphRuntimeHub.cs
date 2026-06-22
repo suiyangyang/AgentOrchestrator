@@ -1,4 +1,5 @@
 using System;
+using AgentOrchestrator.App.Models.TaskGraph;
 using AgentOrchestrator.App.Services.Agent;
 
 namespace AgentOrchestrator.App.Services.TaskGraph;
@@ -9,9 +10,17 @@ public interface ITaskGraphRuntimeHub
 
     event EventHandler<TaskGraphNodeEventArgs>? NodeChanged;
 
+    event EventHandler<TaskGraphCheckpointEventArgs>? CheckpointReached;
+
+    event EventHandler<TaskGraphExecutionEventArgs>? ExecutionStateChanged;
+
     void PublishChunk(string graphId, string nodeId, ChatStreamChunk chunk);
 
     void PublishNodeChanged(string graphId, string nodeId);
+
+    void PublishCheckpoint(string graphId, string? nodeId, TaskGraphCheckpointKind kind, string? message);
+
+    void PublishExecutionState(string graphId, TaskGraphExecutionState state);
 }
 
 public sealed class TaskGraphChunkEventArgs : EventArgs
