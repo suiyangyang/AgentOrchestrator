@@ -207,6 +207,65 @@ View ── ViewModel ── IAgentGateway / ISidebarRepository
 - The CLI (`AgentOrchestrator.Cli`) reuses the same services for
   headless verification
 
+## TaskGraph In-Conversation Orchestrator
+
+The chat workspace acts as the control plane for TaskGraph execution;
+the executor is the execution plane. Both surfaces communicate through
+`TaskGraphRuntimeHub` events and `ConversationExecutionContext`.
+
+- **Control plane** — `ChatWorkspaceViewModel` owns `ActiveGraph`,
+  `ActiveExecutionContext`, and `HasChatExecutionLease`. It triggers
+  graph execution via `ITaskGraphExecutionController.StartAsync(...)`
+  and consumes checkpoint events back through hub subscriptions. The
+  chat composer is gated by the lease so `InSessionExecution` and
+  `Inline` node runs cannot collide with regular chat sends.
+- **Execution plane** — `TaskGraphExecutor` implements both
+  `ITaskGraphExecutor` (existing entry points, unchanged signatures)
+  and `ITaskGraphExecutionController` (new `StartAsync` / `ResumeAsync`
+  / `PauseAsync` / `CancelAsync`). The internal loop runs node-by-node
+  in topological order and pauses at checkpoints; the same loop is
+  shared by all four `ITaskGraphExecutor` entry methods so the
+  standalone TaskGraph workspace continues to use the same engine.
+- **Checkpoint kinds** — first-version checkpoints fire on
+  `NodeCompleted`, `NodeFailed`, `WaitingForInput`, and `GraphExpanded`
+  (plan §8.2). A checkpoint sets `TaskGraph.IsCheckpointPending`,
+  populates `ActiveCheckpointNodeId`, publishes
+  `TaskGraphCheckpointEventArgs` through the hub, and awaits a
+  `GraphContinueDecision` (`Continue` / `Pause` / `Cancel` /
+  `RetryFailed` / `SkipNode` / `Summarize`).
+- **Node delegation strategies** — every `TaskNode` carries a
+  `TaskNodeDelegationStrategy` of `NewSession`, `ChildSession`,
+  `InSessionExecution`, or `Inline`. `NewSession` is the existing
+  behavior; the other three were added in v3 with `Inline` returning a
+  deterministic stub for the first version (LLM-routed inline is
+  deferred).
+- **Context bridge** — `ConversationExecutionContext` is the chat
+  session's projection of graph state. It carries three most-recent
+  completed nodes, two most-recent failed nodes, pending decisions,
+  and recent mutations. `BuildTaskGraphContextInjection()` renders
+  this projection as a hidden prompt prefix; `SendOneAsync` prepends
+  it to the next user prompt and clears the context after one use so
+  the chat history is not polluted.
+- **Lease semantics** — `ChatExecutionLease` is acquired when a
+  chat-triggered graph enters `InSessionExecution` or `Inline`
+  execution and is released when the graph reaches a terminal state or
+  is cancelled. While held, `HasChatExecutionLease` is `true` and the
+  executor's checkpoint/decision flow has exclusive write authority
+  on the bound chat session.
+- **IAgentGateway extensions** — `CreateChildSessionAsync(parent, ...)`
+  and `ListChildSessionsAsync(parent, ...)` were added to support
+  `ChildSession` delegation. `OpenCodeAgentGateway` resolves the
+  parent's directory and reuses `Sessions.CreateAsync` and
+  `Sessions.ChildrenAsync`; `NotImplementedAgentGateway` mirrors the
+  stub pattern.
+- **UI surface** — `ChatWorkspaceControl` exposes an orchestration
+  strip between the message scroll area and the composer with two
+  mutually-visible states: an auto-pilot strip (auto + 3 template
+  buttons) when no graph is active, and a status card (graph name,
+  running node, completion/failure/decision counts, pause/cancel/
+  continue/summarize/detach buttons) when `HasActiveGraph` is true.
+  All bindings use compiled bindings with `x:DataType`.
+
 ## Settings
 
 - `AppSettings` is a single POCO that carries every persisted field
