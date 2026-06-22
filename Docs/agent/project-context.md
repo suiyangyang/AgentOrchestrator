@@ -17,6 +17,10 @@ Current product focus:
 - task-graph workspace (saved graphs, template/direct/intent/document generation,
   graph canvas editing, drag-link dependencies, node detail drill-down, bug report export,
   and a focus mode that lets the graph canvas fill the window)
+- in-conversation TaskGraph orchestrator: chat workspace owns the active graph
+  as the control plane, app executor runs it as the execution plane; checkpoint-based
+  pauses publish results back through the runtime hub and a context bridge so the
+  current chat session can consume aggregated node summaries as hidden prompt context
 - settings window (Personal / General placeholder, Personal / Appearance for
   UI & code font family + size, Integrations / Services with the live
   OpenCode enable/status/URL/username/password card and a codex placeholder)
