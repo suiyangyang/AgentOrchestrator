@@ -1,8 +1,10 @@
 # TaskGraph 对话内 Orchestrator 开发方案
 
-> 状态: 开发方案，待实施
+> 状态: 已实施 (2026-06-22) — 本文档保留作为设计记录与回溯参考
 > 日期: 2026-06-21
 > 适用范围: AgentOrchestrator TaskGraph v3 对话内编排
+>
+> 当前实现见 `Docs/developer/architecture.md` 中「TaskGraph In-Conversation Orchestrator」一节。
 
 ---
 
@@ -696,7 +698,534 @@ flowchart TD
 
 ---
 
-## 20. 风险与缓解
+## 20. 关键模型与关键函数
+
+为了便于本地模型直接参与开发，本节明确列出首版实现必须涉及的核心类型、建议新增类型、关键函数与调用关系。目标是让开发过程可以围绕“模型 -> 服务 -> 调用链”逐步展开，而不是只停留在概念层。
+
+### 20.1 需要修改的现有模型
+
+#### `TaskGraph`
+
+文件:
+
+- `src/AgentOrchestrator.App/Models/TaskGraph/TaskGraph.cs`
+
+建议新增字段:
+
+```csharp
+[ObservableProperty]
+private TaskGraphOriginHint _originHint = TaskGraphOriginHint.WorkspaceDirect;
+
+[ObservableProperty]
+private string? _conversationSessionId;
+
+[ObservableProperty]
+private bool _isCheckpointPending;
+
+[ObservableProperty]
+private string? _activeCheckpointNodeId;
+```
+
+字段说明:
+
+- `OriginHint`: 图来源，区分工作区直接创建、Chat 自动创建、Chat 模板创建
+- `ConversationSessionId`: 当前图绑定的 chat session id
+- `IsCheckpointPending`: 当前图是否停在检查点等待控制面决策
+- `ActiveCheckpointNodeId`: 当前触发检查点的节点 id
+
+#### `TaskNode`
+
+文件:
+
+- `src/AgentOrchestrator.App/Models/TaskGraph/TaskNode.cs`
+
+建议新增字段:
+
+```csharp
+[ObservableProperty]
+private TaskNodeDelegationStrategy _delegationStrategy = TaskNodeDelegationStrategy.NewSession;
+
+[ObservableProperty]
+private string? _parentSessionId;
+
+[ObservableProperty]
+private bool _mutationEnabled;
+
+[ObservableProperty]
+private bool _checkpointAfterCompletion;
+
+[ObservableProperty]
+private string? _structuredSummary;
+```
+
+字段说明:
+
+- `DelegationStrategy`: 节点执行路径
+- `ParentSessionId`: `ChildSession` 执行时记录父 session
+- `MutationEnabled`: 是否允许该节点触发受控扩图
+- `CheckpointAfterCompletion`: 节点完成后是否强制进入检查点
+- `StructuredSummary`: 面向当前会话回灌的结构化摘要缓存
+
+#### `TaskGraphExecutionRequest`
+
+建议确保该类型包含以下字段:
+
+```csharp
+public sealed record TaskGraphExecutionRequest(
+    string WorkingDirectory,
+    string Permission,
+    string Model,
+    string? ConversationSessionId,
+    bool AllowInlineExecution,
+    TaskGraphExecutionPresentationMode PresentationMode);
+```
+
+字段说明:
+
+- `ConversationSessionId`: 当前图绑定的会话 id
+- `AllowInlineExecution`: 是否允许 `Inline` 在当前路径运行
+- `PresentationMode`: 图执行展示模式，区分工作区与 Chat 内嵌模式
+
+### 20.2 建议新增的核心模型
+
+#### `TaskGraphOriginHint`
+
+建议位置:
+
+- `src/AgentOrchestrator.App/Models/TaskGraph/TaskGraphOriginHint.cs`
+
+建议定义:
+
+```csharp
+public enum TaskGraphOriginHint
+{
+    WorkspaceDirect = 0,
+    ChatAuto = 1,
+    ChatTemplate = 2,
+    ChatMention = 3,
+}
+```
+
+#### `TaskGraphExecutionPresentationMode`
+
+建议位置:
+
+- `src/AgentOrchestrator.App/Models/TaskGraph/TaskGraphExecutionPresentationMode.cs`
+
+建议定义:
+
+```csharp
+public enum TaskGraphExecutionPresentationMode
+{
+    Workspace = 0,
+    ChatEmbedded = 1,
+}
+```
+
+#### `ConversationExecutionContext`
+
+建议位置:
+
+- `src/AgentOrchestrator.App/Models/Chat/ConversationExecutionContext.cs`
+
+建议定义:
+
+```csharp
+public sealed class ConversationExecutionContext
+{
+    public string ConversationSessionId { get; init; } = string.Empty;
+    public string GraphId { get; init; } = string.Empty;
+    public bool HasExecutionLease { get; set; }
+    public string? CurrentRunningNodeId { get; set; }
+    public string? GraphSummary { get; set; }
+    public List<NodeSummarySnapshot> RecentCompletedNodes { get; } = [];
+    public List<NodeFailureSnapshot> RecentFailedNodes { get; } = [];
+    public List<PendingDecisionSnapshot> PendingDecisions { get; } = [];
+    public List<GraphMutationSnapshot> RecentMutations { get; } = [];
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+```
+
+#### `NodeSummarySnapshot`
+
+建议位置:
+
+- `src/AgentOrchestrator.App/Models/Chat/NodeSummarySnapshot.cs`
+
+建议定义:
+
+```csharp
+public sealed record NodeSummarySnapshot(
+    string NodeId,
+    string Title,
+    string Summary,
+    DateTimeOffset CompletedAt);
+```
+
+#### `NodeFailureSnapshot`
+
+建议位置:
+
+- `src/AgentOrchestrator.App/Models/Chat/NodeFailureSnapshot.cs`
+
+建议定义:
+
+```csharp
+public sealed record NodeFailureSnapshot(
+    string NodeId,
+    string Title,
+    string Error,
+    bool Retryable,
+    DateTimeOffset FailedAt);
+```
+
+#### `PendingDecisionSnapshot`
+
+建议位置:
+
+- `src/AgentOrchestrator.App/Models/Chat/PendingDecisionSnapshot.cs`
+
+建议定义:
+
+```csharp
+public sealed record PendingDecisionSnapshot(
+    string NodeId,
+    string Title,
+    string Reason,
+    DateTimeOffset RequestedAt);
+```
+
+#### `GraphMutationSnapshot`
+
+建议位置:
+
+- `src/AgentOrchestrator.App/Models/Chat/GraphMutationSnapshot.cs`
+
+建议定义:
+
+```csharp
+public sealed record GraphMutationSnapshot(
+    string SourceNodeId,
+    string Description,
+    DateTimeOffset OccurredAt);
+```
+
+#### `GraphContinueDecision`
+
+建议位置:
+
+- `src/AgentOrchestrator.App/Models/TaskGraph/GraphContinueDecision.cs`
+
+建议定义:
+
+```csharp
+public sealed record GraphContinueDecision(
+    GraphContinueDecisionKind Kind,
+    string? TargetNodeId = null,
+    string? Comment = null);
+
+public enum GraphContinueDecisionKind
+{
+    Continue = 0,
+    Pause = 1,
+    Cancel = 2,
+    RetryFailed = 3,
+    SkipNode = 4,
+    Summarize = 5,
+}
+```
+
+#### `ChatExecutionLease`
+
+建议位置:
+
+- `src/AgentOrchestrator.App/Services/Chat/ChatExecutionLease.cs`
+
+建议定义:
+
+```csharp
+public sealed class ChatExecutionLease
+{
+    public string ConversationSessionId { get; }
+    public string GraphId { get; }
+    public DateTimeOffset AcquiredAt { get; }
+
+    public ChatExecutionLease(string conversationSessionId, string graphId)
+    {
+        ConversationSessionId = conversationSessionId;
+        GraphId = graphId;
+        AcquiredAt = DateTimeOffset.UtcNow;
+    }
+}
+```
+
+### 20.3 建议新增的运行时事件类型
+
+#### `TaskGraphCheckpointKind`
+
+建议位置:
+
+- `src/AgentOrchestrator.App/Services/TaskGraph/TaskGraphCheckpointKind.cs`
+
+建议定义:
+
+```csharp
+public enum TaskGraphCheckpointKind
+{
+    NodeCompleted = 0,
+    NodeFailed = 1,
+    WaitingForInput = 2,
+    GraphExpanded = 3,
+}
+```
+
+#### `TaskGraphCheckpointEventArgs`
+
+建议位置:
+
+- `src/AgentOrchestrator.App/Services/TaskGraph/TaskGraphCheckpointEventArgs.cs`
+
+建议定义:
+
+```csharp
+public sealed class TaskGraphCheckpointEventArgs : EventArgs
+{
+    public string GraphId { get; }
+    public string? NodeId { get; }
+    public TaskGraphCheckpointKind Kind { get; }
+    public string? Message { get; }
+
+    public TaskGraphCheckpointEventArgs(
+        string graphId,
+        string? nodeId,
+        TaskGraphCheckpointKind kind,
+        string? message)
+    {
+        GraphId = graphId;
+        NodeId = nodeId;
+        Kind = kind;
+        Message = message;
+    }
+}
+```
+
+### 20.4 需要扩展的接口
+
+#### `IAgentGateway`
+
+文件:
+
+- `src/AgentOrchestrator.App/Services/Agent/IAgentGateway.cs`
+
+建议新增:
+
+```csharp
+Task<string> CreateChildSessionAsync(
+    string parentSessionId,
+    SessionCreateRequest request,
+    CancellationToken ct = default);
+
+Task<IReadOnlyList<RemoteSessionInfo>> ListChildSessionsAsync(
+    string parentSessionId,
+    CancellationToken ct = default);
+```
+
+说明:
+
+- `InSessionExecution` 不新增独立 gateway 接口
+- 仍复用 `SendMessageAsync(existingSessionId, ...)`
+
+#### `ITaskGraphRuntimeHub`
+
+文件:
+
+- `src/AgentOrchestrator.App/Services/TaskGraph/ITaskGraphRuntimeHub.cs`
+
+建议新增:
+
+```csharp
+event EventHandler<TaskGraphCheckpointEventArgs>? CheckpointReached;
+event EventHandler<TaskGraphExecutionEventArgs>? ExecutionStateChanged;
+
+void PublishCheckpoint(string graphId, string? nodeId, TaskGraphCheckpointKind kind, string? message);
+void PublishExecutionState(string graphId, TaskGraphExecutionState state);
+```
+
+#### `ITaskGraphExecutionController`
+
+建议新增文件:
+
+- `src/AgentOrchestrator.App/Services/TaskGraph/ITaskGraphExecutionController.cs`
+
+建议定义:
+
+```csharp
+public interface ITaskGraphExecutionController
+{
+    Task StartAsync(TaskGraph graph, TaskGraphExecutionRequest request, CancellationToken ct = default);
+    Task ResumeAsync(string graphId, GraphContinueDecision decision, CancellationToken ct = default);
+    Task PauseAsync(string graphId, CancellationToken ct = default);
+    Task CancelAsync(string graphId, CancellationToken ct = default);
+}
+```
+
+说明:
+
+- 首版可由 `TaskGraphExecutor` 同时实现 `ITaskGraphExecutor` 与 `ITaskGraphExecutionController`
+- 外部先兼容原入口，内部逐步迁移为检查点式
+
+### 20.5 `TaskGraphExecutor` 关键函数
+
+文件:
+
+- `src/AgentOrchestrator.App/Services/TaskGraph/TaskGraphExecutor.cs`
+
+建议保留的对外入口:
+
+```csharp
+Task ExecuteAsync(TaskGraph graph, TaskGraphExecutionRequest request, CancellationToken ct = default);
+Task RetryFailedAsync(TaskGraph graph, TaskGraphExecutionRequest request, CancellationToken ct = default);
+Task ContinueAsync(TaskGraph graph, TaskGraphExecutionRequest request, CancellationToken ct = default);
+void RequestCancel(string graphId);
+Task ReconcileAsync(TaskGraph graph, CancellationToken ct = default);
+```
+
+建议新增或重构的内部关键函数:
+
+```csharp
+private Task RunUntilCheckpointAsync(
+    TaskGraph graph,
+    TaskGraphExecutionRequest request,
+    ExecutionController controller,
+    CancellationToken ct);
+
+private Task<NodeExecutionOutcome> ExecuteNodeByStrategyAsync(
+    TaskGraph graph,
+    TaskNode node,
+    TaskGraphExecutionRequest request,
+    ExecutionController controller,
+    CancellationToken ct);
+
+private Task<NodeExecutionOutcome> ExecuteWithNewSessionAsync(
+    TaskGraph graph,
+    TaskNode node,
+    TaskGraphExecutionRequest request,
+    CancellationToken ct);
+
+private Task<NodeExecutionOutcome> ExecuteWithChildSessionAsync(
+    TaskGraph graph,
+    TaskNode node,
+    TaskGraphExecutionRequest request,
+    CancellationToken ct);
+
+private Task<NodeExecutionOutcome> ExecuteInConversationSessionAsync(
+    TaskGraph graph,
+    TaskNode node,
+    TaskGraphExecutionRequest request,
+    CancellationToken ct);
+
+private Task<NodeExecutionOutcome> ExecuteInlineAsync(
+    TaskGraph graph,
+    TaskNode node,
+    TaskGraphExecutionRequest request,
+    CancellationToken ct);
+
+private bool TryEnterCheckpoint(
+    TaskGraph graph,
+    TaskNode node,
+    NodeExecutionOutcome outcome,
+    out TaskGraphCheckpointKind checkpointKind,
+    out string? message);
+
+private Task PublishCheckpointAndPauseAsync(
+    TaskGraph graph,
+    TaskNode node,
+    TaskGraphCheckpointKind checkpointKind,
+    string? message,
+    CancellationToken ct);
+
+private Task ApplyContinueDecisionAsync(
+    TaskGraph graph,
+    GraphContinueDecision decision,
+    CancellationToken ct);
+```
+
+建议新增内部结果类型:
+
+```csharp
+private sealed record NodeExecutionOutcome(
+    bool Success,
+    bool NeedsCheckpoint,
+    string? Summary,
+    string? ErrorMessage);
+```
+
+### 20.6 `ChatWorkspaceViewModel` 关键函数
+
+文件:
+
+- `src/AgentOrchestrator.App/ViewModels/ChatWorkspaceViewModel.cs`
+
+建议新增属性:
+
+```csharp
+public TaskGraph? ActiveGraph { get; private set; }
+public ConversationExecutionContext? ActiveExecutionContext { get; private set; }
+public bool HasChatExecutionLease { get; private set; }
+```
+
+建议新增关键函数:
+
+```csharp
+Task TriggerAutoTaskGraphAsync(string text);
+Task TriggerTemplateTaskGraphAsync(TaskGraphTemplateKind kind, string rawInput);
+
+private async Task<TaskGraph> CreateGraphFromCurrentConversationAsync(string text);
+private ConversationExecutionContext CreateExecutionContext(TaskGraph graph);
+private void AttachGraphRuntimeSubscriptions(TaskGraph graph);
+private void UpdateExecutionContextFromNode(TaskGraph graph, TaskNode node);
+private void UpdateExecutionContextFromCheckpoint(TaskGraphCheckpointEventArgs args);
+private string BuildTaskGraphContextInjection(ConversationExecutionContext context);
+private async Task ResumeGraphAfterCheckpointAsync(GraphContinueDecision decision);
+private bool TryAcquireChatExecutionLease(string graphId, string conversationSessionId);
+private void ReleaseChatExecutionLease(string graphId);
+```
+
+这些函数分别解决:
+
+- 图生成
+- 会话级执行上下文创建
+- 运行时事件挂接
+- 节点结果聚合
+- prompt 注入构造
+- 检查点继续
+- chat 写入串行控制
+
+### 20.7 推荐主调用链
+
+首版推荐调用顺序如下:
+
+```text
+用户在 Chat 中触发编排
+  -> ChatWorkspaceViewModel.TriggerAutoTaskGraphAsync(...)
+  -> CreateGraphFromCurrentConversationAsync(...)
+  -> 创建 ConversationExecutionContext
+  -> TryAcquireChatExecutionLease(...)
+  -> TaskGraphExecutor.ExecuteAsync(...)
+  -> RunUntilCheckpointAsync(...)
+  -> ExecuteNodeByStrategyAsync(...)
+  -> TaskGraphRuntimeHub 发布 NodeChanged / CheckpointReached
+  -> ChatWorkspaceViewModel.UpdateExecutionContextFrom...
+  -> BuildTaskGraphContextInjection(...)
+  -> 当前会话做继续决策
+  -> ResumeGraphAfterCheckpointAsync(...)
+```
+
+这条调用链是本地模型开发时最重要的主线，应优先保证命名、职责和调用方向一致。
+
+---
+
+## 21. 风险与缓解
 
 ### 20.1 执行器重构过大
 
@@ -744,7 +1273,7 @@ flowchart TD
 
 ---
 
-## 21. 最终落地结论
+## 22. 最终落地结论
 
 v3 对话内 Orchestrator 采用以下路线:
 
