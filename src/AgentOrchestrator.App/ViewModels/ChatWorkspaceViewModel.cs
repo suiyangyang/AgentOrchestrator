@@ -4,13 +4,17 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOrchestrator.App.Models.Chat;
 using AgentOrchestrator.App.Models.Sidebar;
+using AgentOrchestrator.App.Models.TaskGraph;
 using AgentOrchestrator.App.Services.Agent;
+using AgentOrchestrator.App.Services.Chat;
 using AgentOrchestrator.App.Services.Sidebar;
+using AgentOrchestrator.App.Services.TaskGraph;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using AgentChatRequest = AgentOrchestrator.App.Services.Agent.ChatRequest;
@@ -38,23 +42,83 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     private readonly IAgentGateway _agent;
     private readonly ISidebarRepository _repo;
     private readonly SidebarViewModel _sidebar;
+    private readonly ITaskGraphExecutionController? _graphController;
+    private readonly ITaskGraphRuntimeHub? _runtimeHub;
     private readonly Dictionary<string, SessionRuntimeState> _sessionStates = new(StringComparer.Ordinal);
     private SessionRuntimeState _activeState = new();
     private readonly Queue<QueuedSendRequest> _pendingSendQueue = new();
 
+    // Stage 3: TaskGraph Chat Integration fields.
+    private TaskGraphRuntimeHubEventSubscriptions? _hubSubscriptions;
+    private string? _leasedGraphId;
+    private string? _leasedConversationId;
+
     public ChatWorkspaceViewModel(
         IAgentGateway agent,
         ISidebarRepository repo,
-        SidebarViewModel sidebar)
+        SidebarViewModel sidebar,
+        ITaskGraphExecutionController? graphController = null,
+        ITaskGraphRuntimeHub? runtimeHub = null)
     {
         _agent = agent;
         _repo = repo;
         _sidebar = sidebar;
+        _graphController = graphController;
+        _runtimeHub = runtimeHub;
 
         SelectedPermission = Permissions[2];
         AttachActiveStateHandlers(_activeState);
     }
 
+    // ── Stage 3: TaskGraph Chat Integration Properties ───────────────────
+
+    [ObservableProperty]
+    private TaskGraph? _activeGraph;
+
+    [ObservableProperty]
+    private ConversationExecutionContext? _activeExecutionContext;
+
+    [ObservableProperty]
+    private bool _hasChatExecutionLease;
+
+    [ObservableProperty]
+    private bool _showAutoPilotStrip = true;
+
+    [ObservableProperty]
+    private TaskGraphTemplateKind _selectedTemplateKind = TaskGraphTemplateKind.BugList;
+
+    partial void OnActiveGraphChanged(TaskGraph? value)
+    {
+        OnPropertyChanged(nameof(HasActiveGraph));
+        OnPropertyChanged(nameof(CanTriggerAutoGraph));
+        ShowAutoPilotStrip = value is null;
+        CancelActiveGraphCommand.NotifyCanExecuteChanged();
+        PauseActiveGraphCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnActiveExecutionContextChanged(ConversationExecutionContext? value)
+    {
+        OnPropertyChanged(nameof(CanInjectTaskGraphContext));
+    }
+
+    partial void OnHasChatExecutionLeaseChanged(bool value)
+    {
+        PauseActiveGraphCommand.NotifyCanExecuteChanged();
+    }
+
+    public bool HasActiveGraph => ActiveGraph is not null;
+
+    public bool CanTriggerAutoGraph => ActiveGraph is null && !string.IsNullOrWhiteSpace(DraftText);
+
+    public bool CanInjectTaskGraphContext => ActiveExecutionContext is not null
+        && (ActiveExecutionContext.RecentCompletedNodes.Count > 0
+            || ActiveExecutionContext.RecentFailedNodes.Count > 0
+            || ActiveExecutionContext.PendingDecisions.Count > 0);
+
+    public bool CanPauseActiveGraph => HasActiveGraph && HasChatExecutionLease;
+    public bool CanCancelActiveGraph => HasActiveGraph;
+
+    // ── Public properties (backed by SessionRuntimeState) ────────────────
     public ObservableCollection<ChatMessageViewModel> Messages => _activeState.Messages;
     public ObservableCollection<ChatAttachment> Attachments => _activeState.Attachments;
     public ObservableCollection<SubagentActivityViewModel> SubagentActivities => _activeState.SubagentActivities;
@@ -651,6 +715,18 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                 Attachments: request.Attachments,
                 Permission: SelectedPermission.Key,
                 Model: SelectedModel);
+
+            // Stage 3: inject TaskGraph execution context into the prompt (once per checkpoint).
+            if (CanInjectTaskGraphContext && ActiveExecutionContext is not null)
+            {
+                var injection = BuildTaskGraphContextInjection();
+                if (!string.IsNullOrWhiteSpace(injection))
+                {
+                    chatRequest = chatRequest with { Prompt = injection + "\n\n" + chatRequest.Prompt };
+                    ActiveExecutionContext = null;
+                    OnPropertyChanged(nameof(CanInjectTaskGraphContext));
+                }
+            }
 
             await foreach (var chunk in _agent
                 .SendMessageAsync(state.AgentSessionId!, chatRequest, ct)
@@ -1511,6 +1587,421 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
     [RelayCommand]
     private void RemoveAttachment(ChatAttachment attachment) => Attachments.Remove(attachment);
+
+    // ── Stage 3: TaskGraph Orchestration Entry Points ────────────────────
+
+    /// <summary>
+    /// Triggers automatic TaskGraph execution from chat input.
+    /// v3 first-version: builds a minimal stub graph (1 inline node) without
+    /// calling any planner. LLM-based graph generation is deferred per §18.
+    /// </summary>
+    public async Task TriggerAutoTaskGraphAsync(string text, CancellationToken ct = default)
+    {
+        if (_graphController is null)
+            throw new InvalidOperationException("TaskGraph executor is not wired in this host.");
+        if (HasChatExecutionLease)
+            throw new InvalidOperationException("当前会话已绑定正在执行的编排。");
+
+        var graph = new TaskGraph
+        {
+            Name = "Chat 自动编排",
+            OriginHint = TaskGraphOriginHint.ChatAuto,
+            ConversationSessionId = _activeState.AgentSessionId,
+        };
+
+        var node = new TaskNode
+        {
+            Title = "解析用户请求",
+            Kind = TaskNodeKind.Plan,
+            DelegationStrategy = TaskNodeDelegationStrategy.Inline,
+            Prompt = text,
+        };
+        graph.Nodes.Add(node);
+        graph.RebuildEdges();
+
+        ActiveGraph = graph;
+        ActiveExecutionContext = CreateExecutionContext(graph);
+
+        if (!TryAcquireChatExecutionLease(graph.Id, _activeState.AgentSessionId ?? string.Empty))
+            throw new InvalidOperationException("无法获取 Chat 执行租约。");
+
+        AttachGraphRuntimeSubscriptions(graph);
+
+        var request = new TaskGraphExecutionRequest(
+            WorkingDirectory: CurrentWorkingDirectory ?? AppContext.BaseDirectory,
+            Permission: SelectedPermission.Key,
+            Model: SelectedModel,
+            ConversationSessionId: _activeState.AgentSessionId,
+            AllowInlineExecution: true,
+            PresentationMode: TaskGraphExecutionPresentationMode.ChatEmbedded);
+
+        await _graphController.StartAsync(graph, request, ct).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Triggers a template-based TaskGraph execution from chat.
+    /// </summary>
+    public async Task TriggerTemplateTaskGraphAsync(TaskGraphTemplateKind kind, string rawInput, CancellationToken ct = default)
+    {
+        if (_graphController is null)
+            throw new InvalidOperationException("TaskGraph executor is not wired in this host.");
+        if (HasChatExecutionLease)
+            throw new InvalidOperationException("当前会话已绑定正在执行的编排。");
+
+        var graph = BuildTemplateGraph(kind, rawInput);
+        graph.OriginHint = TaskGraphOriginHint.ChatTemplate;
+        graph.ConversationSessionId = _activeState.AgentSessionId;
+
+        ActiveGraph = graph;
+        ActiveExecutionContext = CreateExecutionContext(graph);
+
+        if (!TryAcquireChatExecutionLease(graph.Id, _activeState.AgentSessionId ?? string.Empty))
+            throw new InvalidOperationException("无法获取 Chat 执行租约。");
+
+        AttachGraphRuntimeSubscriptions(graph);
+
+        var request = new TaskGraphExecutionRequest(
+            WorkingDirectory: CurrentWorkingDirectory ?? AppContext.BaseDirectory,
+            Permission: SelectedPermission.Key,
+            Model: SelectedModel,
+            ConversationSessionId: _activeState.AgentSessionId,
+            PresentationMode: TaskGraphExecutionPresentationMode.ChatEmbedded);
+
+        await _graphController.StartAsync(graph, request, ct).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Resumes the active graph after a checkpoint pause.
+    /// </summary>
+    public async Task ResumeGraphAfterCheckpointAsync(GraphContinueDecision decision, CancellationToken ct = default)
+    {
+        if (_graphController is null)
+            throw new InvalidOperationException("TaskGraph executor is not wired in this host.");
+        if (ActiveGraph is null)
+            throw new InvalidOperationException("当前没有活动的编排。");
+
+        await _graphController.ResumeAsync(ActiveGraph.Id, decision, ct).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Pauses the active graph execution.
+    /// </summary>
+    public async Task PauseActiveGraphAsync(CancellationToken ct = default)
+    {
+        if (_graphController is not null && ActiveGraph is not null)
+            await _graphController.PauseAsync(ActiveGraph.Id, ct).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Cancels the active graph execution and releases the lease.
+    /// </summary>
+    public async Task CancelActiveGraphAsync(CancellationToken ct = default)
+    {
+        if (_graphController is not null && ActiveGraph is not null)
+        {
+            await _graphController.CancelAsync(ActiveGraph.Id, ct).ConfigureAwait(true);
+            ReleaseChatExecutionLease(ActiveGraph.Id);
+        }
+    }
+
+    /// <summary>
+    /// Fully detaches the active graph, clearing subscriptions, context, and lease.
+    /// </summary>
+    public void DetachActiveGraph()
+    {
+        DetachGraphRuntimeSubscriptions();
+        ActiveExecutionContext = null;
+        ReleaseChatExecutionLease(ActiveGraph?.Id ?? string.Empty);
+        ActiveGraph = null;
+        OnPropertyChanged(nameof(HasActiveGraph));
+        OnPropertyChanged(nameof(CanTriggerAutoGraph));
+        OnPropertyChanged(nameof(CanInjectTaskGraphContext));
+    }
+
+    /// <summary>
+    /// Builds a structured text block summarizing the current TaskGraph execution
+    /// context for injection into the next chat prompt.
+    /// </summary>
+    public string BuildTaskGraphContextInjection()
+    {
+        if (ActiveExecutionContext is null || ActiveGraph is null)
+            return string.Empty;
+
+        var sb = new StringBuilder();
+        sb.AppendLine("Current TaskGraph execution context:");
+        sb.AppendLine($"- Active graph: {ActiveGraph.Name}");
+        sb.AppendLine($"- Running node: {ActiveExecutionContext.CurrentRunningNodeId ?? "none"}");
+
+        if (ActiveExecutionContext.RecentCompletedNodes.Count > 0)
+        {
+            sb.AppendLine("- Recently completed:");
+            foreach (var node in ActiveExecutionContext.RecentCompletedNodes)
+                sb.AppendLine($"  - {node.Title}: {node.Summary}");
+        }
+
+        if (ActiveExecutionContext.RecentFailedNodes.Count > 0)
+        {
+            sb.AppendLine("- Recently failed:");
+            foreach (var node in ActiveExecutionContext.RecentFailedNodes)
+                sb.AppendLine($"  - {node.Title}: {node.Error}");
+        }
+
+        if (ActiveExecutionContext.PendingDecisions.Count > 0)
+        {
+            sb.AppendLine("- Pending decisions:");
+            foreach (var d in ActiveExecutionContext.PendingDecisions)
+                sb.AppendLine($"  - {d.Title}: {d.Reason}");
+        }
+
+        sb.AppendLine("- Suggested next action:");
+        sb.AppendLine("  - continue or summarize based on context");
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Prepends the TaskGraph context injection to the draft text if
+    /// conditions are met and the sentinel is not already present.
+    /// </summary>
+    public void InjectContextIntoDraftIfNeeded()
+    {
+        if (!CanInjectTaskGraphContext) return;
+        if (DraftText.Contains("[taskgraph-context]", StringComparison.Ordinal)) return;
+
+        var injection = BuildTaskGraphContextInjection();
+        if (string.IsNullOrWhiteSpace(injection)) return;
+
+        DraftText = injection + "\n\n" + DraftText;
+    }
+
+    // ── Stage 3: Private Helpers ─────────────────────────────────────────
+
+    private static ConversationExecutionContext CreateExecutionContext(TaskGraph graph)
+    {
+        return new ConversationExecutionContext
+        {
+            ConversationSessionId = graph.ConversationSessionId ?? string.Empty,
+            GraphId = graph.Id,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        };
+    }
+
+    private void AttachGraphRuntimeSubscriptions(TaskGraph graph)
+    {
+        if (_runtimeHub is null) return;
+
+        // Detach any existing subscriptions first.
+        DetachGraphRuntimeSubscriptions();
+
+        void OnNodeChanged(object? sender, TaskGraphNodeEventArgs args)
+        {
+            if (!string.Equals(args.GraphId, graph.Id, StringComparison.Ordinal)) return;
+            UpdateExecutionContextFromNode(graph, args.NodeId);
+        }
+
+        void OnCheckpointReached(object? sender, TaskGraphCheckpointEventArgs args)
+        {
+            if (!string.Equals(args.GraphId, graph.Id, StringComparison.Ordinal)) return;
+            UpdateExecutionContextFromCheckpoint(args);
+        }
+
+        void OnExecutionStateChanged(object? sender, TaskGraphExecutionEventArgs args)
+        {
+            if (!string.Equals(args.GraphId, graph.Id, StringComparison.Ordinal)) return;
+            if (args.State is TaskGraphExecutionState.Completed
+                or TaskGraphExecutionState.Failed
+                or TaskGraphExecutionState.Cancelled)
+            {
+                ReleaseChatExecutionLease(graph.Id);
+                ActiveExecutionContext = null;
+                OnPropertyChanged(nameof(CanInjectTaskGraphContext));
+            }
+        }
+
+        void OnChunkReceived(object? sender, TaskGraphChunkEventArgs args)
+        {
+            // v3 first-version: no-op. We do not forward chunk-by-chunk to chat history.
+        }
+
+        _runtimeHub.NodeChanged += OnNodeChanged;
+        _runtimeHub.CheckpointReached += OnCheckpointReached;
+        _runtimeHub.ExecutionStateChanged += OnExecutionStateChanged;
+        _runtimeHub.ChunkReceived += OnChunkReceived;
+
+        _hubSubscriptions = new TaskGraphRuntimeHubEventSubscriptions
+        {
+            NodeChanged = OnNodeChanged,
+            CheckpointReached = OnCheckpointReached,
+            ExecutionStateChanged = OnExecutionStateChanged,
+            ChunkReceived = OnChunkReceived,
+        };
+    }
+
+    private void DetachGraphRuntimeSubscriptions()
+    {
+        if (_runtimeHub is null || _hubSubscriptions is null) return;
+
+        if (_hubSubscriptions.NodeChanged is not null)
+            _runtimeHub.NodeChanged -= _hubSubscriptions.NodeChanged;
+        if (_hubSubscriptions.CheckpointReached is not null)
+            _runtimeHub.CheckpointReached -= _hubSubscriptions.CheckpointReached;
+        if (_hubSubscriptions.ExecutionStateChanged is not null)
+            _runtimeHub.ExecutionStateChanged -= _hubSubscriptions.ExecutionStateChanged;
+        if (_hubSubscriptions.ChunkReceived is not null)
+            _runtimeHub.ChunkReceived -= _hubSubscriptions.ChunkReceived;
+
+        _hubSubscriptions = null;
+    }
+
+    private void UpdateExecutionContextFromNode(TaskGraph graph, string nodeId)
+    {
+        if (ActiveExecutionContext is null) return;
+
+        var node = graph.Nodes.FirstOrDefault(n => string.Equals(n.Id, nodeId, StringComparison.Ordinal));
+        if (node is null) return;
+
+        if (node.Status == TaskNodeStatus.Completed)
+        {
+            var alreadyExists = ActiveExecutionContext.RecentCompletedNodes
+                .Any(n => string.Equals(n.NodeId, nodeId, StringComparison.Ordinal));
+            if (!alreadyExists)
+            {
+                ActiveExecutionContext.RecentCompletedNodes.Add(new NodeSummarySnapshot(
+                    NodeId: node.Id,
+                    Title: node.Title,
+                    Summary: node.OutputSummary ?? node.StructuredSummary ?? "(无摘要)",
+                    CompletedAt: node.CompletedAt ?? DateTimeOffset.UtcNow));
+                while (ActiveExecutionContext.RecentCompletedNodes.Count > 3)
+                    ActiveExecutionContext.RecentCompletedNodes.RemoveAt(0);
+            }
+        }
+        else if (node.Status == TaskNodeStatus.Failed)
+        {
+            var alreadyExists = ActiveExecutionContext.RecentFailedNodes
+                .Any(n => string.Equals(n.NodeId, nodeId, StringComparison.Ordinal));
+            if (!alreadyExists)
+            {
+                ActiveExecutionContext.RecentFailedNodes.Add(new NodeFailureSnapshot(
+                    NodeId: node.Id,
+                    Title: node.Title,
+                    Error: node.LastError ?? "(未知错误)",
+                    Retryable: node.CanRetry,
+                    FailedAt: node.CompletedAt ?? DateTimeOffset.UtcNow));
+                while (ActiveExecutionContext.RecentFailedNodes.Count > 2)
+                    ActiveExecutionContext.RecentFailedNodes.RemoveAt(0);
+            }
+        }
+
+        ActiveExecutionContext.UpdatedAt = DateTimeOffset.UtcNow;
+        OnPropertyChanged(nameof(CanInjectTaskGraphContext));
+    }
+
+    private void UpdateExecutionContextFromCheckpoint(TaskGraphCheckpointEventArgs args)
+    {
+        if (ActiveExecutionContext is null || ActiveGraph is null) return;
+
+        if (args.Kind == TaskGraphCheckpointKind.WaitingForInput)
+        {
+            var alreadyExists = ActiveExecutionContext.PendingDecisions
+                .Any(d => string.Equals(d.NodeId, args.NodeId, StringComparison.Ordinal));
+            if (!alreadyExists)
+            {
+                var title = ActiveGraph.Nodes
+                    .FirstOrDefault(n => string.Equals(n.Id, args.NodeId, StringComparison.Ordinal))
+                    ?.Title ?? string.Empty;
+                ActiveExecutionContext.PendingDecisions.Add(new PendingDecisionSnapshot(
+                    NodeId: args.NodeId ?? string.Empty,
+                    Title: title,
+                    Reason: args.Message ?? string.Empty,
+                    RequestedAt: DateTimeOffset.UtcNow));
+            }
+        }
+        else if (args.Kind == TaskGraphCheckpointKind.GraphExpanded)
+        {
+            ActiveExecutionContext.RecentMutations.Add(new GraphMutationSnapshot(
+                SourceNodeId: args.NodeId ?? string.Empty,
+                Description: args.Message ?? string.Empty,
+                OccurredAt: DateTimeOffset.UtcNow));
+        }
+
+        ActiveExecutionContext.CurrentRunningNodeId = args.NodeId;
+        ActiveExecutionContext.UpdatedAt = DateTimeOffset.UtcNow;
+        OnPropertyChanged(nameof(CanInjectTaskGraphContext));
+    }
+
+    private bool TryAcquireChatExecutionLease(string graphId, string conversationSessionId)
+    {
+        if (HasChatExecutionLease) return false;
+
+        _ = new ChatExecutionLease(conversationSessionId, graphId);
+        _leasedGraphId = graphId;
+        _leasedConversationId = conversationSessionId;
+        HasChatExecutionLease = true;
+        return true;
+    }
+
+    private void ReleaseChatExecutionLease(string graphId)
+    {
+        if (!IsOwnedLease(graphId)) return;
+
+        HasChatExecutionLease = false;
+        _leasedGraphId = null;
+        _leasedConversationId = null;
+    }
+
+    private bool IsOwnedLease(string graphId) => _leasedGraphId == graphId;
+
+    /// <summary>
+    /// Dispatches to the appropriate template builder based on <paramref name="kind"/>.
+    /// </summary>
+    private static TaskGraph BuildTemplateGraph(TaskGraphTemplateKind kind, string rawInput)
+        => TaskGraphTemplateBuilder.Build(kind, rawInput);
+
+    // ── Stage 4: UI-facing RelayCommands for orchestration ───────────────
+
+    [RelayCommand(CanExecute = nameof(CanTriggerAutoGraph))]
+    private Task TriggerAutoTaskGraphAsync() => TriggerAutoTaskGraphAsync(DraftText, CancellationToken.None);
+
+    [RelayCommand]
+    private Task TriggerBugListTemplateAsync() =>
+        TriggerTemplateTaskGraphAsync(TaskGraphTemplateKind.BugList, DraftText, CancellationToken.None);
+
+    [RelayCommand]
+    private Task TriggerFeatureDevTemplateAsync() =>
+        TriggerTemplateTaskGraphAsync(TaskGraphTemplateKind.FeatureDevelopment, DraftText, CancellationToken.None);
+
+    [RelayCommand]
+    private Task TriggerTaskListTemplateAsync() =>
+        TriggerTemplateTaskGraphAsync(TaskGraphTemplateKind.TaskList, DraftText, CancellationToken.None);
+
+    [RelayCommand(CanExecute = nameof(CanPauseActiveGraph))]
+    private Task PauseActiveGraphAsync() => PauseActiveGraphAsync(CancellationToken.None);
+
+    [RelayCommand(CanExecute = nameof(CanCancelActiveGraph))]
+    private Task CancelActiveGraphAsync() => CancelActiveGraphAsync(CancellationToken.None);
+
+    [RelayCommand]
+    private Task ResumeContinueGraphAsync() =>
+        ResumeGraphAfterCheckpointAsync(new GraphContinueDecision(
+            GraphContinueDecisionKind.Continue), CancellationToken.None);
+
+    [RelayCommand]
+    private Task ResumeSummarizeGraphAsync() =>
+        ResumeGraphAfterCheckpointAsync(new GraphContinueDecision(
+            GraphContinueDecisionKind.Summarize), CancellationToken.None);
+
+    [RelayCommand]
+    private void ExecuteDetachActiveGraph() => DetachActiveGraph();
+
+    // ── Stage 3: Nested Types ────────────────────────────────────────────
+
+    private sealed class TaskGraphRuntimeHubEventSubscriptions
+    {
+        public EventHandler<TaskGraphChunkEventArgs>? ChunkReceived { get; init; }
+        public EventHandler<TaskGraphNodeEventArgs>? NodeChanged { get; init; }
+        public EventHandler<TaskGraphCheckpointEventArgs>? CheckpointReached { get; init; }
+        public EventHandler<TaskGraphExecutionEventArgs>? ExecutionStateChanged { get; init; }
+    }
 }
 
 /// <summary>
