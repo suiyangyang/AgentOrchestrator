@@ -21,23 +21,23 @@
 - `App.axaml` declares explicit DataTemplates so `MainWindowViewModel`
   → `ChatWorkspaceViewModel` → `ChatWorkspaceControl` resolves
   correctly without depending on the `ViewLocator` convention
-- `MainWindowViewModel` owns `Chat`, `TaskGraph`, `Sidebar`, `Settings`
-  and an `ActiveWorkspace` that switches between `Chat` and `TaskGraph`.
+- `MainWindowViewModel` owns `Chat`, `TaskGraph`, `TaskOrchestration`, `Sidebar`, `Settings`
+  and an `ActiveWorkspace` that switches between the three workspace VMs.
   It is also the only place that knows about dialogs (folder picker,
-  rename, remove-confirm) — the sidebar raises events and the shell
-  handles them.
+  rename, remove-confirm) — the sidebar and the new orchestration workspace
+  raise events and the shell handles them.
 - `MainWindowViewModel` also owns left/right sidebar visible state and
   widths, so the shell can toggle and resize both sidebars without
   leaking layout state into child workspaces
 - `ChatWorkspaceViewModel` manages messages, attachments, permissions,
   draft input, header title, subagent activity, and the full session lifecycle (new / open / send /
   stream) via `IAgentGateway` and `ISidebarRepository`
-- `TaskGraphWorkspaceViewModel` now owns the full task orchestration flow:
+- `TaskGraphWorkspaceViewModel` now owns the full task orchestration资产管理 flow:
   saved graphs, template-based creation, direct/intent/document plan
-  generation, graph-canvas projection, execute/continue/retry/cancel,
-  user-confirmation handoff, node drag/move, dependency link editing
-  (side-panel selection and canvas drag-link), zoom/auto-layout,
-  node add/delete/edit, bug report aggregation/export, and node-detail routing
+  generation, graph-canvas projection, node drag/move, dependency link
+  editing (side-panel selection and canvas drag-link), zoom/auto-layout,
+  node add/delete/edit, bug report aggregation/export, node-detail routing,
+  and the handoff entry that invokes the current TaskGraph from Chat
 - TaskGraph 图形区支持“铺满窗口”模式：进入后会收起 TaskGraph 内部左右栏与主窗口外层左右侧栏，只保留图编辑区和画布工具条
 - `Models/TaskGraph/` contains the persisted graph model
   (`TaskGraph`, `TaskNode`, template/execution enums, edges, planner schema)
@@ -93,9 +93,30 @@
   不再占用标题栏下方的固定布局高度，用户勾选或输入答案后再统一提交
 - `SidebarViewModel` owns the project + session tree, the search
   overlay state, search result list, current-project focus, the
-  task-graph list under the `任务编排` section, the per-row "..." actions,
-  and the project-session paging state that shows at most 5 chats per
-  project by default
+  per-row "..." actions, and the project-session paging state that
+  shows at most 5 chats per project by default. 任务编排入口已从主侧栏抽离，
+  不再作为左侧顶层导航分组出现
+- `TaskOrchestrationWorkspaceViewModel` is the top-level "任务编排" entry's VM.
+  It owns its own list of templates (from `ITaskTemplateStore`) and task graphs
+  (from `ITaskGraphStore`), search, group-expand state, current selection
+  (template or task graph), and inline template rename. It exposes three
+  events the shell routes to the right destination:
+  `NewTaskGraphRequested` / `TaskGraphOpenRequested` (string id) /
+  `TaskGraphActionRequested` / `TemplateGenerateRequested`. The right pane
+  shows template detail (name / description / base kind / default input /
+  save / 本次生成输入 / "基于此模板生成任务图") or task-graph summary (name / status pill /
+  node count / updated / "打开图编辑"). Built-in templates (task-list /
+  feature-dev / bug-list) cannot be deleted; they can be duplicated to
+  create a custom copy. `TaskGraph` 现已持久化 `ProjectId / ProjectName`
+  作为导航归属信息，任务图列表第二行优先显示所属项目；无项目时回退显示模板、
+  节点数和状态摘要。修改所属项目时，shell 会弹出已有项目选择框，并提供
+  `无所属项目` 选项
+- `MainWindow.axaml` puts a `任务编排` title-bar button between the existing
+  sidebar toggle and the right-side controls. Clicking it calls
+  `MainWindowViewModel.OpenOrchestrationWorkspace()` which sets
+  `ActiveWorkspace = TaskOrchestration`. The DataTemplate in `App.axaml`
+  maps `TaskOrchestrationWorkspaceViewModel` to the new
+  `TaskOrchestrationWorkspaceControl`.
 - `MainWindow.axaml` hosts a 3-column shell with resizable left and
   right sidebars; the center column contains a fixed header area that
   spans the workspace and right sidebar top edge, plus the active
@@ -111,8 +132,12 @@
 - `ChatWorkspaceControl` adds a fixed header strip inside the chat
   workspace for task orchestration and subagent activity;
   当没有活动编排时，编排入口位于输入区底部工具条中，处在权限右侧、
-  模型左侧，并使用与权限设置一致的弹出式选项框；当已有活动编排时，
-  顶部 strip 仅显示当前编排状态与继续 / 取消等控制
+  模型左侧，并使用与权限设置一致的弹出式选项框。当前选项为
+  `普通对话 / 自动编排 / 使用模板`：普通对话直接发送，自动编排直接启动
+  chat 内任务图，使用模板则切换到独立任务编排工作区并带入当前输入；
+  独立任务图页不再单独保留顶部资产工具条，“保存 / 在 Chat 中调用 / 更多”
+  已并入图编辑工具栏，不再提供单独的执行按钮。
+  当已有活动编排时，顶部 strip 显示当前编排状态与暂停 / 取消 / 继续 / 汇总 / 分离控制
 - `TaskGraphNodeDetailWindow` is a separate transient window that shows
   one node's remote message history plus live streamed output, reusing
   the same chat block controls as the main chat surface
@@ -176,6 +201,8 @@
 - `AgentOrchestrator.Cli` exercises the same `IAgentGateway` +
   `ISidebarRepository` for headless verification
 - Commands: `health`, `list-sessions`, `new-session`, `send`, `messages`,
-  `sidebar-list`, `verify`
+  `sidebar-list`, `verify`, `orchestration open` (prints the
+  `dotnet run --project src/AgentOrchestrator.App -- --open-orchestration`
+  hint), `orchestration help`
 - Settings overlay: `appsettings.json` then env vars
   `AO_HOST` / `AO_PORT` / `AO_USERNAME` / `AO_PASSWORD`

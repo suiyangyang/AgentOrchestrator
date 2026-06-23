@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -128,6 +129,83 @@ internal static class DialogHost
 
         dialog.Content = root;
         dialog.Opened += (_, _) => { input.Focus(); input.SelectAll(); };
+        ShowDialog(dialog, owner);
+        return tcs.Task;
+    }
+
+    public static Task<string?> SelectAsync(
+        Window? owner,
+        string title,
+        string label,
+        IReadOnlyList<string> options,
+        string? selectedOption = null)
+    {
+        var tcs = new TaskCompletionSource<string?>();
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 420,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = owner is null
+                ? WindowStartupLocation.CenterScreen
+                : WindowStartupLocation.CenterOwner,
+            CanResize = false,
+            ShowInTaskbar = false,
+            Background = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF)),
+        };
+
+        var root = new StackPanel
+        {
+            Margin = new Thickness(20),
+            Spacing = 12,
+        };
+
+        root.Children.Add(new TextBlock
+        {
+            Text = label,
+            FontSize = 13,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x6E, 0x72, 0x7A)),
+        });
+
+        var combo = new ComboBox
+        {
+            ItemsSource = options,
+            SelectedItem = selectedOption,
+            FontSize = 13,
+            Padding = new Thickness(10, 8),
+            Background = new SolidColorBrush(Color.FromRgb(0xF5, 0xF6, 0xF8)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xDC, 0xE1, 0xE8)),
+            BorderThickness = new Thickness(1),
+        };
+        root.Children.Add(combo);
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 8,
+        };
+        var cancel = MakeButton("取消", false);
+        var ok = MakeButton("确定", true);
+        ok.IsDefault = true;
+
+        cancel.Click += (_, _) => { tcs.TrySetResult(null); dialog.Close(); };
+        ok.Click += (_, _) => { tcs.TrySetResult(combo.SelectedItem as string); dialog.Close(); };
+
+        buttons.Children.Add(cancel);
+        buttons.Children.Add(ok);
+        root.Children.Add(buttons);
+
+        dialog.Content = root;
+        dialog.Opened += (_, _) =>
+        {
+            if (combo.SelectedItem is null && options.Count > 0)
+            {
+                combo.SelectedIndex = 0;
+            }
+            combo.Focus();
+        };
         ShowDialog(dialog, owner);
         return tcs.Task;
     }

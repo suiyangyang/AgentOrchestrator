@@ -1,0 +1,190 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AgentOrchestrator.App.ViewModels"
+             xmlns:tg="using:AgentOrchestrator.App.Models.TaskGraph"
+             x:Class="AgentOrchestrator.App.Controls.TaskOrchestrationWorkspaceControl"
+             x:DataType="vm:TaskOrchestrationWorkspaceViewModel"
+             Focusable="True">
+
+    <Grid Background="#F7F8FA">
+        <Border Background="#F7F8FA"
+                Padding="24">
+            <Grid>
+                <!-- Empty state -->
+                <Border Classes="orch-empty-hint"
+                        IsVisible="{Binding IsEmpty}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+                    <StackPanel Spacing="12" HorizontalAlignment="Center">
+                        <Path Classes="sidebar-nav-icon-path sidebar-orchestrator-icon"
+                              Width="32" Height="32"
+                              HorizontalAlignment="Center" />
+                        <TextBlock Text="从模板或既有任务图开始"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="#6E727A"
+                                   HorizontalAlignment="Center" />
+                        <TextBlock Text="左侧选择一个模板来编辑和生成任务图，或选择一个已有任务图查看详情。"
+                                   FontSize="13"
+                                   Foreground="#9096A0"
+                                   TextWrapping="Wrap"
+                                   TextAlignment="Center"
+                                   MaxWidth="320" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Template detail -->
+                <Border Classes="orch-detail-card"
+                        IsVisible="{Binding IsTemplateSelected}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="16">
+                            <TextBlock Text="模板详情"
+                                       Classes="orch-detail-title" />
+
+                            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
+                                <!-- Name -->
+                                <StackPanel Grid.Row="0" Spacing="4">
+                                    <TextBlock Text="模板名称" Classes="orch-detail-meta" />
+                                    <TextBox Text="{Binding TemplateDetailName, Mode=TwoWay}"
+                                             Classes="orch-detail-input"
+                                             IsReadOnly="{Binding IsTemplateDetailBuiltIn}" />
+                                </StackPanel>
+
+                                <!-- Description -->
+                                <StackPanel Grid.Row="1" Spacing="4">
+                                    <TextBlock Text="模板说明" Classes="orch-detail-meta" />
+                                    <TextBox Text="{Binding TemplateDetailDescription, Mode=TwoWay}"
+                                             Classes="orch-detail-input"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             MinHeight="64"
+                                             IsReadOnly="{Binding IsTemplateDetailBuiltIn}" />
+                                </StackPanel>
+
+                                <!-- Base kind -->
+                                <StackPanel Grid.Row="2" Spacing="4">
+                                    <TextBlock Text="基础骨架" Classes="orch-detail-meta" />
+                                    <ComboBox SelectedItem="{Binding TemplateDetailBaseKind, Mode=TwoWay}"
+                                              Classes="orch-detail-input"
+                                              ItemsSource="{x:Static vm:TaskOrchestrationWorkspaceViewModel.TemplateKindOptions}"
+                                              IsEnabled="{Binding !IsTemplateDetailBuiltIn}">
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <!-- Default Input -->
+                                <StackPanel Grid.Row="3" Spacing="4">
+                                    <TextBlock Text="默认输入" Classes="orch-detail-meta" />
+                                    <TextBox Text="{Binding TemplateDetailDefaultInput, Mode=TwoWay}"
+                                             Classes="orch-detail-input"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             MinHeight="120"
+                                             IsReadOnly="{Binding IsTemplateDetailBuiltIn}" />
+                                </StackPanel>
+
+                                <!-- 内置标签 -->
+                                <Border Grid.Row="4"
+                                        Background="#E8EEF9"
+                                        CornerRadius="6"
+                                        Padding="10,6"
+                                        IsVisible="{Binding IsTemplateDetailBuiltIn}">
+                                    <TextBlock Text="此模板为内置模板，不可直接编辑。可以使用「复制」创建自定义副本后再编辑。"
+                                               FontSize="13"
+                                               Foreground="#2459B8"
+                                               TextWrapping="Wrap" />
+                                </Border>
+
+                                <StackPanel Grid.Row="5" Spacing="4">
+                                    <TextBlock Text="本次生成输入" Classes="orch-detail-meta" />
+                                    <TextBox Text="{Binding TemplateGenerationInput, Mode=TwoWay}"
+                                             Classes="orch-detail-input"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             MinHeight="120" />
+                                </StackPanel>
+
+                                <!-- Actions -->
+                                <StackPanel Grid.Row="6"
+                                            Orientation="Horizontal"
+                                            Spacing="12"
+                                            HorizontalAlignment="Right">
+                                    <TextBox Text="{Binding TemplateGenerationGraphName, Mode=TwoWay}"
+                                             Width="220"
+                                             PlaceholderText="任务图名称（可选）"
+                                             Classes="orch-detail-input" />
+                                    <Button Classes="orch-primary-btn"
+                                            Content="保存"
+                                            Command="{Binding SaveTemplateDetailCommand}"
+                                            IsVisible="{Binding !IsTemplateDetailBuiltIn}" />
+                                    <Button Classes="orch-secondary-btn"
+                                            Content="基于此模板生成任务图"
+                                            Command="{Binding GenerateTaskGraphFromSelectedTemplateCommand}" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- Task graph summary -->
+                <Border Classes="orch-detail-card"
+                        IsVisible="{Binding IsTaskGraphSelected}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="16">
+                            <TextBlock Text="任务图概要"
+                                       Classes="orch-detail-title" />
+
+                            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
+
+                                <!-- Name -->
+                                <StackPanel Grid.Row="0" Spacing="4">
+                                    <TextBlock Text="名称" Classes="orch-detail-meta" />
+                                    <TextBlock Text="{Binding SelectedTaskGraphName}"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"
+                                               Foreground="#1F2328" />
+                                </StackPanel>
+
+                                <!-- Status pill -->
+                                <StackPanel Grid.Row="1" Spacing="4">
+                                    <TextBlock Text="执行状态" Classes="orch-detail-meta" />
+                                    <Border Classes="orch-status-pill">
+                                        <TextBlock Text="{Binding SelectedTaskGraphStatusText}"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#1F2328" />
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- Node count -->
+                                <StackPanel Grid.Row="2" Spacing="4">
+                                    <TextBlock Text="节点数量" Classes="orch-detail-meta" />
+                                    <TextBlock Text="{Binding SelectedTaskGraphNodeCount}"
+                                               FontSize="15"
+                                               Foreground="#1F2328" />
+                                </StackPanel>
+
+                                <!-- Updated -->
+                                <StackPanel Grid.Row="3" Spacing="4">
+                                    <TextBlock Text="最后更新" Classes="orch-detail-meta" />
+                                    <TextBlock Text="{Binding SelectedTaskGraphUpdatedText}"
+                                               FontSize="14"
+                                               Foreground="#1F2328" />
+                                </StackPanel>
+
+                                <!-- Actions -->
+                                <StackPanel Grid.Row="4"
+                                            Orientation="Horizontal"
+                                            Spacing="12"
+                                            HorizontalAlignment="Right">
+                                    <Button Classes="orch-primary-btn"
+                                            Content="打开图编辑"
+                                            Command="{Binding OpenSelectedTaskGraphInEditorCommand}" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

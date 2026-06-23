@@ -291,18 +291,13 @@ public partial class ChatWorkspaceControl : UserControl
         }
     }
 
-    private async void OnTaskOrchestrationItemClick(object? sender, RoutedEventArgs e)
+    private void OnTaskOrchestrationItemClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { CommandParameter: TaskOrchestrationOption option } &&
             DataContext is ViewModels.ChatWorkspaceViewModel viewModel)
         {
             viewModel.SelectTaskOrchestrationCommand.Execute(option);
             TaskOrchestrationPopup.IsOpen = false;
-
-            if (viewModel.TriggerSelectedTaskOrchestrationCommand.CanExecute(null))
-            {
-                await viewModel.TriggerSelectedTaskOrchestrationCommand.ExecuteAsync(null);
-            }
         }
     }
 

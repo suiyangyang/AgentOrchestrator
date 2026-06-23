@@ -22,14 +22,14 @@
 - The center workspace header spans the chat area and the right sidebar
   top edge; it shows the active workspace title and a toggle for the
   right sidebar
-- `ActiveWorkspace` switches between `ChatWorkspaceViewModel` and
-  `TaskGraphWorkspaceViewModel`. Workspace VMs are resolved to their
-  control via **explicit DataTemplates** in `App.axaml` — the
-  `ViewLocator`'s "ViewModel" → "View" rename does not match the
-  project's "Control" naming convention, so the templates are
+- `ActiveWorkspace` switches between `ChatWorkspaceViewModel`,
+  `TaskGraphWorkspaceViewModel`, and `TaskOrchestrationWorkspaceViewModel`.
+  Workspace VMs are resolved to their control via **explicit DataTemplates**
+  in `App.axaml` — the `ViewLocator`'s "ViewModel" → "View" rename does not
+  match the project's "Control" naming convention, so the templates are
   declared by hand to keep the rule out of the way.
 - `SidebarControl` is the left navigation tree. Top quick actions keep
-  新对话 / 搜索, while 任务编排 / 项目 / 对话 are all rendered as
+  新对话 / 搜索, while 项目 / 对话 are rendered as
   collapsible sections with hover-revealed action buttons;
   project session lists page in chunks of 5 with inline 展开显示 / 折叠显示 controls;
   session rows reserve a compact state slot that shows a spinner while the
@@ -86,11 +86,11 @@
   - a graph canvas that renders nodes by `TaskNode.Position` and edges by dependency
   - node cards can be repositioned by drag-and-drop; dependencies can be created either from the side panel or by dragging from a node's link handle onto another node
   - an editor toolbar for add/delete node, auto-layout, and zoom controls
+  - save / use-in-chat / more are merged into the graph editor toolbar; standalone execute controls were removed
   - a graph focus mode that collapses both TaskGraph side panels and asks the shell to hide the outer left/right sidebars so the canvas fills the window
   - an empty-canvas onboarding state so the graph surface is visible even before the first graph exists
   - a right-side node editor for inline title/description updates plus a lightweight node-creation form
   - three built-in templates: task list / feature development / bug list
-  - execution controls (save / execute / continue / retry failed / cancel)
   - a right-side node detail panel for summary, errors, tags, touched files, and session drill-down
   - a waiting-for-input checkpoint for feature-development graphs before plan execution continues
   - node detail entry points that open a dedicated session-detail window
@@ -167,6 +167,10 @@ View ── ViewModel ── IAgentGateway / ISidebarRepository
 - `ITaskGraphStore` is a JSON-backed local store for TaskGraph plans;
   it persists the graph structure, execution state, node session ids,
   summaries, and recovery metadata under `%LOCALAPPDATA%/AgentOrchestrator/Datas/TaskGraphs`
+- `ITaskTemplateStore` is a JSON-backed local store for `TaskTemplate`
+  generation assets under `%LOCALAPPDATA%/AgentOrchestrator/Templates`;
+  it seeds the three built-in templates on first init and rejects
+  deletion of built-ins
 - `OpenCodeAgentGateway` wraps `OpenCodeClient`, translates Part/Message/
   ToolState into the chat-block vocabulary, routes SSE events into
   streaming `ChatStreamChunk` envelopes, and queries child sessions plus
@@ -219,6 +223,12 @@ the executor is the execution plane. Both surfaces communicate through
   and consumes checkpoint events back through hub subscriptions. The
   chat composer is gated by the lease so `InSessionExecution` and
   `Inline` node runs cannot collide with regular chat sends.
+- **Workspace handoff** — `TaskGraphWorkspaceViewModel.UseCurrentInChat`
+  persists the current graph and raises `UseInChatRequested`; the shell
+  switches to `ChatWorkspaceViewModel`, which calls
+  `StartExistingTaskGraphAsync(...)` so the same persisted graph entity
+  executes under Chat's checkpoint/status surface instead of a separate
+  TaskGraph-page run button set.
 - **Execution plane** — `TaskGraphExecutor` implements both
   `ITaskGraphExecutor` (existing entry points, unchanged signatures)
   and `ITaskGraphExecutionController` (new `StartAsync` / `ResumeAsync`
@@ -260,11 +270,71 @@ the executor is the execution plane. Both surfaces communicate through
   stub pattern.
 - **UI surface** — `ChatWorkspaceControl` exposes an orchestration
   strip between the message scroll area and the composer with two
-  mutually-visible states: an auto-pilot strip (与权限菜单同款的编排选项弹框
-  + “开始”按钮) when no graph is active, and a status card (graph name,
-  running node, completion/failure/decision counts, pause/cancel/
-  continue/summarize/detach buttons) when `HasActiveGraph` is true.
-  All bindings use compiled bindings with `x:DataType`.
+  mutually-visible states: a mode selector when no graph is active,
+  and a status card (graph name, running node, completion/failure/
+  decision counts, pause/cancel/continue/summarize/detach buttons)
+  when `HasActiveGraph` is true. 编排模式当前为 `普通对话 / 自动编排 / 使用模板`；
+  选择模式本身不会立即执行，真正执行发生在点击主发送按钮时；选择
+  `使用模板` 时，shell 会切到独立任务编排工作区，并把当前输入灌入模板的
+  “本次生成输入” 区域。All bindings
+  use compiled bindings with `x:DataType`.
+
+## Task Orchestration Independent Workspace
+
+`TaskOrchestrationWorkspaceViewModel` is a top-level workspace reachable
+from a dedicated title-bar button. It is independent from the chat
+sidebar, and the main left navigation no longer renders a top-level
+`任务编排` section.
+
+- **Domain split** — `Template` (`Models/TaskGraph/TaskTemplate.cs`) is
+  a generation asset (id, name, description, base kind, default input,
+  `isBuiltIn`); `TaskGraph` remains the execution entity. The two are
+  persisted to different directories: templates live in
+  `%LOCALAPPDATA%/AgentOrchestrator/Templates/*.json` via
+  `JsonTaskTemplateStore`; task graphs keep their existing location
+  under `Datas/TaskGraphs/*.json` via `JsonTaskGraphStore`.
+- **Built-in templates** — the store seeds three built-ins on first
+  init: `task-list`, `feature-dev`, `bug-list`. They carry stable ids
+  (`builtin.task-list` etc.), `isBuiltIn=true`, and are protected from
+  deletion. Users can duplicate them to create custom copies.
+- **Left nav** — `TaskOrchestrationWorkspaceControl` renders a 320px
+  panel with: top quick actions (`新任务图` / `搜索`), a `模板` group
+  with template rows (name + base-kind + `内置` tag + hover `...` for
+  重命名 / 复制 / 删除), a `+` action on the group header to create a
+  new custom template, and a `任务图` group with task-graph rows
+  (name + second-line project-or-summary text + updated + hover `...`
+  for 删除 / 重命名 / 修改所属项目). `修改所属项目` 当前通过轻量选择弹窗实现，
+  列出全部已有项目，并提供 `无所属项目` 选项
+- **Right pane** — switches on selection:
+  - nothing selected → empty hint "从模板或既有任务图开始"
+  - template selected → name TextBox, description TextBox, base-kind
+    ComboBox, default-input TextBox, a transient `本次生成输入` TextBox,
+    optional graph-name input, `保存` button, and a
+    `基于此模板生成任务图` action
+  - task graph selected → summary card (name, status pill, node count,
+    last-updated, project) plus a `打开图编辑` button that fires
+    `TaskGraphOpenRequested(id)` to switch the shell to the full
+    `TaskGraphWorkspaceViewModel`
+- **Shell integration** — `MainWindowViewModel` subscribes to three
+  events on the new VM:
+  - `NewTaskGraphRequested` → switch to `TaskGraph` and run
+    `NewGraphAsync`
+  - `TaskGraphOpenRequested(id)` → switch to `TaskGraph` and run
+    `OpenGraphByIdAsync(id)`
+  - `TaskGraphActionRequested` → reuse the existing sidebar action
+    pipeline (Rename / Remove) for the embedded task-graph rows
+  - `TemplateGenerateRequested` → materialize a real `TaskGraph` from the
+    selected template input and open it in the task-graph workspace
+- **CLI** — `AgentOrchestrator.Cli orchestration open` prints the
+  hint; the App accepts `--open-orchestration` on launch to switch to
+  the new workspace (used by `scripts/verify-orchestration-workspace.ps1`
+  to capture the layout for regression checks)
+- **Styles** — all new classes live in `App.axaml` under the `orch-*`
+  prefix (`orch-quick-action`, `orch-search-input`, `orch-inline-edit`,
+  `orch-detail-card`, `orch-detail-title`, `orch-detail-meta`,
+  `orch-status-pill` with state variants, `orch-primary-btn`,
+  `orch-secondary-btn`, `orch-detail-input` for both TextBox and
+  ComboBox, `orch-empty-hint`)
 
 ## Settings
 
@@ -317,8 +387,8 @@ the executor is the execution plane. Both surfaces communicate through
 - `IAgentGateway` / `OpenCodeAgentGateway` / `NotImplementedAgentGateway` (P2-P3)
 - `DataPathProvider` resolves `.exe/Datas/OrchestratorDb.db`
 - `IAppSettingsService` (extended with `LastProjectId`)
-- `DialogHost` provides code-only Confirm/Input Windows used by the
-  sidebar rename + remove flows
+- `DialogHost` provides code-only Confirm/Input/Select Windows used by the
+  sidebar rename + remove flows and lightweight ownership selection
 - `ToolDisplayParser` converts a tool call's name + JSON input +
   working directory + output into a structured `ToolDisplayInfo`
   (`PrimaryText`, relative `FilePath`, optional `LineRangeText`,

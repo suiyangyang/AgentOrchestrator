@@ -134,10 +134,9 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     ];
     public ObservableCollection<TaskOrchestrationOption> TaskOrchestrationOptions { get; } =
     [
-        new("auto", "自动编排", "根据当前输入直接生成一个最小可执行编排。", "⚡"),
-        new("task-list", "任务列表", "将输入内容按顺序拆成串行任务节点。", "≣"),
-        new("feature-dev", "功能开发", "先生成方案，确认后再注入开发计划。", "◫"),
-        new("bug-list", "Bug 列表", "逐项分析问题并生成汇总报告。", "◌")
+        new("chat", "普通对话", "直接按当前会话模式发送消息，不触发任务编排。", "💬"),
+        new("auto", "自动编排", "根据当前输入自动生成并启动任务图。", "⚡"),
+        new("template", "使用模板", "进入任务编排工作区，基于模板生成本次任务图。", "▣")
     ];
     public IReadOnlyList<string> Models { get; } = ["codex", "gpt-5", "claude-compatible"];
 
@@ -307,6 +306,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
     /// <summary>Fired when a brand-new session is created (so MainWindow can switch workspace).</summary>
     public event EventHandler? SessionChanged;
+    public event EventHandler<string>? TemplateOrchestrationRequested;
 
     private void AttachActiveStateHandlers(SessionRuntimeState state)
     {
@@ -670,7 +670,18 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             return;
         }
 
-        await SendAsync().ConfigureAwait(true);
+        switch (SelectedTaskOrchestration.Key)
+        {
+            case "auto":
+                await TriggerAutoTaskGraphAsync(DraftText, CancellationToken.None).ConfigureAwait(true);
+                break;
+            case "template":
+                TemplateOrchestrationRequested?.Invoke(this, DraftText);
+                break;
+            default:
+                await SendAsync().ConfigureAwait(true);
+                break;
+        }
     }
 
     private async Task RunSendQueueAsync(SessionRuntimeState state, QueuedSendRequest firstRequest)
@@ -1638,10 +1649,9 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     {
         return SelectedTaskOrchestration.Key switch
         {
-            "task-list" => TriggerTemplateTaskGraphAsync(TaskGraphTemplateKind.TaskList, DraftText, CancellationToken.None),
-            "feature-dev" => TriggerTemplateTaskGraphAsync(TaskGraphTemplateKind.FeatureDevelopment, DraftText, CancellationToken.None),
-            "bug-list" => TriggerTemplateTaskGraphAsync(TaskGraphTemplateKind.BugList, DraftText, CancellationToken.None),
-            _ => TriggerAutoTaskGraphAsync(DraftText, CancellationToken.None),
+            "auto" => TriggerAutoTaskGraphAsync(DraftText, CancellationToken.None),
+            "template" => Task.Run(() => TemplateOrchestrationRequested?.Invoke(this, DraftText)),
+            _ => Task.CompletedTask,
         };
     }
 
@@ -1710,6 +1720,43 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
         var graph = BuildTemplateGraph(kind, rawInput);
         graph.OriginHint = TaskGraphOriginHint.ChatTemplate;
+        graph.ConversationSessionId = _activeState.AgentSessionId;
+
+        ActiveGraph = graph;
+        ActiveExecutionContext = CreateExecutionContext(graph);
+
+        if (!TryAcquireChatExecutionLease(graph.Id, _activeState.AgentSessionId ?? string.Empty))
+            throw new InvalidOperationException("无法获取 Chat 执行租约。");
+
+        AttachGraphRuntimeSubscriptions(graph);
+
+        var request = new TaskGraphExecutionRequest(
+            WorkingDirectory: CurrentWorkingDirectory ?? AppContext.BaseDirectory,
+            Permission: SelectedPermission.Key,
+            Model: SelectedModel,
+            ConversationSessionId: _activeState.AgentSessionId,
+            PresentationMode: TaskGraphExecutionPresentationMode.ChatEmbedded);
+
+        await _graphController.StartAsync(graph, request, ct).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Runs an existing TaskGraph from the TaskGraph workspace inside Chat.
+    /// The graph remains the same persisted entity; Chat only becomes the
+    /// control surface for execution and checkpoint interaction.
+    /// </summary>
+    public async Task StartExistingTaskGraphAsync(TaskGraph graph, CancellationToken ct = default)
+    {
+        if (_graphController is null)
+            throw new InvalidOperationException("TaskGraph executor is not wired in this host.");
+        if (graph is null)
+            throw new ArgumentNullException(nameof(graph));
+        if (HasChatExecutionLease)
+            throw new InvalidOperationException("当前会话已绑定正在执行的编排。");
+        if (graph.Nodes.Count == 0)
+            throw new InvalidOperationException("当前任务图没有可执行节点。");
+
+        graph.OriginHint = TaskGraphOriginHint.WorkspaceDirect;
         graph.ConversationSessionId = _activeState.AgentSessionId;
 
         ActiveGraph = graph;

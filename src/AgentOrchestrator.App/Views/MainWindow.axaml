@@ -43,6 +43,18 @@
                     </Button>
                 </StackPanel>
 
+                <!-- Center-left: Task orchestration entry -->
+                <Button Grid.Column="1"
+                        Classes="title-bar-btn title-bar-outline-btn"
+                        Classes.title-bar-btn-active="{Binding IsTaskOrchestrationMode}"
+                        Click="OnOpenOrchestrationClick"
+                        ToolTip.Tip="任务编排"
+                        HorizontalAlignment="Left"
+                        Margin="4,0,0,0">
+                    <Path Classes="workspace-header-icon workspace-orchestrator-toggle-icon"
+                          Width="14" Height="14" />
+                </Button>
+
                 <!-- Right: Settings + Window Controls (Segoe MDL2 Assets glyphs) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="0">
                     <Button Classes="title-bar-btn title-bar-service-btn"
@@ -124,32 +136,34 @@
             </Grid.ColumnDefinitions>
 
             <Border Grid.RowSpan="2" Grid.Column="0" IsVisible="{Binding IsLeftSidebarVisible}">
-                <controls:SidebarControl DataContext="{Binding Sidebar}" />
+                <Grid>
+                    <Border DataContext="{Binding Sidebar}"
+                            IsVisible="{Binding #Root.DataContext.IsChatSidebarMode}">
+                        <controls:SidebarControl />
+                    </Border>
+                    <Border DataContext="{Binding TaskOrchestration}"
+                            IsVisible="{Binding #Root.DataContext.IsTaskOrchestrationMode}">
+                        <controls:TaskOrchestrationSidebarControl />
+                    </Border>
+                </Grid>
             </Border>
 
-                        <Border x:Name="WorkspaceHeaderBar" Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Classes="workspace-header">
-                <Grid ColumnDefinitions="*,Auto,Auto">
-                                        <Grid Grid.Column="0"
-                                                    ColumnDefinitions="Auto,Auto,*"
-                                                    HorizontalAlignment="Left"
-                                                    VerticalAlignment="Center">
-                                                <TextBlock Grid.Column="0"
-                                                                     Text="{Binding ActiveWorkspaceTitle}"
-                                                                     Classes="workspace-header-title"
-                                                                     TextTrimming="CharacterEllipsis" />
-                                                <Path Grid.Column="1"
-                                                            Classes="workspace-header-chevron"
-                                                            Margin="8,0,0,0"
-                                                            IsVisible="{Binding #WorkspaceHeaderBar.IsPointerOver}" />
-                                        </Grid>
-                    <ToggleButton Grid.Column="1"
-                                  Classes="workspace-header-action task-orchestration-toggle"
-                                  ToolTip.Tip="显示/隐藏任务编排"
-                                  IsChecked="{Binding IsTaskOrchestrationVisible, Mode=TwoWay}"
-                                  Margin="0,0,8,0">
-                        <Path Classes="workspace-header-icon workspace-orchestrator-toggle-icon" />
-                    </ToggleButton>
-                    <Button Grid.Column="2"
+            <Border x:Name="WorkspaceHeaderBar" Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Classes="workspace-header">
+                <Grid ColumnDefinitions="*,Auto">
+                    <Grid Grid.Column="0"
+                          ColumnDefinitions="Auto,Auto,*"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Center">
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding ActiveWorkspaceTitle}"
+                                   Classes="workspace-header-title"
+                                   TextTrimming="CharacterEllipsis" />
+                        <Path Grid.Column="1"
+                              Classes="workspace-header-chevron"
+                              Margin="8,0,0,0"
+                              IsVisible="{Binding #WorkspaceHeaderBar.IsPointerOver}" />
+                    </Grid>
+                    <Button Grid.Column="1"
                             Classes="workspace-header-action workspace-header-outline-action"
                             Click="OnRightSidebarToggleButtonClick"
                             ToolTip.Tip="显示/隐藏右侧边栏">

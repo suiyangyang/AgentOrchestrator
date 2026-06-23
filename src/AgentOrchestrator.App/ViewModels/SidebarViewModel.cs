@@ -284,6 +284,25 @@ public sealed partial class SidebarViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasTaskGraphs));
     }
 
+    public async Task ChangeTaskGraphProjectAsync(
+        string taskGraphId,
+        string? projectId,
+        string? projectName,
+        CancellationToken ct = default)
+    {
+        var graph = await _taskGraphStore.LoadAsync(taskGraphId, ct).ConfigureAwait(true);
+        if (graph is null)
+        {
+            return;
+        }
+
+        graph.ProjectId = string.IsNullOrWhiteSpace(projectId) ? null : projectId;
+        graph.ProjectName = string.IsNullOrWhiteSpace(projectName) ? null : projectName;
+        await _taskGraphStore.SaveAsync(graph, ct).ConfigureAwait(true);
+        await RefreshTaskGraphsAsync(ct).ConfigureAwait(true);
+        SelectTaskGraph(taskGraphId);
+    }
+
     /// <summary>Sets the focused project (used by the chat VM when it picks a project).</summary>
     public void SetCurrentProject(SidebarProjectViewModel? project)
     {
@@ -535,4 +554,5 @@ public enum TaskGraphActionKind
 {
     Rename,
     Remove,
+    ChangeProject,
 }

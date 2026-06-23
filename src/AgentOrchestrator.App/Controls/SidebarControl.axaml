@@ -5,7 +5,7 @@
              x:Class="AgentOrchestrator.App.Controls.SidebarControl"
              x:DataType="vm:SidebarViewModel">
     <Border Background="#F9F9FB" BorderBrush="#E2E5EA" BorderThickness="0,0,1,0">
-        <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,8,0,0">
+        <Grid RowDefinitions="Auto,*" Margin="0,8,0,0">
 
             <!-- 新对话 / 搜索 -->
             <StackPanel Grid.Row="0" Margin="12,4,12,12" Spacing="4">
@@ -33,71 +33,8 @@
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="2">
 
-                    <!-- 任务编排分类头 + 节点 -->
-                    <StackPanel>
-                        <Button x:Name="TaskGraphsHeader"
-                                Classes="sidebar-section-header"
-                                HorizontalAlignment="Stretch"
-                                HorizontalContentAlignment="Stretch"
-                                Click="OnTaskGraphsHeaderClick">
-                            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                                <Path Grid.Column="0" Classes="sidebar-section-icon sidebar-orchestrator-icon" />
-                                <TextBlock Grid.Column="1" Text="任务编排" Classes="sidebar-section-label" />
-                                <Path Grid.Column="2"
-                                      Classes="sidebar-chevron sidebar-section-caret"
-                                      Classes.sidebar-chevron-expanded="{Binding IsTaskGraphsExpanded}" />
-                                <Button Grid.Column="3"
-                                        Classes="sidebar-section-action-btn"
-                                        Command="{Binding RequestNewTaskGraphCommand}"
-                                        IsVisible="{Binding #TaskGraphsHeader.IsPointerOver}">
-                                    <Path Classes="sidebar-action-icon sidebar-plus-icon" />
-                                </Button>
-                            </Grid>
-                        </Button>
-                        <ItemsControl ItemsSource="{Binding TaskGraphs}"
-                                      IsVisible="{Binding IsTaskGraphsExpanded}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="vm:SidebarTaskGraphItemViewModel">
-                                    <Button x:Name="TaskGraphRow"
-                                            Classes="sidebar-session-item"
-                                            Classes.sidebar-session-item-selected="{Binding IsSelected}"
-                                            HorizontalAlignment="Stretch"
-                                            HorizontalContentAlignment="Stretch"
-                                            Margin="10,0,4,0"
-                                            Click="OnTaskGraphClick">
-                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6" RowDefinitions="Auto,Auto" RowSpacing="2">
-                                            <Path Grid.Column="0" Grid.RowSpan="2" Classes="sidebar-task-item-icon sidebar-orchestrator-icon" />
-                                            <TextBlock Grid.Column="1" Grid.Row="0"
-                                                       Text="{Binding Name}"
-                                                       Classes="sidebar-session-title"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       VerticalAlignment="Center" />
-                                            <TextBlock Grid.Column="1" Grid.Row="1"
-                                                       Text="{Binding SubtitleText}"
-                                                       Classes="sidebar-session-time" />
-                                            <TextBlock Grid.Column="2" Grid.RowSpan="2"
-                                                       Text="{Binding DisplayRelativeTime}"
-                                                       Classes="sidebar-session-time"
-                                                       VerticalAlignment="Center" />
-                                            <Button Grid.Column="3" Grid.RowSpan="2"
-                                                    Classes="sidebar-row-action-btn"
-                                                    Click="OnTaskGraphRowMoreClick"
-                                                    Tag="{Binding Id}"
-                                                    IsVisible="{Binding #TaskGraphRow.IsPointerOver}">
-                                                <Path Classes="sidebar-action-icon sidebar-more-icon" />
-                                            </Button>
-                                        </Grid>
-                                    </Button>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <TextBlock Text="暂无任务编排"
-                                   Classes="sidebar-empty"
-                                   IsVisible="{Binding !HasTaskGraphs}" />
-                    </StackPanel>
-
                     <!-- 项目分类头 + 节点 -->
-                    <StackPanel Margin="0,8,0,0">
+                    <StackPanel>
                         <Button x:Name="ProjectsHeader"
                                 Classes="sidebar-section-header"
                                 HorizontalAlignment="Stretch"

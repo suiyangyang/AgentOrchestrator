@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -46,7 +47,8 @@ public partial class MainWindowViewModel : ViewModelBase
         ISidebarRepository repo,
         IAppSettingsService settingsService,
         IServiceProvider services,
-        IAgentGateway agent)
+        IAgentGateway agent,
+        TaskOrchestrationWorkspaceViewModel taskOrchestration)
     {
         _repo = repo;
         _settingsService = settingsService;
@@ -56,7 +58,9 @@ public partial class MainWindowViewModel : ViewModelBase
         TaskGraph = graph;
         Sidebar = sidebar;
         Settings = settings;
+        TaskOrchestration = taskOrchestration;
 
+        Chat.TemplateOrchestrationRequested += OnChatTemplateOrchestrationRequested;
         Sidebar.SessionSelected += OnSidebarSessionSelected;
         Sidebar.NewSessionRequested += OnSidebarNewSessionRequested;
         Sidebar.TaskGraphRequested += (_, _) => ActiveWorkspace = TaskGraph;
@@ -68,6 +72,13 @@ public partial class MainWindowViewModel : ViewModelBase
         Sidebar.SessionActionRequested += OnSessionActionRequested;
         Sidebar.TaskGraphActionRequested += OnTaskGraphActionRequested;
         Sidebar.SessionSelected += OnSidebarSessionSelectionChanged;
+
+        // Wire task orchestration workspace events to the shell.
+        TaskOrchestration.NewTaskGraphRequested += OnTaskOrchestrationNewTaskGraphRequested;
+        TaskOrchestration.TaskGraphOpenRequested += OnTaskOrchestrationTaskGraphOpenRequested;
+        TaskOrchestration.TaskGraphActionRequested += OnTaskOrchestrationTaskGraphActionRequested;
+        TaskOrchestration.TemplateGenerateRequested += OnTaskOrchestrationTemplateGenerateRequested;
+        TaskOrchestration.TemplateFocusRequested += OnTaskOrchestrationTemplateFocusRequested;
 
         // Persist focus changes back to the settings file so the next
         // launch can restore the same working directory.
@@ -91,6 +102,7 @@ public partial class MainWindowViewModel : ViewModelBase
         Chat.PropertyChanged += OnWorkspacePropertyChanged;
         TaskGraph.PropertyChanged += OnWorkspacePropertyChanged;
         TaskGraph.NodeDetailRequested += OnTaskGraphNodeDetailRequested;
+        TaskGraph.UseInChatRequested += OnTaskGraphUseInChatRequested;
 
         _agent.AgentErrorOccurred += OnAgentErrorOccurred;
 
@@ -115,6 +127,12 @@ public partial class MainWindowViewModel : ViewModelBase
     public SidebarViewModel Sidebar { get; }
     public SettingsViewModel Settings { get; }
 
+    /// <summary>
+    /// Task orchestration independent workspace. Switches the active workspace
+    /// to the task orchestration layout when selected by the user.
+    /// </summary>
+    public TaskOrchestrationWorkspaceViewModel TaskOrchestration { get; }
+
     [ObservableProperty]
     private ViewModelBase _activeWorkspace = null!;
 
@@ -129,9 +147,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _isRightSidebarVisible = true;
-
-    [ObservableProperty]
-    private bool _isTaskOrchestrationVisible = true;
 
     [ObservableProperty]
     private int _connectedServiceCount;
@@ -169,6 +184,10 @@ public partial class MainWindowViewModel : ViewModelBase
     /// subagent panel.</summary>
     public bool IsTaskGraphMode => ActiveWorkspace == TaskGraph;
 
+    public bool IsTaskOrchestrationMode => ActiveWorkspace is TaskOrchestrationWorkspaceViewModel or TaskGraphWorkspaceViewModel;
+
+    public bool IsChatSidebarMode => !IsTaskOrchestrationMode;
+
     /// <summary>The MainWindow sets this on Opened so dialogs and pickers can find it.</summary>
     public IStorageProvider? Storage { get; set; }
 
@@ -200,6 +219,12 @@ public partial class MainWindowViewModel : ViewModelBase
         if (_startupOptions is { OpenGraphToken: { Length: > 0 } token })
         {
             await OpenTaskGraphByTokenAsync(token, _startupOptions.MaximizeGraph).ConfigureAwait(true);
+        }
+
+        // Open the task orchestration workspace if requested via CLI flag.
+        if (_startupOptions is { OpenOrchestration: true })
+        {
+            OpenOrchestrationWorkspace();
         }
     }
 
@@ -314,6 +339,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(ActiveWorkspaceTitle));
         OnPropertyChanged(nameof(IsChatMode));
         OnPropertyChanged(nameof(IsTaskGraphMode));
+        OnPropertyChanged(nameof(IsTaskOrchestrationMode));
+        OnPropertyChanged(nameof(IsChatSidebarMode));
 
         if (value == TaskGraph)
         {
@@ -441,10 +468,29 @@ public partial class MainWindowViewModel : ViewModelBase
         await TaskGraph.OpenGraphByIdAsync(taskGraphId);
     }
 
+    private async void OnTaskGraphUseInChatRequested(object? sender, Models.TaskGraph.TaskGraph graph)
+    {
+        try
+        {
+            ActiveWorkspace = Chat;
+            await Chat.StartExistingTaskGraphAsync(graph).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AgentErrorMessage = $"在 Chat 中调用任务图失败: {ex.Message}";
+        }
+    }
+
     private async void OnSidebarNewTaskGraphRequested(object? sender, EventArgs e)
     {
         ActiveWorkspace = TaskGraph;
         await TaskGraph.NewGraphCommand.ExecuteAsync(null);
+    }
+
+    private void OnChatTemplateOrchestrationRequested(object? sender, string prompt)
+    {
+        OpenOrchestrationWorkspace();
+        TaskOrchestration.PrepareTemplateGenerationFromChat(prompt);
     }
 
     private async Task OnAddProjectRequested()
@@ -580,6 +626,134 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    // ── Task orchestration workspace event handlers ────────────────────
+
+    private async void OnTaskOrchestrationNewTaskGraphRequested(object? sender, EventArgs e)
+    {
+        ActiveWorkspace = TaskGraph;
+        await TaskGraph.NewGraphCommand.ExecuteAsync(null);
+    }
+
+    private async void OnTaskOrchestrationTaskGraphOpenRequested(object? sender, string taskGraphId)
+    {
+        ActiveWorkspace = TaskGraph;
+        await TaskGraph.OpenGraphByIdAsync(taskGraphId);
+    }
+
+    private async void OnTaskOrchestrationTaskGraphActionRequested(object? sender, TaskGraphActionRequest req)
+    {
+        switch (req.Kind)
+        {
+            case TaskGraphActionKind.Rename:
+            {
+                var graph = await TaskGraphStoreLoadAsync(req.TaskGraphId);
+                if (graph is null)
+                {
+                    return;
+                }
+
+                var newName = await PromptInputAsync("重命名任务编排", "新名称", graph.Name);
+                if (!string.IsNullOrWhiteSpace(newName))
+                {
+                    await Sidebar.RenameTaskGraphAsync(req.TaskGraphId, newName);
+                }
+                break;
+            }
+            case TaskGraphActionKind.Remove:
+            {
+                var graph = await TaskGraphStoreLoadAsync(req.TaskGraphId);
+                if (graph is null)
+                {
+                    return;
+                }
+
+                var ok = await PromptConfirmAsync("移除任务编排", $"确定要移除任务编排 “{graph.Name}” 吗?");
+                if (ok)
+                {
+                    await Sidebar.RemoveTaskGraphAsync(req.TaskGraphId);
+                    if (TaskGraph.CurrentGraph?.Id == req.TaskGraphId)
+                    {
+                        await TaskGraph.NewGraphCommand.ExecuteAsync(null);
+                    }
+                }
+                break;
+            }
+            case TaskGraphActionKind.ChangeProject:
+            {
+                var graph = await TaskGraphStoreLoadAsync(req.TaskGraphId);
+                if (graph is null)
+                {
+                    return;
+                }
+
+                var noneOption = "无所属项目";
+                var options = new[] { noneOption }
+                    .Concat(Sidebar.Projects.Select(p => p.Name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                var currentSelection = string.IsNullOrWhiteSpace(graph.ProjectName)
+                    ? noneOption
+                    : graph.ProjectName;
+
+                var selectedProjectName = await PromptSelectAsync(
+                    "修改所属项目",
+                    "选择此任务图的所属项目。",
+                    options,
+                    currentSelection);
+                if (selectedProjectName is null)
+                {
+                    return;
+                }
+
+                if (string.Equals(selectedProjectName, noneOption, StringComparison.Ordinal))
+                {
+                    await Sidebar.ChangeTaskGraphProjectAsync(req.TaskGraphId, null, null);
+                    if (TaskGraph.CurrentGraph?.Id == req.TaskGraphId)
+                    {
+                        TaskGraph.CurrentGraph.ProjectId = null;
+                        TaskGraph.CurrentGraph.ProjectName = null;
+                    }
+                    break;
+                }
+
+                var matchedProject = Sidebar.Projects.FirstOrDefault(p =>
+                    string.Equals(p.Name, selectedProjectName, StringComparison.OrdinalIgnoreCase));
+
+                if (matchedProject is null)
+                {
+                    var available = Sidebar.Projects.Count == 0
+                        ? "当前没有可选项目。"
+                        : $"未找到项目“{selectedProjectName}”。可选项目：{string.Join(" / ", Sidebar.Projects.Select(p => p.Name))}";
+                    await PromptConfirmAsync("未找到项目", available);
+                    return;
+                }
+
+                await Sidebar.ChangeTaskGraphProjectAsync(req.TaskGraphId, matchedProject.Id, matchedProject.Name);
+                if (TaskGraph.CurrentGraph?.Id == req.TaskGraphId)
+                {
+                    TaskGraph.CurrentGraph.ProjectId = matchedProject.Id;
+                    TaskGraph.CurrentGraph.ProjectName = matchedProject.Name;
+                }
+                break;
+            }
+        }
+    }
+
+    private async void OnTaskOrchestrationTemplateGenerateRequested(object? sender, TaskTemplateGenerationRequest req)
+    {
+        ActiveWorkspace = TaskGraph;
+        await TaskGraph.CreateGraphFromTemplateAsync(
+            req.BaseKind,
+            req.Input,
+            req.GraphName,
+            req.TemplateName).ConfigureAwait(true);
+    }
+
+    private void OnTaskOrchestrationTemplateFocusRequested(object? sender, EventArgs e)
+    {
+        ActiveWorkspace = TaskOrchestration;
+    }
+
     private bool TryGetProject(string projectId, out SidebarProjectViewModel pvm)
     {
         foreach (var p in Sidebar.Projects)
@@ -614,6 +788,9 @@ public partial class MainWindowViewModel : ViewModelBase
     private Task<string?> PromptInputAsync(string title, string label, string initial) =>
         DialogHost.InputAsync(GetOwnerWindow(), title, label, initial);
 
+    private Task<string?> PromptSelectAsync(string title, string label, IReadOnlyList<string> options, string? selectedOption) =>
+        DialogHost.SelectAsync(GetOwnerWindow(), title, label, options, selectedOption);
+
     private static Window? GetOwnerWindow()
     {
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
@@ -636,6 +813,20 @@ public partial class MainWindowViewModel : ViewModelBase
         ActiveWorkspace = TaskGraph;
     }
 
+    /// <summary>
+    /// Switches the active workspace to the task orchestration independent
+    /// workspace.
+    /// </summary>
+    public void OpenOrchestrationWorkspace()
+    {
+        ActiveWorkspace = TaskOrchestration;
+    }
+
+    public void ToggleTaskOrchestrationMode()
+    {
+        ActiveWorkspace = IsTaskOrchestrationMode ? (ViewModelBase)Chat : TaskOrchestration;
+    }
+
     [RelayCommand]
     private void ToggleLeftSidebar()
     {
@@ -650,6 +841,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string ActiveWorkspaceTitle => ActiveWorkspace switch
     {
+        TaskOrchestrationWorkspaceViewModel orch => orch.HeaderTitle,
         ChatWorkspaceViewModel chat => chat.HeaderTitle,
         TaskGraphWorkspaceViewModel graph => graph.HeaderTitle,
         _ => "工作区",

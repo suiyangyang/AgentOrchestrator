@@ -9,5 +9,7 @@ public sealed record TaskGraphListItem(
     DateTimeOffset UpdatedAt,
     TaskGraphExecutionState ExecutionState,
     int NodeCount,
-    TaskGraphTemplateKind TemplateKind
+    TaskGraphTemplateKind TemplateKind,
+    string? ProjectId,
+    string? ProjectName
 );

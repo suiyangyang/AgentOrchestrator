@@ -13,88 +13,13 @@
          dedicated to the graph surface and its inline toolbars. -->
     <Grid Background="#FFFFFF">
         <Grid Margin="{Binding WorkspaceMargin}"
-              RowDefinitions="Auto,Auto,*"
+              RowDefinitions="Auto,*"
               RowSpacing="12">
-
-            <!-- ============================================================ -->
-            <!-- Toolbar 1 — Execution (Save / Run / Continue / Retry / Stop) -->
-            <!--   Plus a "More" menu at the end that holds the less-used      -->
-            <!--   items (delete node, link mode, etc.) to keep the bar       -->
-            <!--   uncluttered.                                               -->
-            <!-- ============================================================ -->
-            <Grid Grid.Row="0"
-                  IsVisible="{Binding IsGraphHeaderVisible}"
-                  ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto"
-                  ColumnSpacing="8">
-                <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding CurrentGraphName}" FontSize="18" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding CurrentGraphSummaryText}" Foreground="#6E727A" />
-                </StackPanel>
-
-                <!-- Save — always available (writes whatever's in the canvas). -->
-                <Button Grid.Column="1"
-                        Classes="task-toolbar-btn"
-                        Command="{Binding SaveCurrentCommand}"
-                        ToolTip.Tip="保存">
-                    <Path Classes="toolbar-icon-path toolbar-icon-save" />
-                </Button>
-
-                <!-- Execute — primary action. -->
-                <Button Grid.Column="2"
-                        Classes="task-toolbar-btn task-toolbar-btn-primary"
-                        Command="{Binding ExecuteCurrentCommand}"
-                        IsEnabled="{Binding CanExecute}"
-                        ToolTip.Tip="执行">
-                    <Path Classes="toolbar-icon-path toolbar-icon-execute" />
-                </Button>
-
-                <!-- Continue — secondary, only after a WaitingForInput gate. -->
-                <Button Grid.Column="3"
-                        Classes="task-toolbar-btn"
-                        Command="{Binding ContinueExecutionCommand}"
-                        IsEnabled="{Binding CanContinue}"
-                        ToolTip.Tip="继续执行">
-                    <Path Classes="toolbar-icon-path toolbar-icon-continue" />
-                </Button>
-
-                <!-- Retry failed nodes. -->
-                <Button Grid.Column="4"
-                        Classes="task-toolbar-btn"
-                        Command="{Binding RetryFailedCommand}"
-                        IsEnabled="{Binding CanRetryFailed}"
-                        ToolTip.Tip="重试失败">
-                    <Path Classes="toolbar-icon-path toolbar-icon-retry" />
-                </Button>
-
-                <!-- Cancel — only while running. -->
-                <Button Grid.Column="5"
-                        Classes="task-toolbar-btn task-toolbar-btn-danger"
-                        Command="{Binding CancelExecutionCommand}"
-                        IsEnabled="{Binding CanCancelExecution}"
-                        ToolTip.Tip="取消执行">
-                    <Path Classes="toolbar-icon-path toolbar-icon-cancel" />
-                </Button>
-
-                <!-- "More" — opens a popup that hosts the less-frequent tools
-                     (create from template, link mode, add node, etc.).       -->
-                <Button Grid.Column="6"
-                        x:Name="MoreButton"
-                        Classes="task-toolbar-btn"
-                        Click="OnMoreButtonClick"
-                        ToolTip.Tip="更多">
-                    <Path Classes="toolbar-icon-path toolbar-icon-more" />
-                </Button>
-            </Grid>
-
-            <!-- ============================================================ -->
-            <!-- (Toolbar 2 was merged into the graph editor title bar       -->
-            <!--  below — see the "图编辑" header inside the graph surface.) -->
-            <!-- ============================================================ -->
 
             <!-- ============================================================ -->
             <!-- Pending user confirmation banner                             -->
             <!-- ============================================================ -->
-            <Border Grid.Row="1"
+            <Border Grid.Row="0"
                     IsVisible="{Binding IsWaitingForUserConfirmation}"
                     Background="#FFF8E7"
                     BorderBrush="#F0D59A"
@@ -114,22 +39,20 @@
             <!-- ============================================================ -->
             <!-- Graph surface                                                -->
             <!-- ============================================================ -->
-            <Border Grid.Row="2"
+            <Border Grid.Row="1"
                     Background="#F7F8FA"
                     BorderBrush="#E2E5EA"
                     BorderThickness="{Binding GraphSurfaceBorderThickness}"
                     CornerRadius="{Binding GraphSurfaceCornerRadius}">
                 <Grid RowDefinitions="Auto,*">
-                    <!-- Top bar — "图编辑" title (left) + Add/Delete/AutoLayout
-                         buttons + Graph name (centered) + Zoom + Fullscreen (right).
-                         This header now hosts the canvas controls that used to
-                         live in a standalone toolbar. -->
+                    <!-- Top bar — "图编辑" title (left) + node/layout actions
+                         + graph name (centered) + canvas and asset actions (right). -->
                     <Border Grid.Row="0"
                             Background="#FFFFFF"
                             BorderBrush="#E2E5EA"
                             BorderThickness="0,0,0,1"
                             Padding="16,8">
-                        <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto"
+                        <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
                               ColumnSpacing="8">
                             <StackPanel Grid.Column="0"
                                         Orientation="Horizontal"
@@ -202,6 +125,28 @@
                                     <Path Classes="toolbar-icon-path graph-fullscreen-exit-icon"
                                           IsVisible="{Binding IsGraphMaximized}" />
                                 </Panel>
+                            </Button>
+
+                            <Button Grid.Column="9"
+                                    Classes="task-toolbar-btn"
+                                    Command="{Binding SaveCurrentCommand}"
+                                    ToolTip.Tip="保存">
+                                <Path Classes="toolbar-icon-path toolbar-icon-save" />
+                            </Button>
+
+                            <Button Grid.Column="10"
+                                    Classes="task-toolbar-btn task-toolbar-btn-primary"
+                                    Command="{Binding UseCurrentInChatCommand}"
+                                    ToolTip.Tip="在 Chat 中调用">
+                                <Path Classes="toolbar-icon-path toolbar-icon-chat" />
+                            </Button>
+
+                            <Button Grid.Column="11"
+                                    x:Name="MoreButton"
+                                    Classes="task-toolbar-btn"
+                                    Click="OnMoreButtonClick"
+                                    ToolTip.Tip="更多">
+                                <Path Classes="toolbar-icon-path toolbar-icon-more" />
                             </Button>
                         </Grid>
                     </Border>

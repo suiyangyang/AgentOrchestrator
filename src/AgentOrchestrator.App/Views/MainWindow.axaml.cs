@@ -109,6 +109,14 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnOpenOrchestrationClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.ToggleTaskOrchestrationMode();
+        }
+    }
+
     private void OnRightSidebarToggleButtonClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is MainWindowViewModel vm)

@@ -196,6 +196,9 @@ public partial class App : Application
         services.AddSingleton<ITaskGraphExecutor, TaskGraphExecutor>();
         services.AddSingleton<ITaskGraphExecutionController>(sp => (ITaskGraphExecutionController)sp.GetRequiredService<ITaskGraphExecutor>());
 
+        // ── Task Template services ──
+        services.AddSingleton<ITaskTemplateStore, JsonTaskTemplateStore>();
+
         // ── ViewModels ──
         services.AddSingleton<SidebarViewModel>();
         services.AddSingleton<ChatWorkspaceViewModel>(sp => new ChatWorkspaceViewModel(
@@ -205,6 +208,7 @@ public partial class App : Application
             sp.GetRequiredService<ITaskGraphExecutionController>(),
             sp.GetRequiredService<ITaskGraphRuntimeHub>()));
         services.AddSingleton<TaskGraphWorkspaceViewModel>();
+        services.AddSingleton<TaskOrchestrationWorkspaceViewModel>();
         services.AddTransient<TaskGraphNodeDetailViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<SettingsViewModel>();
@@ -243,6 +247,11 @@ public sealed class StartupOptions
     /// complete in well under one second.</summary>
     public bool PerfTest { get; init; }
 
+    /// <summary>When true, the shell opens the task orchestration
+    /// independent workspace on startup (instead of the default chat
+    /// workspace). Driven by the <c>orchestration open</c> CLI command.</summary>
+    public bool OpenOrchestration { get; init; }
+
     public static StartupOptions Parse(string[] args)
     {
         if (args is null || args.Length == 0)
@@ -253,6 +262,7 @@ public sealed class StartupOptions
         string? openGraph = null;
         var maximize = false;
         var perfTest = false;
+        var openOrchestration = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -274,9 +284,12 @@ public sealed class StartupOptions
                 case "--perf-test":
                     perfTest = true;
                     break;
+                case "--open-orchestration":
+                    openOrchestration = true;
+                    break;
             }
         }
 
-        return new StartupOptions { OpenGraphToken = openGraph, MaximizeGraph = maximize, PerfTest = perfTest };
+        return new StartupOptions { OpenGraphToken = openGraph, MaximizeGraph = maximize, PerfTest = perfTest, OpenOrchestration = openOrchestration };
     }
 }

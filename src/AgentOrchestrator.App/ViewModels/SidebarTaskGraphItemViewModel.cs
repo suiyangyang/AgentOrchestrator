@@ -35,6 +35,9 @@ public sealed class SidebarTaskGraphItemViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(NodeCount));
             OnPropertyChanged(nameof(TemplateKind));
             OnPropertyChanged(nameof(TemplateText));
+            OnPropertyChanged(nameof(ProjectId));
+            OnPropertyChanged(nameof(ProjectName));
+            OnPropertyChanged(nameof(HasProject));
             OnPropertyChanged(nameof(UpdatedAtText));
             OnPropertyChanged(nameof(SubtitleText));
         }
@@ -66,6 +69,12 @@ public sealed class SidebarTaskGraphItemViewModel : INotifyPropertyChanged
 
     public TaskGraphTemplateKind TemplateKind => Item.TemplateKind;
 
+    public string? ProjectId => Item.ProjectId;
+
+    public string? ProjectName => Item.ProjectName;
+
+    public bool HasProject => !string.IsNullOrWhiteSpace(ProjectName);
+
     public string ExecutionStateText => ExecutionState switch
     {
         TaskGraphExecutionState.Draft => "草稿",
@@ -87,7 +96,9 @@ public sealed class SidebarTaskGraphItemViewModel : INotifyPropertyChanged
 
     public string UpdatedAtText => UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
 
-    public string SubtitleText => $"{TemplateText} · {NodeCount} 个节点 · {ExecutionStateText}";
+    public string SubtitleText => HasProject
+        ? ProjectName!
+        : $"{TemplateText} · {NodeCount} 个节点 · {ExecutionStateText}";
 
     public string DisplayRelativeTime => SidebarSessionViewModel.FormatRelative(UpdatedAt.ToUnixTimeMilliseconds());
 

@@ -1,0 +1,182 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AgentOrchestrator.App.ViewModels"
+             x:Class="AgentOrchestrator.App.Controls.TaskOrchestrationSidebarControl"
+             x:DataType="vm:TaskOrchestrationWorkspaceViewModel"
+             Focusable="True">
+    <Border Background="#F9F9FB"
+            BorderBrush="#E2E5EA"
+            BorderThickness="0,0,1,0">
+        <Grid RowDefinitions="Auto,*">
+            <StackPanel Grid.Row="0" Margin="12,8,12,8" Spacing="6">
+                <Button Classes="orch-quick-action"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Command="{Binding NewTaskGraphCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <Path Classes="sidebar-nav-icon-path sidebar-orchestrator-icon" />
+                        <TextBlock Text="新任务图" FontSize="14" FontWeight="SemiBold" Foreground="#1F2328" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <TextBox Text="{Binding SearchText, Mode=TwoWay}"
+                         Classes="orch-search-input"
+                         PlaceholderText="{Binding SearchPlaceholder}"
+                         HorizontalAlignment="Stretch">
+                    <TextBox.InnerLeftContent>
+                        <Path Classes="sidebar-nav-icon-path sidebar-search-icon" Margin="10,0,0,0" />
+                    </TextBox.InnerLeftContent>
+                </TextBox>
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="2">
+                    <StackPanel>
+                        <Button x:Name="TemplatesHeader"
+                                Classes="sidebar-section-header"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch"
+                                Command="{Binding ToggleTemplatesExpandedCommand}">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                <Path Grid.Column="0" Classes="sidebar-section-icon sidebar-orchestrator-icon" />
+                                <TextBlock Grid.Column="1" Text="模板" Classes="sidebar-section-label" />
+                                <Path Grid.Column="2"
+                                      Classes="sidebar-chevron sidebar-section-caret"
+                                      Classes.sidebar-chevron-expanded="{Binding AreTemplatesExpanded}" />
+                                <Button Grid.Column="3"
+                                        Classes="sidebar-section-action-btn"
+                                        Command="{Binding NewTemplateCommand}"
+                                        IsVisible="{Binding #TemplatesHeader.IsPointerOver}">
+                                    <Path Classes="sidebar-action-icon sidebar-plus-icon" />
+                                </Button>
+                            </Grid>
+                        </Button>
+
+                        <ItemsControl ItemsSource="{Binding Templates}"
+                                      IsVisible="{Binding AreTemplatesExpanded}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:TaskTemplateItemViewModel">
+                                    <Button x:Name="TemplateRow"
+                                            Classes="sidebar-session-item"
+                                            Classes.sidebar-session-item-selected="{Binding IsSelected}"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch"
+                                            Margin="10,0,4,0"
+                                            Click="OnTemplateRowClick">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6" RowDefinitions="Auto,Auto" RowSpacing="2">
+                                            <Path Grid.Column="0" Grid.RowSpan="2"
+                                                  Classes="sidebar-task-item-icon sidebar-orchestrator-icon" />
+                                            <TextBlock Grid.Column="1" Grid.Row="0"
+                                                       Text="{Binding Name}"
+                                                       Classes="sidebar-session-title"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center"
+                                                       IsVisible="{Binding IsNotEditing}" />
+                                            <TextBox Grid.Column="1" Grid.Row="0"
+                                                     Text="{Binding Name, Mode=TwoWay}"
+                                                     Classes="orch-inline-edit"
+                                                     IsVisible="{Binding IsEditing}"
+                                                     KeyDown="OnTemplateRenameKeyDown"
+                                                     LostFocus="OnTemplateRenameLostFocus"
+                                                     Tag="{Binding}" />
+                                            <StackPanel Grid.Column="1" Grid.Row="1"
+                                                        Orientation="Horizontal"
+                                                        Spacing="4"
+                                                        VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding BaseKindText}" Classes="sidebar-session-time" />
+                                                <TextBlock Text="·" Classes="sidebar-session-time" IsVisible="{Binding IsBuiltIn}" />
+                                                <TextBlock Text="内置" Foreground="#2F7CF6" FontSize="12" IsVisible="{Binding IsBuiltIn}" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" Grid.RowSpan="2"
+                                                       Text="{Binding DisplayRelativeTime}"
+                                                       Classes="sidebar-session-time"
+                                                       VerticalAlignment="Center" />
+                                            <Button Grid.Column="3" Grid.RowSpan="2"
+                                                    Classes="sidebar-row-action-btn"
+                                                    Click="OnTemplateRowMoreClick"
+                                                    Tag="{Binding}"
+                                                    IsVisible="{Binding #TemplateRow.IsPointerOver}">
+                                                <Path Classes="sidebar-action-icon sidebar-more-icon" />
+                                            </Button>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <StackPanel Margin="0,8,0,0">
+                        <Button x:Name="TaskGraphsHeader"
+                                Classes="sidebar-section-header"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch"
+                                Command="{Binding ToggleTaskGraphsExpandedCommand}">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                <Path Grid.Column="0" Classes="sidebar-section-icon sidebar-orchestrator-icon" />
+                                <TextBlock Grid.Column="1" Text="任务图" Classes="sidebar-section-label" />
+                                <Path Grid.Column="2"
+                                      Classes="sidebar-chevron sidebar-section-caret"
+                                      Classes.sidebar-chevron-expanded="{Binding AreTaskGraphsExpanded}" />
+                                <Button Grid.Column="3"
+                                        Classes="sidebar-section-action-btn"
+                                        Command="{Binding NewTaskGraphCommand}"
+                                        IsVisible="{Binding #TaskGraphsHeader.IsPointerOver}">
+                                    <Path Classes="sidebar-action-icon sidebar-plus-icon" />
+                                </Button>
+                            </Grid>
+                        </Button>
+
+                        <ItemsControl ItemsSource="{Binding TaskGraphs}"
+                                      IsVisible="{Binding AreTaskGraphsExpanded}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:SidebarTaskGraphItemViewModel">
+                                    <Button x:Name="TaskGraphRow"
+                                            Classes="sidebar-session-item"
+                                            Classes.sidebar-session-item-selected="{Binding IsSelected}"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch"
+                                            Margin="10,0,4,0"
+                                            Click="OnTaskGraphRowClick">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6" RowDefinitions="Auto,Auto" RowSpacing="2">
+                                            <Path Grid.Column="0" Grid.RowSpan="2"
+                                                  Classes="sidebar-task-item-icon sidebar-orchestrator-icon" />
+                                            <TextBlock Grid.Column="1" Grid.Row="0"
+                                                       Text="{Binding Name}"
+                                                       Classes="sidebar-session-title"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center" />
+                                            <StackPanel Grid.Column="1" Grid.Row="1"
+                                                        Orientation="Horizontal"
+                                                        Spacing="4"
+                                                        VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding SubtitleText}" Classes="sidebar-session-time" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" Grid.RowSpan="2"
+                                                       Text="{Binding DisplayRelativeTime}"
+                                                       Classes="sidebar-session-time"
+                                                       VerticalAlignment="Center" />
+                                            <Button Grid.Column="3" Grid.RowSpan="2"
+                                                    Classes="sidebar-row-action-btn"
+                                                    Click="OnTaskGraphRowMoreClick"
+                                                    Tag="{Binding}"
+                                                    IsVisible="{Binding #TaskGraphRow.IsPointerOver}">
+                                                <Path Classes="sidebar-action-icon sidebar-more-icon" />
+                                            </Button>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+
+            <Popup x:Name="RowActionPopup"
+                   Placement="Right"
+                   IsLightDismissEnabled="True">
+                <Border Classes="popup-shell" Padding="4">
+                    <StackPanel x:Name="RowActionPanel" Spacing="2" />
+                </Border>
+            </Popup>
+        </Grid>
+    </Border>
+</UserControl>

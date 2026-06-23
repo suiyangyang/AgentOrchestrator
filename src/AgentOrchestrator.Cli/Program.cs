@@ -46,6 +46,9 @@ namespace AgentOrchestrator.Cli;
 ///   taskgraph select &lt;id-or-name&gt;               -- print the resolved graph id (and summary)
 ///   taskgraph show &lt;id-or-name&gt;                 -- print full graph JSON
 ///   taskgraph delete &lt;id-or-name&gt;               -- delete a saved task graph
+///   orchestration open                     -- launch the GUI with the task
+///                                            orchestration workspace
+///   orchestration help                     -- print orchestration usage
 /// </summary>
 public static class Program
 {
@@ -74,6 +77,7 @@ public static class Program
                 "sidebar-list" => await SidebarListAsync(),
                 "verify" => await VerifyAsync(args),
                 "taskgraph" => await TaskGraphCommandAsync(args),
+                "orchestration" => await OrchestrationCommandAsync(args),
                 "verify-ui" => await VerifyUiAsync(args),
                 _ => UnknownCommand(args[0]),
             };
@@ -676,6 +680,11 @@ public static class Program
         sb.AppendLine("                                           a screenshot, then exit.");
         sb.AppendLine("                                           taskgraph-token = id | name | index");
         sb.AppendLine();
+        sb.AppendLine("Orchestration commands:");
+        sb.AppendLine("  orchestration open                               -- launch the GUI with the");
+        sb.AppendLine("                                                     task orchestration workspace");
+        sb.AppendLine("  orchestration help                               -- print orchestration usage");
+        sb.AppendLine();
         sb.AppendLine("Task graph commands:");
         sb.AppendLine("  taskgraph list");
         sb.AppendLine("  taskgraph add-template <task-list|feature-dev|bug-list> [name] [input]");
@@ -698,6 +707,54 @@ public static class Program
         sb.AppendLine("  select <id-or-name-or-index>                  print resolved id + summary");
         sb.AppendLine("  show <id-or-name-or-index>                    print full graph JSON");
         sb.AppendLine("  delete <id-or-name-or-index>                  delete a saved task graph");
+        Console.Write(sb.ToString());
+    }
+
+    // ── Orchestration commands ─────────────────────────────────────────
+
+    private static async Task<int> OrchestrationCommandAsync(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            PrintOrchestrationUsage();
+            return ExitUsage;
+        }
+
+        var subCommand = args[1];
+
+        switch (subCommand)
+        {
+            case "open":
+                return await OrchestrationOpenAsync();
+            case "help":
+            case "--help":
+            case "-h":
+                PrintOrchestrationUsage();
+                return ExitOk;
+            default:
+                Console.Error.WriteLine($"unknown orchestration sub-command: {subCommand}");
+                PrintOrchestrationUsage();
+                return ExitUsage;
+        }
+    }
+
+    private static Task<int> OrchestrationOpenAsync()
+    {
+        Console.WriteLine("open");
+        Console.WriteLine();
+        Console.WriteLine("Launch the GUI with the task orchestration workspace:");
+        Console.WriteLine("  dotnet run --project src/AgentOrchestrator.App -- --open-orchestration");
+        return Task.FromResult(ExitOk);
+    }
+
+    private static void PrintOrchestrationUsage()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("orchestration <sub-command> [args]");
+        sb.AppendLine();
+        sb.AppendLine("Sub-commands:");
+        sb.AppendLine("  open    launch the GUI with the task orchestration workspace");
+        sb.AppendLine("  help    print this help");
         Console.Write(sb.ToString());
     }
 

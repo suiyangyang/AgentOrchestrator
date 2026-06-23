@@ -59,7 +59,9 @@ public sealed class JsonTaskGraphStore : ITaskGraphStore
                     graph.UpdatedAt,
                     graph.ExecutionState,
                     graph.Nodes.Count,
-                    graph.TemplateKind));
+                    graph.TemplateKind,
+                    graph.ProjectId,
+                    graph.ProjectName));
             }
             catch
             {
@@ -119,6 +121,8 @@ public sealed class JsonTaskGraphStore : ITaskGraphStore
     {
         graph.Id = string.IsNullOrWhiteSpace(graph.Id) ? Guid.NewGuid().ToString("N") : graph.Id;
         graph.Name = string.IsNullOrWhiteSpace(graph.Name) ? "未命名编排" : graph.Name;
+        graph.ProjectId = string.IsNullOrWhiteSpace(graph.ProjectId) ? null : graph.ProjectId;
+        graph.ProjectName = string.IsNullOrWhiteSpace(graph.ProjectName) ? null : graph.ProjectName;
         graph.Nodes ??= [];
         graph.Edges ??= [];
 

@@ -205,6 +205,8 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
 
     public event EventHandler<TaskGraphNodeDetailRequest>? NodeDetailRequested;
 
+    public event EventHandler<TaskGraph>? UseInChatRequested;
+
     public IReadOnlyList<TaskNodeKind> NodeKinds { get; } =
     [
         TaskNodeKind.Plan,
@@ -529,22 +531,32 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
     [RelayCommand]
     private async Task CreateTemplateGraphAsync()
     {
+        await CreateGraphFromTemplateAsync(
+            MapTemplateKeyToKind(SelectedTemplate.Key),
+            TemplateInputText,
+            TemplateGraphName,
+            SelectedTemplate.Title).ConfigureAwait(true);
+    }
+
+    public async Task CreateGraphFromTemplateAsync(
+        TaskGraphTemplateKind templateKind,
+        string templateInput,
+        string? graphName,
+        string templateName)
+    {
         await ExecuteBusyAsync(async () =>
         {
-            var graph = SelectedTemplate.Key switch
-            {
-                "task-list" => TaskGraphTemplateBuilder.BuildTaskListGraph(TemplateInputText),
-                "feature-dev" => TaskGraphTemplateBuilder.BuildFeatureDevelopmentGraph(TemplateInputText),
-                "bug-list" => TaskGraphTemplateBuilder.BuildBugListGraph(TemplateInputText),
-                _ => throw new TaskGraphValidationException("未知模板类型。"),
-            };
+            var graph = BuildGraphFromTemplateKind(templateKind, templateInput);
 
-            if (!string.IsNullOrWhiteSpace(TemplateGraphName))
+            if (!string.IsNullOrWhiteSpace(graphName))
             {
-                graph.Name = TemplateGraphName.Trim();
+                graph.Name = graphName.Trim();
             }
 
-            await ActivateGraphAsync(graph, $"已根据“{SelectedTemplate.Title}”模板创建任务图。").ConfigureAwait(true);
+            graph.ProjectId = _sidebar.CurrentProject?.Id;
+            graph.ProjectName = _sidebar.CurrentProject?.Name;
+
+            await ActivateGraphAsync(graph, $"已根据“{templateName}”模板创建任务图。").ConfigureAwait(true);
             SelectedInputMode = TaskGraphInputMode.Template;
         }).ConfigureAwait(true);
     }
@@ -612,6 +624,19 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
             await _sidebar.RefreshTaskGraphsAsync().ConfigureAwait(true);
             StatusText = "编排已保存。";
         }).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task UseCurrentInChatAsync()
+    {
+        if (CurrentGraph is null)
+        {
+            return;
+        }
+
+        await SaveCurrentAsync().ConfigureAwait(true);
+        UseInChatRequested?.Invoke(this, CurrentGraph);
+        StatusText = $"已切换到 Chat，并开始调用编排“{CurrentGraph.Name}”。";
     }
 
     public async Task OpenGraphByIdAsync(string id)
@@ -1476,6 +1501,22 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
         var maxY = graph.Nodes.Max(x => x.Position.Y);
         return new NodePosition(maxX + 120, Math.Max(80, maxY));
     }
+
+    private static TaskGraphTemplateKind MapTemplateKeyToKind(string key) => key switch
+    {
+        "task-list" => TaskGraphTemplateKind.TaskList,
+        "feature-dev" => TaskGraphTemplateKind.FeatureDevelopment,
+        "bug-list" => TaskGraphTemplateKind.BugList,
+        _ => throw new TaskGraphValidationException("未知模板类型。"),
+    };
+
+    private static TaskGraph BuildGraphFromTemplateKind(TaskGraphTemplateKind templateKind, string templateInput) => templateKind switch
+    {
+        TaskGraphTemplateKind.TaskList => TaskGraphTemplateBuilder.BuildTaskListGraph(templateInput),
+        TaskGraphTemplateKind.FeatureDevelopment => TaskGraphTemplateBuilder.BuildFeatureDevelopmentGraph(templateInput),
+        TaskGraphTemplateKind.BugList => TaskGraphTemplateBuilder.BuildBugListGraph(templateInput),
+        _ => throw new TaskGraphValidationException("当前模板基础骨架暂不支持直接生成任务图。"),
+    };
 }
 
 public enum TaskGraphInputMode

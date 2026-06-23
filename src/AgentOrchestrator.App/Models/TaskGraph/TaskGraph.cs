@@ -35,6 +35,12 @@ public sealed partial class TaskGraph : ObservableObject
     private string? _sourceFilePath;
 
     [ObservableProperty]
+    private string? _projectId;
+
+    [ObservableProperty]
+    private string? _projectName;
+
+    [ObservableProperty]
     private DateTimeOffset? _executionStartedAt;
 
     [ObservableProperty]
