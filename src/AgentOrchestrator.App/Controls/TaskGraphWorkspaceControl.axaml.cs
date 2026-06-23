@@ -81,6 +81,8 @@ public partial class TaskGraphWorkspaceControl : UserControl
 
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
+        ResetInteractionState();
+
         if (_vm is not null)
         {
             _vm.GraphNodes.CollectionChanged -= OnGraphNodesChanged;
@@ -175,6 +177,7 @@ public partial class TaskGraphWorkspaceControl : UserControl
         var currentGraphId = _vm.CurrentGraph?.Id;
         if (currentGraphId is not null && currentGraphId != _lastResetGraphId)
         {
+            ResetInteractionState();
             _lastResetGraphId = currentGraphId;
             if (GraphCanvas.Parent is not null)
             {
@@ -207,6 +210,8 @@ public partial class TaskGraphWorkspaceControl : UserControl
             presentIds.Add(node.Id);
             if (_nodeVisuals.TryGetValue(node.Id, out var existing))
             {
+                existing.DataContext = node;
+                existing.Tag = node;
                 UpdateNodeVisual(existing, node);
             }
             else
@@ -253,6 +258,9 @@ public partial class TaskGraphWorkspaceControl : UserControl
 
                 ports = (inputPort, outputPort);
             }
+
+            ports.Input.Tag = node;
+            ports.Output.Tag = node;
 
             UpdatePortVisual(ports.Input, ports.Output, node);
         }
@@ -485,6 +493,7 @@ public partial class TaskGraphWorkspaceControl : UserControl
 
             if (_edgeVisuals.TryGetValue(id, out var existing))
             {
+                existing.Mid.Tag = edge;
                 UpdateEdgeVisual(existing, edge, isHighlighted);
             }
             else
@@ -878,6 +887,15 @@ public partial class TaskGraphWorkspaceControl : UserControl
         _linkTargetNode = null;
         _menuEdge = null;
         UpdateLinkTargetHighlight(null);
+    }
+
+    private void ResetInteractionState()
+    {
+        _dragBorder = null;
+        _dragNode = null;
+        _dragOffset = default;
+        _isPanning = false;
+        ClearLinkPreviewState();
     }
 
     private void UpdateLinkTargetHighlight(TaskNode? node)
