@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -275,6 +276,10 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
             }
 
             return result;
+        }
+        catch (Exception ex) when (IsOptionalQuestionFetchFailure(ex))
+        {
+            return [];
         }
         catch (Exception ex)
         {
@@ -1625,5 +1630,22 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         {
             await _client.DisposeAsync().ConfigureAwait(false);
         }
+    }
+
+    private static bool IsOptionalQuestionFetchFailure(Exception ex)
+    {
+        if (ex is JsonException)
+        {
+            return true;
+        }
+
+        if (ex is HttpRequestException httpEx)
+        {
+            return httpEx.StatusCode is HttpStatusCode.NotFound
+                or HttpStatusCode.MethodNotAllowed
+                or HttpStatusCode.NotImplemented;
+        }
+
+        return false;
     }
 }
