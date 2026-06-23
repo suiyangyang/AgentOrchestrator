@@ -73,8 +73,17 @@ namespace OpenCode.Client.Internal.Json;
 [JsonSerializable(typeof(ToolStateUnknown))]
 // Question
 [JsonSerializable(typeof(QuestionRequest))]
+[JsonSerializable(typeof(QuestionRequest[]))]
+[JsonSerializable(typeof(List<QuestionRequest>))]
+[JsonSerializable(typeof(IReadOnlyList<QuestionRequest>))]
 [JsonSerializable(typeof(QuestionItem))]
+[JsonSerializable(typeof(QuestionItem[]))]
+[JsonSerializable(typeof(List<QuestionItem>))]
+[JsonSerializable(typeof(IReadOnlyList<QuestionItem>))]
 [JsonSerializable(typeof(QuestionOption))]
+[JsonSerializable(typeof(QuestionOption[]))]
+[JsonSerializable(typeof(List<QuestionOption>))]
+[JsonSerializable(typeof(IReadOnlyList<QuestionOption>))]
 [JsonSerializable(typeof(QuestionTime))]
 [JsonSerializable(typeof(QuestionReplyRequest))]
 
