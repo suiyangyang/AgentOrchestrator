@@ -91,15 +91,27 @@
                            Classes="agent-error-banner-text"
                            VerticalAlignment="Center"
                            TextWrapping="Wrap" />
-                <Button Grid.Column="2"
-                        Classes="agent-error-banner-close"
-                        Command="{Binding DismissAgentErrorCommand}"
-                        VerticalAlignment="Center">
-                    <TextBlock Text="×"
-                               FontSize="18"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
-                </Button>
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            Spacing="4"
+                            VerticalAlignment="Center">
+                    <Button Classes="agent-error-banner-copy"
+                            Click="OnCopyAgentErrorClick"
+                            ToolTip.Tip="复制报错">
+                        <TextBlock Text="复制"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Button>
+                    <Button Classes="agent-error-banner-close"
+                            Command="{Binding DismissAgentErrorCommand}"
+                            ToolTip.Tip="关闭"
+                            VerticalAlignment="Center">
+                        <TextBlock Text="×"
+                                   FontSize="18"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Button>
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -390,7 +402,8 @@
                     <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Spacing="12" Margin="0,12,0,0">
                         <ItemsControl ItemsSource="{Binding Chat.PendingQuestion.Questions}">
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="chat:PendingQuestionItem">
+                                <DataTemplate DataType="chat:PendingQuestionItem"
+                                              x:DataType="chat:PendingQuestionItem">
                                     <StackPanel Spacing="8" Margin="0,6,0,0">
                                         <TextBlock Text="{Binding Header}" Classes="question-item-header" />
                                         <TextBlock Text="{Binding Question}" Classes="question-item-question" TextWrapping="Wrap" />
@@ -401,7 +414,8 @@
                                                 </ItemsPanelTemplate>
                                             </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemTemplate>
-                                                <DataTemplate DataType="chat:PendingQuestionOption">
+                                                <DataTemplate DataType="chat:PendingQuestionOption"
+                                                              x:DataType="chat:PendingQuestionOption">
                                                     <Button Classes="question-option-button"
                                                             HorizontalAlignment="Stretch"
                                                             Command="{Binding DataContext.Chat.SelectPendingQuestionOptionCommand, ElementName=Root}"

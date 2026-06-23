@@ -1,5 +1,6 @@
-﻿using Avalonia.Controls;
+using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using AgentOrchestrator.App.ViewModels;
 
@@ -84,6 +85,19 @@ public partial class MainWindow : Window
                 DataContext = settingsVm
             };
             await settingsWindow.ShowDialog<bool>(this);
+        }
+    }
+
+    private async void OnCopyAgentErrorClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel { AgentErrorMessage: { Length: > 0 } message })
+        {
+            return;
+        }
+
+        if (TopLevel.GetTopLevel(this)?.Clipboard is IClipboard clipboard)
+        {
+            await clipboard.SetTextAsync(message);
         }
     }
 
