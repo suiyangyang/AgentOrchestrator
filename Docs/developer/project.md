@@ -109,7 +109,10 @@
   卡片标题 / 状态 / 正文 / 底部元信息基础字号为 `12`，Markdown 标题保留分级字号；
   当 subagent 内容字段刷新时，卡片内部滚动条会自动贴到底部
 - `ChatWorkspaceControl` adds a fixed header strip inside the chat
-  workspace for task orchestration and subagent activity
+  workspace for task orchestration and subagent activity;
+  当没有活动编排时，编排入口位于输入区底部工具条中，处在权限右侧、
+  模型左侧，并使用与权限设置一致的弹出式选项框；当已有活动编排时，
+  顶部 strip 仅显示当前编排状态与继续 / 取消等控制
 - `TaskGraphNodeDetailWindow` is a separate transient window that shows
   one node's remote message history plus live streamed output, reusing
   the same chat block controls as the main chat surface

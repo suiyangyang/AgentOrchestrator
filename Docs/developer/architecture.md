@@ -260,8 +260,8 @@ the executor is the execution plane. Both surfaces communicate through
   stub pattern.
 - **UI surface** — `ChatWorkspaceControl` exposes an orchestration
   strip between the message scroll area and the composer with two
-  mutually-visible states: an auto-pilot strip (auto + 3 template
-  buttons) when no graph is active, and a status card (graph name,
+  mutually-visible states: an auto-pilot strip (与权限菜单同款的编排选项弹框
+  + “开始”按钮) when no graph is active, and a status card (graph name,
   running node, completion/failure/decision counts, pause/cancel/
   continue/summarize/detach buttons) when `HasActiveGraph` is true.
   All bindings use compiled bindings with `x:DataType`.
