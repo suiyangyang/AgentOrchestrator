@@ -95,24 +95,10 @@
              </ItemsControl>
          </ScrollViewer>
 
-         <!-- Row 1: TaskGraph orchestration strip -->
-         <Border Grid.Row="1" Classes="taskgraph-strip" Margin="38,8,38,0" Padding="12,10">
+         <!-- Row 1: Active TaskGraph status strip -->
+         <Border Grid.Row="1" Classes="taskgraph-strip" Margin="38,8,38,0" Padding="12,10"
+                 IsVisible="{Binding HasActiveGraph}">
              <Panel>
-                 <!-- Auto-pilot strip: visible when no active graph -->
-                 <StackPanel Spacing="8" Orientation="Horizontal" VerticalAlignment="Center"
-                             IsVisible="{Binding ShowAutoPilotStrip}">
-                     <TextBlock Text="编排:" VerticalAlignment="Center" FontWeight="SemiBold" />
-                     <Button Content="自动编排" Command="{Binding TriggerAutoTaskGraphCommand}"
-                             Classes="taskgraph-strip-button" />
-                     <Separator Width="1" Height="20" Background="#E0E3E8" />
-                     <Button Content="任务列表" Command="{Binding TriggerTaskListTemplateCommand}"
-                             Classes="taskgraph-strip-button" />
-                     <Button Content="功能开发" Command="{Binding TriggerFeatureDevTemplateCommand}"
-                             Classes="taskgraph-strip-button" />
-                     <Button Content="Bug 列表" Command="{Binding TriggerBugListTemplateCommand}"
-                             Classes="taskgraph-strip-button" />
-                 </StackPanel>
-
                  <!-- Status card: visible when HasActiveGraph -->
                  <Border IsVisible="{Binding HasActiveGraph}" Padding="4,0">
                      <Grid ColumnDefinitions="*,Auto">
@@ -256,7 +242,7 @@
                               PastingFromClipboard="OnDraftPasting" />
                 </Grid>
 
-                <Grid Grid.Row="3" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" VerticalAlignment="Center" Margin="0,12,0,0">
+                <Grid Grid.Row="3" ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto" VerticalAlignment="Center" Margin="0,12,0,0">
                     <Button Grid.Column="0" Classes="toolbar-icon-button" Command="{Binding AddAttachmentCommand}">
                         <TextBlock Text="+" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="20" />
                     </Button>
@@ -306,6 +292,51 @@
                     </Popup>
 
                     <Button Grid.Column="2"
+                            x:Name="TaskOrchestrationAnchor"
+                            Classes="permission-pill"
+                            Click="OnTaskOrchestrationClick"
+                            HorizontalContentAlignment="Left"
+                            Padding="10,0"
+                            Margin="8,0,0,0"
+                            IsVisible="{Binding ShowAutoPilotStrip}">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <TextBlock Text="⚡" Classes="permission-warning-icon" />
+                            <TextBlock Text="{Binding SelectedTaskOrchestration.Title}" Classes="permission-pill-text" />
+                            <Path Classes="permission-caret" />
+                        </StackPanel>
+                    </Button>
+
+                    <Popup x:Name="TaskOrchestrationPopup"
+                           Placement="Bottom"
+                           PlacementTarget="{Binding #TaskOrchestrationAnchor}"
+                           IsLightDismissEnabled="True">
+                        <Border Classes="popup-shell">
+                            <ItemsControl ItemsSource="{Binding TaskOrchestrationOptions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="chat:TaskOrchestrationOption">
+                                        <Button Classes="permission-item" Click="OnTaskOrchestrationItemClick" CommandParameter="{Binding}">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" Margin="4">
+                                                <Border Classes="permission-item-icon">
+                                                    <TextBlock Text="{Binding Icon}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="3" Margin="12,0,12,0">
+                                                    <TextBlock Text="{Binding Title}" Classes="permission-title" />
+                                                    <TextBlock Text="{Binding Description}" Classes="permission-description" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2"
+                                                           Text="✓"
+                                                           VerticalAlignment="Center"
+                                                           FontSize="16"
+                                                           IsVisible="{Binding IsSelected}" />
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </Popup>
+
+                    <Button Grid.Column="3"
                             x:Name="ModelAnchor"
                             Classes="model-pill"
                             Click="OnModelClick"
@@ -333,7 +364,7 @@
                         </Border>
                     </Popup>
 
-                    <Button Grid.Column="5" Classes="send-circle-button" Command="{Binding PrimaryActionCommand}">
+                    <Button Grid.Column="6" Classes="send-circle-button" Command="{Binding PrimaryActionCommand}">
                         <Grid Width="30" Height="30">
                             <Path Classes="composer-send-icon"
                                   IsVisible="{Binding ShowSendButton}" />

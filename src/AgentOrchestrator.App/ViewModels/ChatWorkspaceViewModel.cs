@@ -67,6 +67,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         _runtimeHub = runtimeHub;
 
         SelectedPermission = Permissions[2];
+        SelectedTaskOrchestration = TaskOrchestrationOptions[0];
         AttachActiveStateHandlers(_activeState);
     }
 
@@ -92,6 +93,8 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasActiveGraph));
         OnPropertyChanged(nameof(CanTriggerAutoGraph));
         ShowAutoPilotStrip = value is null;
+        TriggerAutoTaskGraphCommand.NotifyCanExecuteChanged();
+        TriggerSelectedTaskOrchestrationCommand.NotifyCanExecuteChanged();
         CancelActiveGraphCommand.NotifyCanExecuteChanged();
         PauseActiveGraphCommand.NotifyCanExecuteChanged();
     }
@@ -127,7 +130,14 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     [
         new("ask", "请求批准", "编辑外部文件和使用互联网时始终询问", "✋"),
         new("replace", "替代批准", "仅对检测到的风险操作请求批准", "◔"),
-        new("full", "完全访问权限", "可不受限制地访问互联网和您电脑上的任何文件", "🛡")
+        new("full", "完全访问", "可不受限制地访问互联网和您电脑上的任何文件", "🛡")
+    ];
+    public ObservableCollection<TaskOrchestrationOption> TaskOrchestrationOptions { get; } =
+    [
+        new("auto", "自动编排", "根据当前输入直接生成一个最小可执行编排。", "⚡"),
+        new("task-list", "任务列表", "将输入内容按顺序拆成串行任务节点。", "≣"),
+        new("feature-dev", "功能开发", "先生成方案，确认后再注入开发计划。", "◫"),
+        new("bug-list", "Bug 列表", "逐项分析问题并生成汇总报告。", "◌")
     ];
     public IReadOnlyList<string> Models { get; } = ["codex", "gpt-5", "claude-compatible"];
 
@@ -175,6 +185,30 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             if (_activeState.SelectedPermissionKey == value.Key) return;
             _activeState.SelectedPermissionKey = value.Key;
             foreach (var item in Permissions) item.IsSelected = ReferenceEquals(item, value);
+            OnPropertyChanged();
+        }
+    }
+
+    public TaskOrchestrationOption SelectedTaskOrchestration
+    {
+        get => TaskOrchestrationOptions.FirstOrDefault(x => x.IsSelected) ?? TaskOrchestrationOptions[0];
+        set
+        {
+            if (value is null)
+            {
+                return;
+            }
+
+            if (ReferenceEquals(SelectedTaskOrchestration, value))
+            {
+                return;
+            }
+
+            foreach (var item in TaskOrchestrationOptions)
+            {
+                item.IsSelected = ReferenceEquals(item, value);
+            }
+
             OnPropertyChanged();
         }
     }
@@ -310,6 +344,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         OnPropertyChanged(nameof(CurrentAgentSessionId));
         OnPropertyChanged(nameof(DraftText));
         OnPropertyChanged(nameof(SelectedPermission));
+        OnPropertyChanged(nameof(SelectedTaskOrchestration));
         OnPropertyChanged(nameof(SelectedModel));
         OnPropertyChanged(nameof(IsStreaming));
         OnPropertyChanged(nameof(StatusMessage));
@@ -335,6 +370,8 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowSendButton));
         OnPropertyChanged(nameof(ShowStopButton));
         OnPropertyChanged(nameof(HasPendingQuestion));
+        TriggerAutoTaskGraphCommand.NotifyCanExecuteChanged();
+        TriggerSelectedTaskOrchestrationCommand.NotifyCanExecuteChanged();
     }
 
     private void NotifyHistoryStateChanged()
@@ -1584,6 +1621,29 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
     [RelayCommand]
     private void OpenModelConfig() { }
+
+    [RelayCommand]
+    private void SelectTaskOrchestration(TaskOrchestrationOption option)
+    {
+        if (option is null)
+        {
+            return;
+        }
+
+        SelectedTaskOrchestration = option;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanTriggerAutoGraph))]
+    private Task TriggerSelectedTaskOrchestrationAsync()
+    {
+        return SelectedTaskOrchestration.Key switch
+        {
+            "task-list" => TriggerTemplateTaskGraphAsync(TaskGraphTemplateKind.TaskList, DraftText, CancellationToken.None),
+            "feature-dev" => TriggerTemplateTaskGraphAsync(TaskGraphTemplateKind.FeatureDevelopment, DraftText, CancellationToken.None),
+            "bug-list" => TriggerTemplateTaskGraphAsync(TaskGraphTemplateKind.BugList, DraftText, CancellationToken.None),
+            _ => TriggerAutoTaskGraphAsync(DraftText, CancellationToken.None),
+        };
+    }
 
     [RelayCommand]
     private void RemoveAttachment(ChatAttachment attachment) => Attachments.Remove(attachment);

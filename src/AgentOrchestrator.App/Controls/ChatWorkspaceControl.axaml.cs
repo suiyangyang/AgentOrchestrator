@@ -254,12 +254,21 @@ public partial class ChatWorkspaceControl : UserControl
     {
         PermissionPopup.IsOpen = !PermissionPopup.IsOpen;
         ModelPopup.IsOpen = false;
+        TaskOrchestrationPopup.IsOpen = false;
     }
 
     private void OnModelClick(object? sender, RoutedEventArgs e)
     {
         ModelPopup.IsOpen = !ModelPopup.IsOpen;
         PermissionPopup.IsOpen = false;
+        TaskOrchestrationPopup.IsOpen = false;
+    }
+
+    private void OnTaskOrchestrationClick(object? sender, RoutedEventArgs e)
+    {
+        TaskOrchestrationPopup.IsOpen = !TaskOrchestrationPopup.IsOpen;
+        PermissionPopup.IsOpen = false;
+        ModelPopup.IsOpen = false;
     }
 
     private void OnPermissionItemClick(object? sender, RoutedEventArgs e)
@@ -279,6 +288,21 @@ public partial class ChatWorkspaceControl : UserControl
         {
             viewModel.SelectedModel = model;
             ModelPopup.IsOpen = false;
+        }
+    }
+
+    private async void OnTaskOrchestrationItemClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { CommandParameter: TaskOrchestrationOption option } &&
+            DataContext is ViewModels.ChatWorkspaceViewModel viewModel)
+        {
+            viewModel.SelectTaskOrchestrationCommand.Execute(option);
+            TaskOrchestrationPopup.IsOpen = false;
+
+            if (viewModel.TriggerSelectedTaskOrchestrationCommand.CanExecute(null))
+            {
+                await viewModel.TriggerSelectedTaskOrchestrationCommand.ExecuteAsync(null);
+            }
         }
     }
 
