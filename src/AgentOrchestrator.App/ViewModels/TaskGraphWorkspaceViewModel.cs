@@ -177,6 +177,9 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
     private string _selectedNodeDescriptionDraft = string.Empty;
 
     [ObservableProperty]
+    private TaskNodeKind _selectedNodeKindDraft = TaskNodeKind.Execute;
+
+    [ObservableProperty]
     private bool _isGraphMaximized;
 
     [ObservableProperty]
@@ -728,11 +731,16 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
         foreach (var current in CurrentGraph.Nodes)
         {
             current.IsSelected = ReferenceEquals(current, node);
+            if (!ReferenceEquals(current, node))
+            {
+                current.IsEditing = false;
+            }
         }
 
         SelectedNode = node;
         SelectedNodeTitleDraft = node?.Title ?? string.Empty;
         SelectedNodeDescriptionDraft = node?.Description ?? string.Empty;
+        SelectedNodeKindDraft = node?.Kind ?? TaskNodeKind.Execute;
         RefreshLinkableTargets();
         OnPropertyChanged(nameof(HasSelectedNode));
         OnPropertyChanged(nameof(SelectedNodeHasFiles));
@@ -926,11 +934,44 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
                 ? SelectedNode.Title
                 : SelectedNodeTitleDraft.Trim();
             SelectedNode.Description = SelectedNodeDescriptionDraft?.Trim() ?? string.Empty;
+            SelectedNode.Kind = SelectedNodeKindDraft;
             SelectedNode.Prompt = TaskGraphFactory.BuildPrompt(SelectedNode.Title, SelectedNode.Description, SelectedNode.Kind);
+            SelectedNode.IsEditing = false;
             await _store.SaveAsync(CurrentGraph).ConfigureAwait(true);
             RefreshGraphSurface();
             StatusText = $"已保存节点“{SelectedNode.Title}”的编辑内容。";
         }).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private void BeginNodeEdit(TaskNode? node)
+    {
+        if (CurrentGraph is null || node is null)
+        {
+            return;
+        }
+
+        SelectNode(node);
+        node.IsEditing = true;
+        SelectedNodeTitleDraft = node.Title;
+        SelectedNodeDescriptionDraft = node.Description;
+        SelectedNodeKindDraft = node.Kind;
+        RefreshGraphSurface();
+    }
+
+    [RelayCommand]
+    private void CancelNodeEdit(TaskNode? node)
+    {
+        if (CurrentGraph is null || node is null)
+        {
+            return;
+        }
+
+        node.IsEditing = false;
+        SelectedNodeTitleDraft = node.Title;
+        SelectedNodeDescriptionDraft = node.Description;
+        SelectedNodeKindDraft = node.Kind;
+        RefreshGraphSurface();
     }
 
     [RelayCommand]
@@ -1272,7 +1313,10 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
             or nameof(TaskNode.OutputSummary)
             or nameof(TaskNode.Title)
             or nameof(TaskNode.Position)
-            or nameof(TaskNode.IsSelected))
+            or nameof(TaskNode.Description)
+            or nameof(TaskNode.Kind)
+            or nameof(TaskNode.IsSelected)
+            or nameof(TaskNode.IsEditing))
         {
             OnPropertyChanged(nameof(CurrentGraphSummaryText));
             OnPropertyChanged(nameof(CanRetryFailed));

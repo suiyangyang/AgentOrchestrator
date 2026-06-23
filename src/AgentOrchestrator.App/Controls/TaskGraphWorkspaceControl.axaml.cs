@@ -336,10 +336,20 @@ public partial class TaskGraphWorkspaceControl : UserControl
 
     private Control BuildNodeContent(TaskNode node)
     {
+        if (node.IsEditing)
+        {
+            return BuildEditingNodeContent(node);
+        }
+
+        return BuildReadonlyNodeContent(node);
+    }
+
+    private Control BuildReadonlyNodeContent(TaskNode node)
+    {
         var root = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,*,Auto"),
-            RowSpacing = 6,
+            RowDefinitions = new RowDefinitions("28,20,34,*,28"),
+            RowSpacing = 4,
         };
 
         // Title row.
@@ -350,6 +360,7 @@ public partial class TaskGraphWorkspaceControl : UserControl
         };
         var titleText = new TextBlock
         {
+            Classes = { "graph-node-title" },
             FontWeight = FontWeight.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             [!TextBlock.TextProperty] = new Binding("Title"),
@@ -358,6 +369,7 @@ public partial class TaskGraphWorkspaceControl : UserControl
         titleRow.Children.Add(titleText);
         var statusText = new TextBlock
         {
+            Classes = { "graph-node-status" },
             Foreground = new SolidColorBrush(Color.Parse("#6E727A")),
             [!TextBlock.TextProperty] = new Binding("StatusText"),
         };
@@ -367,9 +379,14 @@ public partial class TaskGraphWorkspaceControl : UserControl
         root.Children.Add(titleRow);
 
         // Kind row.
-        var kindRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*") };
+        var kindRow = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*"),
+            Height = 20,
+        };
         var kindText = new TextBlock
         {
+            Classes = { "graph-node-kind" },
             Foreground = new SolidColorBrush(Color.Parse("#2459B8")),
             [!TextBlock.TextProperty] = new Binding("Kind"),
         };
@@ -380,8 +397,9 @@ public partial class TaskGraphWorkspaceControl : UserControl
         // Description.
         var desc = new TextBlock
         {
+            Classes = { "graph-node-description" },
             Foreground = new SolidColorBrush(Color.Parse("#40444B")),
-            MaxHeight = 48,
+            MaxHeight = 34,
             TextWrapping = TextWrapping.Wrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
             [!TextBlock.TextProperty] = new Binding("Description"),
@@ -392,6 +410,7 @@ public partial class TaskGraphWorkspaceControl : UserControl
         // Output summary.
         var output = new TextBlock
         {
+            Classes = { "graph-node-output" },
             Foreground = new SolidColorBrush(Color.Parse("#6E727A")),
             MaxHeight = 36,
             TextWrapping = TextWrapping.Wrap,
@@ -409,14 +428,43 @@ public partial class TaskGraphWorkspaceControl : UserControl
         // of GraphCanvas, positioned via Canvas.Left/Top).
         var actions = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*"),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+            ColumnSpacing = 6,
+            Height = 28,
         };
+
+        var editBtn = new Button
+        {
+            Classes = { "graph-node-edit-button" },
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsVisible = node.IsSelected,
+            [!Button.CommandParameterProperty] = new Binding(),
+        };
+        ToolTip.SetTip(editBtn, "编辑节点");
+        editBtn.Bind(Button.CommandProperty, new Binding("DataContext.BeginNodeEditCommand")
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor)
+            {
+                AncestorType = typeof(UserControl),
+            },
+        });
+        editBtn.Content = new Path
+        {
+            Classes = { "graph-node-edit-button-icon" },
+        };
+        Grid.SetColumn(editBtn, 0);
+        actions.Children.Add(editBtn);
 
         var detailBtn = new Button
         {
             Classes = { "task-toolbar-btn" },
-            HorizontalAlignment = HorizontalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Right,
             [!Button.CommandParameterProperty] = new Binding(),
+        };
+        detailBtn.Content = new Path
+        {
+            Classes = { "toolbar-icon-path", "toolbar-icon-external-link" },
         };
         ToolTip.SetTip(detailBtn, "打开执行详情");
         detailBtn.Bind(Button.CommandProperty, new Binding("DataContext.OpenNodeDetailCommand")
@@ -427,13 +475,116 @@ public partial class TaskGraphWorkspaceControl : UserControl
             },
         });
         detailBtn.Bind(Button.IsEnabledProperty, new Binding("CanOpenDetail"));
-        Grid.SetColumn(detailBtn, 0);
+        Grid.SetColumn(detailBtn, 2);
         actions.Children.Add(detailBtn);
 
         Grid.SetRow(actions, 4);
         root.Children.Add(actions);
         return root;
     }
+
+    private Control BuildEditingNodeContent(TaskNode node)
+    {
+        var root = new Grid
+        {
+            RowDefinitions = new RowDefinitions("28,20,34,*,28"),
+            RowSpacing = 4,
+        };
+
+        var titleRow = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            ColumnSpacing = 8,
+            Height = 28,
+        };
+        var titleBox = new TextBox
+        {
+            Classes = { "graph-node-edit-title" },
+            PlaceholderText = "节点标题",
+        };
+        titleBox.Bind(TextBox.TextProperty, WorkspaceBinding("SelectedNodeTitleDraft", BindingMode.TwoWay));
+        Grid.SetColumn(titleBox, 0);
+        titleRow.Children.Add(titleBox);
+
+        var closeBtn = new Button
+        {
+            Classes = { "graph-node-edit-button" },
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            [!Button.CommandParameterProperty] = new Binding(),
+            Content = new Path
+            {
+                Classes = { "graph-node-close-button-icon" },
+            },
+        };
+        ToolTip.SetTip(closeBtn, "退出编辑");
+        closeBtn.Bind(Button.CommandProperty, WorkspaceBinding("CancelNodeEditCommand"));
+        Grid.SetColumn(closeBtn, 1);
+        titleRow.Children.Add(closeBtn);
+
+        Grid.SetRow(titleRow, 0);
+        root.Children.Add(titleRow);
+
+        var kindBox = new ComboBox
+        {
+            Classes = { "graph-node-edit-kind" },
+            Height = 20,
+        };
+        kindBox.Bind(ItemsControl.ItemsSourceProperty, WorkspaceBinding("NodeKinds"));
+        kindBox.Bind(SelectingItemsControl.SelectedItemProperty, WorkspaceBinding("SelectedNodeKindDraft", BindingMode.TwoWay));
+        Grid.SetRow(kindBox, 1);
+        root.Children.Add(kindBox);
+
+        var descriptionBox = new TextBox
+        {
+            Classes = { "graph-node-edit-description" },
+            PlaceholderText = "节点说明",
+            MinHeight = 34,
+            MaxHeight = 34,
+        };
+        descriptionBox.Bind(TextBox.TextProperty, WorkspaceBinding("SelectedNodeDescriptionDraft", BindingMode.TwoWay));
+        Grid.SetRow(descriptionBox, 2);
+        root.Children.Add(descriptionBox);
+
+        var spacer = new Border();
+        Grid.SetRow(spacer, 3);
+        root.Children.Add(spacer);
+
+        var actions = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnSpacing = 6,
+            Height = 28,
+        };
+
+        var saveBtn = new Button
+        {
+            Classes = { "graph-node-edit-button" },
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+            Content = new Path
+            {
+                Classes = { "graph-node-save-button-icon" },
+            },
+        };
+        saveBtn.Bind(Button.CommandProperty, WorkspaceBinding("SaveSelectedNodeEditsCommand"));
+        Grid.SetColumn(saveBtn, 0);
+        actions.Children.Add(saveBtn);
+
+        Grid.SetRow(actions, 4);
+        root.Children.Add(actions);
+        return root;
+    }
+
+    private static Binding WorkspaceBinding(string path, BindingMode mode = BindingMode.Default)
+        => new($"DataContext.{path}")
+        {
+            Mode = mode,
+            RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor)
+            {
+                AncestorType = typeof(UserControl),
+            },
+        };
 
     /// <summary>
     /// Map a <see cref="TaskNodeKind"/> to the lowercase CSS-class
@@ -711,6 +862,11 @@ public partial class TaskGraphWorkspaceControl : UserControl
             return;
         }
 
+        if (node.IsEditing || IsEditingControlSource(e.Source))
+        {
+            return;
+        }
+
         _dragBorder = border;
         _dragNode = node;
         _vm.SelectNodeCommand.Execute(node);
@@ -887,6 +1043,22 @@ public partial class TaskGraphWorkspaceControl : UserControl
         _linkTargetNode = null;
         _menuEdge = null;
         UpdateLinkTargetHighlight(null);
+    }
+
+    private static bool IsEditingControlSource(object? source)
+    {
+        var element = source as StyledElement;
+        while (element is not null)
+        {
+            if (element is TextBox or ComboBox or Button)
+            {
+                return true;
+            }
+
+            element = element.Parent as StyledElement;
+        }
+
+        return false;
     }
 
     private void ResetInteractionState()

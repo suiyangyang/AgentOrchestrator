@@ -21,7 +21,8 @@
   hidden) + center workspace + right sidebar (resizable, can be hidden)
 - The center workspace header spans the chat area and the right sidebar
   top edge; it shows the active workspace title and a toggle for the
-  right sidebar
+  right sidebar. 当前右侧边栏仅在 Chat 工作区可用；进入任务编排 /
+  TaskGraph 工作区时，右侧边栏和对应开关都会隐藏
 - `ActiveWorkspace` switches between `ChatWorkspaceViewModel`,
   `TaskGraphWorkspaceViewModel`, and `TaskOrchestrationWorkspaceViewModel`.
   Workspace VMs are resolved to their control via **explicit DataTemplates**
@@ -85,13 +86,12 @@
   - four creation modes: template / direct text / intent / document
   - a graph canvas that renders nodes by `TaskNode.Position` and edges by dependency
   - node cards can be repositioned by drag-and-drop; dependencies can be created either from the side panel or by dragging from a node's link handle onto another node
+  - node cards support inline editing: selected nodes can switch into an in-card edit mode for title / kind / description without using the shell sidebar
   - an editor toolbar for add/delete node, auto-layout, and zoom controls
   - save / use-in-chat / more are merged into the graph editor toolbar; standalone execute controls were removed
   - a graph focus mode that collapses both TaskGraph side panels and asks the shell to hide the outer left/right sidebars so the canvas fills the window
   - an empty-canvas onboarding state so the graph surface is visible even before the first graph exists
-  - a right-side node editor for inline title/description updates plus a lightweight node-creation form
   - three built-in templates: task list / feature development / bug list
-  - a right-side node detail panel for summary, errors, tags, touched files, and session drill-down
   - a waiting-for-input checkpoint for feature-development graphs before plan execution continues
   - node detail entry points that open a dedicated session-detail window
 - `SettingsWindow` is a separate dialog

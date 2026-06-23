@@ -188,6 +188,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool IsChatSidebarMode => !IsTaskOrchestrationMode;
 
+    public bool IsRightSidebarAvailable => IsChatMode;
+
+    public bool IsRightSidebarPanelVisible => IsRightSidebarAvailable && IsRightSidebarVisible;
+
+    public GridLength EffectiveRightSidebarWidth => IsRightSidebarPanelVisible
+        ? RightSidebarWidth
+        : new GridLength(0);
+
     /// <summary>The MainWindow sets this on Opened so dialogs and pickers can find it.</summary>
     public IStorageProvider? Storage { get; set; }
 
@@ -297,6 +305,8 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             _rightSidebarExpandedWidth = value;
         }
+
+        OnPropertyChanged(nameof(EffectiveRightSidebarWidth));
     }
 
     partial void OnIsLeftSidebarVisibleChanged(bool value)
@@ -325,10 +335,14 @@ public partial class MainWindowViewModel : ViewModelBase
             }
 
             RightSidebarWidth = new GridLength(0);
+            OnPropertyChanged(nameof(IsRightSidebarPanelVisible));
+            OnPropertyChanged(nameof(EffectiveRightSidebarWidth));
             return;
         }
 
         RightSidebarWidth = NormalizeRestoredWidth(_rightSidebarExpandedWidth, DefaultRightSidebarWidth);
+        OnPropertyChanged(nameof(IsRightSidebarPanelVisible));
+        OnPropertyChanged(nameof(EffectiveRightSidebarWidth));
     }
 
     private static GridLength NormalizeRestoredWidth(GridLength value, GridLength fallback)
@@ -341,6 +355,9 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsTaskGraphMode));
         OnPropertyChanged(nameof(IsTaskOrchestrationMode));
         OnPropertyChanged(nameof(IsChatSidebarMode));
+        OnPropertyChanged(nameof(IsRightSidebarAvailable));
+        OnPropertyChanged(nameof(IsRightSidebarPanelVisible));
+        OnPropertyChanged(nameof(EffectiveRightSidebarWidth));
 
         if (value == TaskGraph)
         {

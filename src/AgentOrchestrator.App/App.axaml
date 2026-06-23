@@ -1644,7 +1644,13 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinWidth" Value="28" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style Selector="Button.graph-node-edit-button:pointerover">
             <Setter Property="Background" Value="#E8EBF0" />
@@ -1658,6 +1664,32 @@
             <Setter Property="Fill" Value="Transparent" />
             <Setter Property="Width" Value="12" />
             <Setter Property="Height" Value="12" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Path.graph-node-save-button-icon">
+            <Setter Property="Data" Value="M 3,3 H 11.5 L 13,4.5 V 13 H 3 Z M 4.5,3 V 6.5 H 9.5 V 3 M 4.5,9 H 11.5 V 13 H 4.5 Z" />
+            <Setter Property="Stroke" Value="#7A7F87" />
+            <Setter Property="StrokeThickness" Value="1.2" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Fill" Value="Transparent" />
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Path.graph-node-close-button-icon">
+            <Setter Property="Data" Value="M 3.5,3.5 L 11.5,11.5 M 11.5,3.5 L 3.5,11.5" />
+            <Setter Property="Stroke" Value="#7A7F87" />
+            <Setter Property="StrokeThickness" Value="1.4" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Fill" Value="Transparent" />
+            <Setter Property="Width" Value="11" />
+            <Setter Property="Height" Value="11" />
             <Setter Property="Stretch" Value="Uniform" />
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Center" />
@@ -1739,7 +1771,10 @@
             <Setter Property="Foreground" Value="#1F2328" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0,2,0,0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="TextWrapping" Value="NoWrap" />
+            <Setter Property="MinHeight" Value="20" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style Selector="TextBox.graph-node-edit-title:focus">
             <Setter Property="BorderThickness" Value="0" />
@@ -1761,10 +1796,22 @@
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="MinHeight" Value="20" />
+            <Setter Property="MaxHeight" Value="20" />
         </Style>
         <Style Selector="ComboBox.graph-node-edit-kind /template/ Border#PART_BorderElement">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="ComboBox.graph-node-edit-kind /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="ComboBox.graph-node-edit-kind /template/ Path#CaretPath">
+            <Setter Property="Width" Value="9" />
+            <Setter Property="Height" Value="9" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="Margin" Value="4,0,0,0" />
         </Style>
 
         <Style Selector="TextBox.graph-node-edit-description">
@@ -1772,9 +1819,11 @@
             <Setter Property="Foreground" Value="#40444B" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0,2" />
+            <Setter Property="Padding" Value="0" />
             <Setter Property="AcceptsReturn" Value="True" />
             <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="LineHeight" Value="15" />
+            <Setter Property="VerticalContentAlignment" Value="Top" />
         </Style>
         <Style Selector="TextBox.graph-node-edit-description:focus">
             <Setter Property="BorderThickness" Value="0" />

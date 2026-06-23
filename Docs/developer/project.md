@@ -38,6 +38,9 @@
   editing (side-panel selection and canvas drag-link), zoom/auto-layout,
   node add/delete/edit, bug report aggregation/export, node-detail routing,
   and the handoff entry that invokes the current TaskGraph from Chat
+- TaskGraph 节点编辑已改为画布内联模式：
+  选中节点后点击节点内编辑按钮，即可直接在卡片内修改标题、类型和说明；
+  保存后立即回写当前图并持久化
 - TaskGraph 图形区支持“铺满窗口”模式：进入后会收起 TaskGraph 内部左右栏与主窗口外层左右侧栏，只保留图编辑区和画布工具条
 - `Models/TaskGraph/` contains the persisted graph model
   (`TaskGraph`, `TaskNode`, template/execution enums, edges, planner schema)
@@ -120,7 +123,8 @@
 - `MainWindow.axaml` hosts a 3-column shell with resizable left and
   right sidebars; the center column contains a fixed header area that
   spans the workspace and right sidebar top edge, plus the active
-  workspace body
+  workspace body。右侧边栏当前只在 Chat 工作区显示；
+  任务编排 / TaskGraph 工作区会隐藏右侧边栏及其标题栏开关
 - 标题栏左侧包含一个与主界面图标风格一致的单色服务按钮；
   点击后直接弹出 `SettingsWindow` 并定位到 `设置 / 集成 / 服务`
 - 右侧 `Subagent` 区域使用固定高度卡片展示子会话活动；卡片正文按
