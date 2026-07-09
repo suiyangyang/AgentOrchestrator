@@ -1,3 +1,5 @@
+using AgentOrchestrator.App.Models.TaskGraph;
+
 namespace AgentOrchestrator.App.Services.TaskGraph;
 
 /// <summary>
@@ -29,4 +31,17 @@ public sealed class TemplateInstantiationOptions
     /// When null, the template's <c>ProjectName</c> is inherited.
     /// </summary>
     public string? ProjectName { get; set; }
+
+    /// <summary>
+    /// Origin hint indicating how this runtime graph was created (Workspace, Chat, etc.).
+    /// When null, the default on <see cref="TaskGraph"/> applies (<c>WorkspaceDirect</c>).
+    /// </summary>
+    public TaskGraphOriginHint? OriginHint { get; set; }
+
+    /// <summary>
+    /// Chat conversation session identifier that links the runtime graph back to its
+    /// originating chat session. When null, the runtime graph's <c>ConversationSessionId</c>
+    /// remains cleared.
+    /// </summary>
+    public string? ConversationSessionId { get; set; }
 }

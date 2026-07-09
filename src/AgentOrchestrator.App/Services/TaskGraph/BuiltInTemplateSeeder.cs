@@ -21,6 +21,8 @@ public sealed class BuiltInTemplateSeeder
 
     // Source of truth for built-in template ids. ChatWorkspaceViewModel.AutoOrchestrationTemplateId
     // must match BuiltInIds.AutoOrchestration.
+    // Source of truth for built-in template ids. ChatWorkspaceViewModel.AutoOrchestrationTemplateId
+    // must match BuiltInIds.AutoOrchestration.
     public static class BuiltInIds
     {
         public const string TaskList = "builtin.task-list";
@@ -33,6 +35,18 @@ public sealed class BuiltInTemplateSeeder
         /// </summary>
         public const string AutoOrchestration = "builtin.auto-orchestration";
     }
+
+    /// <summary>
+    /// Resolves the built-in template ID for a given <see cref="TaskGraphTemplateKind"/>.
+    /// Returns null for kinds that have no built-in template (e.g. <c>Custom</c>).
+    /// </summary>
+    public static string? GetBuiltInTemplateId(TaskGraphTemplateKind kind) => kind switch
+    {
+        TaskGraphTemplateKind.TaskList => BuiltInIds.TaskList,
+        TaskGraphTemplateKind.FeatureDevelopment => BuiltInIds.FeatureDevelopment,
+        TaskGraphTemplateKind.BugList => BuiltInIds.BugList,
+        TaskGraphTemplateKind.Custom or _ => null,
+    };
 
     public BuiltInTemplateSeeder(ITaskGraphStore store)
     {
@@ -84,7 +98,7 @@ public sealed class BuiltInTemplateSeeder
             return;
         }
 
-        var graph = TaskGraphTemplateBuilder.Build(kind, defaultInput, TaskGraphDocumentKind.Template);
+        var graph = TaskGraphTemplateBuilder.BuildTemplate(kind, defaultInput);
         graph.Id = id;
         graph.Name = name;
         graph.IsBuiltInTemplate = true;

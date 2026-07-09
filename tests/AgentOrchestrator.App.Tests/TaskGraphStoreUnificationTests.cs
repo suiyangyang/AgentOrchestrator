@@ -64,8 +64,15 @@ public sealed class TaskGraphStoreUnificationTests : IDisposable
         var store = CreateStore();
         await store.SaveAsync(CreateGraph("t1", "Template A", TaskGraphDocumentKind.Template));
         await store.SaveAsync(CreateGraph("t2", "Template B", TaskGraphDocumentKind.Template));
-        await store.SaveAsync(CreateGraph("r1", "Runtime A", TaskGraphDocumentKind.Runtime));
-        await store.SaveAsync(CreateGraph("r2", "Runtime B", TaskGraphDocumentKind.Runtime));
+        // Runtime graphs must keep at least one node (SaveAsync guard) — seed
+        // the test fixtures with a placeholder so the list test still exercises
+        // the store-level filter rather than the validation guard.
+        var r1 = CreateGraph("r1", "Runtime A", TaskGraphDocumentKind.Runtime);
+        r1.Nodes.Add(new TaskNode { Id = "r1_seed", Title = "seed", Kind = TaskNodeKind.Execute });
+        await store.SaveAsync(r1);
+        var r2 = CreateGraph("r2", "Runtime B", TaskGraphDocumentKind.Runtime);
+        r2.Nodes.Add(new TaskNode { Id = "r2_seed", Title = "seed", Kind = TaskNodeKind.Execute });
+        await store.SaveAsync(r2);
 
         var templates = await store.ListTemplatesAsync();
         var runtimes = await store.ListRuntimeGraphsAsync();
@@ -143,6 +150,8 @@ public sealed class TaskGraphStoreUnificationTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_tempDir, "template.tpl1.json")));
 
         var runtime = CreateGraph("run1", "MyRuntime", TaskGraphDocumentKind.Runtime);
+        // Runtime graphs must keep at least one node (SaveAsync guard).
+        runtime.Nodes.Add(new TaskNode { Id = "run1_seed", Title = "seed", Kind = TaskNodeKind.Execute });
         await store.SaveAsync(runtime);
         Assert.True(File.Exists(Path.Combine(_tempDir, "runtime.run1.json")));
     }
@@ -263,6 +272,8 @@ public sealed class TaskGraphStoreUnificationTests : IDisposable
     {
         var store = CreateStore();
         var runtime = CreateGraph("run-x", "Runtime", TaskGraphDocumentKind.Runtime);
+        // Runtime graphs must keep at least one node (SaveAsync guard).
+        runtime.Nodes.Add(new TaskNode { Id = "run_x_seed", Title = "seed", Kind = TaskNodeKind.Execute });
         await store.SaveAsync(runtime);
 
         await Assert.ThrowsAsync<InvalidOperationException>(

@@ -540,6 +540,55 @@ public sealed class TaskGraphTemplateInstantiatorTests
         Assert.Contains(clone.Nodes, n => n.Title == "Terminal");
     }
 
+    // ── Test 18: OriginHint from options applied to clone ──
+    [Fact]
+    public async Task InstantiateAsync_AppliesOriginHintFromOptions()
+    {
+        var template = CreateTemplate();
+        template.Nodes.Add(CreateNode("n1", "Node 1"));
+
+        var clone = await _instantiator.InstantiateAsync(template,
+            new TemplateInstantiationOptions { OriginHint = TaskGraphOriginHint.ChatAuto });
+        Assert.Equal(TaskGraphOriginHint.ChatAuto, clone.OriginHint);
+    }
+
+    // ── Test 19: ConversationSessionId from options applied to clone ──
+    [Fact]
+    public async Task InstantiateAsync_AppliesConversationSessionIdFromOptions()
+    {
+        var template = CreateTemplate();
+        template.Nodes.Add(CreateNode("n1", "Node 1"));
+
+        var clone = await _instantiator.InstantiateAsync(template,
+            new TemplateInstantiationOptions { ConversationSessionId = "session-123" });
+        Assert.Equal("session-123", clone.ConversationSessionId);
+    }
+
+    // ── Test 20: {{user_input}} placeholder replaced in node Prompts ──
+    [Fact]
+    public async Task InstantiateAsync_ReplacesUserInputPlaceholderInPrompts()
+    {
+        var template = CreateTemplate();
+        var node = CreateNode("n1", "Node 1");
+        node.Prompt = "Do the following: {{user_input}}";
+        template.Nodes.Add(node);
+
+        var clone = await _instantiator.InstantiateAsync(template,
+            new TemplateInstantiationOptions { UserInput = "my actual input" });
+
+        var cloneNode = clone.Nodes[0];
+        Assert.DoesNotContain("{{user_input}}", cloneNode.Prompt);
+        Assert.Contains("my actual input", cloneNode.Prompt);
+        Assert.Equal("Do the following: my actual input", cloneNode.Prompt);
+
+        // Null UserInput replaces placeholder with empty string
+        var clone2 = await _instantiator.InstantiateAsync(template,
+            new TemplateInstantiationOptions());
+        var clone2Node = clone2.Nodes[0];
+        Assert.DoesNotContain("{{user_input}}", clone2Node.Prompt);
+        Assert.Equal("Do the following: ", clone2Node.Prompt);
+    }
+
     // ── Test 17: No cycles introduced ──
     [Fact]
     public async Task InstantiateAsync_NoCyclesIntroduced()

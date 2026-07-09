@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AgentOrchestrator.App.Models.Chat;
 using AgentOrchestrator.App.Models.TaskGraph;
+using AgentOrchestrator.App.Services.DialogHost;
 using AgentOrchestrator.App.Services.TaskGraph;
 using Avalonia;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -28,6 +29,7 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
     private readonly IDocumentReader _documentReader;
     private readonly ITaskGraphExecutor _executor;
     private readonly SidebarViewModel _sidebar;
+    private readonly IDialogHost _dialogHost;
     private TaskGraph? _currentGraph;
 
     public TaskGraphWorkspaceViewModel(
@@ -36,7 +38,8 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
         ITaskGraphPlanner planner,
         IDocumentReader documentReader,
         ITaskGraphExecutor executor,
-        SidebarViewModel sidebar)
+        SidebarViewModel sidebar,
+        IDialogHost dialogHost)
     {
         _store = store;
         _directParser = directParser;
@@ -44,6 +47,7 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
         _documentReader = documentReader;
         _executor = executor;
         _sidebar = sidebar;
+        _dialogHost = dialogHost;
 
         SelectedPermission = Permissions[2];
         SelectedTemplate = Templates[0];
@@ -184,6 +188,22 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _isCreateDialogVisible;
+
+    [ObservableProperty]
+    private bool _isNamingDialogVisible;
+
+    [ObservableProperty]
+    private string _namingDialogNameDraft = string.Empty;
+
+    /// <summary>
+    /// Name typed into the top-level field of the existing "创建任务编排" dialog.
+    /// Used by all four creation modes (Template / Direct / Intent / Document) and
+    /// written back to the graph on confirm. Distinct from the older
+    /// <see cref="_templateGraphName"/> which only applied to the template tab —
+    /// the new field is what gates the "命名窗口" requirement.
+    /// </summary>
+    [ObservableProperty]
+    private string _newGraphNameDraft = string.Empty;
 
     /// <summary>
     /// True while <see cref="RefreshGraphSurface"/> is bulk-replacing
@@ -346,7 +366,12 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
 
     public bool CanAddNode => CurrentGraph is not null && !IsBusy;
 
-    public bool CanDeleteNode => SelectedNode is not null && CurrentGraph is not null && !IsBusy;
+    public bool CanDeleteNode => SelectedNode is not null
+        && CurrentGraph is not null
+        && !IsBusy
+        && (!IsRuntimeDocument || CurrentGraph.Nodes.Count > 1);
+
+    public bool CanConfirmNamingDialog => !string.IsNullOrWhiteSpace(NamingDialogNameDraft);
 
     public bool IsGraphHeaderVisible => !IsGraphMaximized;
 
@@ -407,6 +432,93 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
     public void CancelCreateDialog()
     {
         IsCreateDialogVisible = false;
+        NewGraphNameDraft = string.Empty;
+    }
+
+    // ============================================================
+    // Naming dialog (popup) — gates every "new TaskGraph" path.
+    // Shown BEFORE the graph is created so every saved graph has a
+    // user-supplied (non-empty) name and at least one Execute node.
+    // ============================================================
+
+    public void BeginNamingDialog()
+    {
+        // Pre-fill with whatever the user already typed into the create-dialog
+        // (typically empty); fallback keeps the placeholder readable on screens.
+        NamingDialogNameDraft = string.IsNullOrWhiteSpace(NewGraphNameDraft)
+            ? "未命名编排"
+            : NewGraphNameDraft.Trim();
+        IsNamingDialogVisible = true;
+    }
+
+    public void CancelNamingDialog()
+    {
+        IsNamingDialogVisible = false;
+        _pendingDropX = null;
+        _pendingDropY = null;
+    }
+
+    public async Task ConfirmNamingDialogAsync()
+    {
+        var name = (NamingDialogNameDraft ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            StatusText = "请先输入编排名称。";
+            return;
+        }
+
+        IsNamingDialogVisible = false;
+
+        if (_pendingDropX is not null && _pendingDropY is not null)
+        {
+            await CompletePendingDropAsync(name).ConfigureAwait(true);
+            return;
+        }
+
+        await CreateBlankRuntimeGraphAsync(name).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Creates a fresh RUNTIME TaskGraph with the given <paramref name="name"/>,
+    /// bootstraps a single default Execute node via
+    /// <see cref="TaskGraphFactory.EnsureAtLeastOneExecuteNode"/>, and activates
+    /// it in the workspace. The name is trimmed; empty/whitespace falls back to
+    /// "未命名编排" (same convention as <c>JsonTaskGraphStore.NormalizeGraph</c>).
+    /// </summary>
+    public async Task CreateBlankRuntimeGraphAsync(string? name)
+    {
+        var resolvedName = string.IsNullOrWhiteSpace(name) ? "未命名编排" : name.Trim();
+
+        var graph = new TaskGraph
+        {
+            Name = resolvedName,
+            DocumentKind = TaskGraphDocumentKind.Runtime,
+            Mode = TaskGraphMode.Direct,
+            TemplateKind = TaskGraphTemplateKind.Custom,
+            ExecutionState = TaskGraphExecutionState.Draft,
+        };
+        graph.ProjectId = _sidebar.CurrentProject?.Id;
+        graph.ProjectName = _sidebar.CurrentProject?.Name;
+
+        TaskGraphFactory.EnsureAtLeastOneExecuteNode(graph);
+
+        await ExecuteBusyAsync(async () =>
+        {
+            await ActivateGraphAsync(graph, $"已创建任务编排\u201C{graph.Name}\u201D\u3002").ConfigureAwait(true);
+        }).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Resets the workspace to the "no graph" state without prompting for a name.
+    /// Used after deleting a graph, or by error-cleanup paths.
+    /// </summary>
+    public async Task ClearCurrentGraphAsync()
+    {
+        CurrentGraph = null;
+        SelectedNode = null;
+        UserConfirmationText = string.Empty;
+        StatusText = "已清空当前编排。";
+        await _sidebar.RefreshTaskGraphsAsync().ConfigureAwait(true);
     }
 
     public async Task ConfirmCreateDialogAsync()
@@ -461,29 +573,25 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
     /// a follow-up click to promote the node from pending → real); the new
     /// node is real from the moment it's created.
     /// </summary>
+    /// <remarks>
+    /// When no graph is loaded, this method opens the naming dialog instead of
+    /// silently creating an unnamed graph. The dialog confirm handler
+    /// will create the graph with the stashed drop point and one default
+    /// Execute node via <see cref="CompletePendingDropAsync"/>.
+    /// </remarks>
+
+    // Stash the drop point so the confirm handler can build the graph AT that point.
+    private double? _pendingDropX;
+    private double? _pendingDropY;
+
     public async Task<TaskNode?> CreateNodeAtAsync(double x, double y)
     {
         if (CurrentGraph is null)
         {
-            // No graph yet — auto-create a blank one so the user has a
-            // target. Mirrors the legacy "pending node on blank graph" path.
-            var blank = new TaskGraph
-            {
-                Name = "未命名编排",
-            };
-            var blankNode = new TaskNode
-            {
-                Id = BuildNextNodeId(blank),
-                Title = "新任务",
-                Description = string.Empty,
-                Kind = TaskNodeKind.Execute,
-                Prompt = TaskGraphFactory.BuildPrompt("新任务", string.Empty, TaskNodeKind.Execute),
-                Position = new NodePosition(Math.Max(20, x - NodeWidth / 2), Math.Max(20, y - NodeHeight / 2)),
-                Status = TaskNodeStatus.Pending,
-            };
-            blank.Nodes.Add(blankNode);
-            await ActivateGraphAsync(blank, "已创建新编排。").ConfigureAwait(true);
-            return CurrentGraph?.Nodes.FirstOrDefault();
+            _pendingDropX = x;
+            _pendingDropY = y;
+            BeginNamingDialog();
+            return null; // The naming confirm handler will create the graph + node.
         }
 
         var node = new TaskNode
@@ -511,6 +619,51 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
         return node;
     }
 
+    /// <summary>
+    /// Called by the naming-dialog confirm handler AFTER the user supplies
+    /// a name. Builds a graph with the stashed drop point and ONE default
+    /// Execute node, activates it. Existing flow: the original CreateNodeAtAsync
+    /// drop is treated as "create + place" — we honor the drop here.
+    /// </summary>
+    internal async Task<TaskNode?> CompletePendingDropAsync(string graphName)
+    {
+        var x = _pendingDropX ?? NodeWidth;
+        var y = _pendingDropY ?? NodeHeight;
+        _pendingDropX = null;
+        _pendingDropY = null;
+
+        var resolvedName = string.IsNullOrWhiteSpace(graphName) ? "未命名编排" : graphName.Trim();
+        var graph = new TaskGraph
+        {
+            Name = resolvedName,
+            DocumentKind = TaskGraphDocumentKind.Runtime,
+            Mode = TaskGraphMode.Direct,
+            TemplateKind = TaskGraphTemplateKind.Custom,
+            ExecutionState = TaskGraphExecutionState.Draft,
+        };
+        graph.ProjectId = _sidebar.CurrentProject?.Id;
+        graph.ProjectName = _sidebar.CurrentProject?.Name;
+
+        var initialNode = new TaskNode
+        {
+            Id = BuildNextNodeId(graph),
+            Title = "新任务",
+            Description = string.Empty,
+            Kind = TaskNodeKind.Execute,
+            Prompt = TaskGraphFactory.BuildPrompt("新任务", string.Empty, TaskNodeKind.Execute),
+            Position = new NodePosition(Math.Max(20, x - NodeWidth / 2), Math.Max(20, y - NodeHeight / 2)),
+            Status = TaskNodeStatus.Pending,
+        };
+        graph.Nodes.Add(initialNode);
+
+        await ExecuteBusyAsync(async () =>
+        {
+            await ActivateGraphAsync(graph, $"已创建任务编排\u201C{graph.Name}\u201D\u3002").ConfigureAwait(true);
+        }).ConfigureAwait(true);
+
+        return CurrentGraph?.Nodes.FirstOrDefault();
+    }
+
     public async Task ConnectNodesAsync(TaskNode source, TaskNode target)
     {
         if (CurrentGraph is null || ReferenceEquals(source, target))
@@ -532,13 +685,11 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task NewGraphAsync()
+    private void NewGraph()
     {
-        CurrentGraph = null;
-        SelectedNode = null;
-        UserConfirmationText = string.Empty;
-        StatusText = "已清空当前编排。";
-        await _sidebar.RefreshTaskGraphsAsync().ConfigureAwait(true);
+        // "New" now means "ask for a name and create". Use ClearCurrentGraphAsync
+        // when callers want to reset the workspace silently.
+        BeginNamingDialog();
     }
 
     [RelayCommand]
@@ -559,17 +710,32 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
     {
         await ExecuteBusyAsync(async () =>
         {
-            var graph = BuildGraphFromTemplateKind(templateKind, templateInput);
-
-            if (!string.IsNullOrWhiteSpace(graphName))
+            // Resolve built-in template ID via unified lookup.
+            var templateId = BuiltInTemplateSeeder.GetBuiltInTemplateId(templateKind);
+            if (string.IsNullOrWhiteSpace(templateId))
             {
-                graph.Name = graphName.Trim();
+                StatusText = "选中的模板暂无内置模板支撑。";
+                return;
             }
 
-            graph.ProjectId = _sidebar.CurrentProject?.Id;
-            graph.ProjectName = _sidebar.CurrentProject?.Name;
+            // Final name priority: NewGraphNameDraft > TemplateGraphName > default from options.
+            var finalName = !string.IsNullOrWhiteSpace(NewGraphNameDraft)
+                ? NewGraphNameDraft.Trim()
+                : (!string.IsNullOrWhiteSpace(graphName) ? graphName!.Trim() : (string?)null);
 
-            await ActivateGraphAsync(graph, $"已根据“{templateName}”模板创建任务图。").ConfigureAwait(true);
+            var graph = await _store.InstantiateTemplateAsync(
+                templateId,
+                new TemplateInstantiationOptions
+                {
+                    RuntimeGraphName = finalName,
+                    UserInput = templateInput,
+                    ProjectId = _sidebar.CurrentProject?.Id,
+                    ProjectName = _sidebar.CurrentProject?.Name,
+                    OriginHint = TaskGraphOriginHint.WorkspaceDirect,
+                }).ConfigureAwait(true);
+
+            await ActivateGraphAsync(graph, $"已根据\u201C{templateName}\u201D模板创建任务图\u3002").ConfigureAwait(true);
+            NewGraphNameDraft = string.Empty;
             SelectedInputMode = TaskGraphInputMode.Template;
         }).ConfigureAwait(true);
     }
@@ -580,7 +746,14 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
         await ExecuteBusyAsync(async () =>
         {
             var graph = _directParser.Parse(DirectInputText);
+            TaskGraphFactory.EnsureAtLeastOneExecuteNode(graph);
+            if (!string.IsNullOrWhiteSpace(NewGraphNameDraft))
+            {
+                graph.Name = NewGraphNameDraft.Trim();
+            }
+
             await ActivateGraphAsync(graph, "已根据直接输入生成编排。").ConfigureAwait(true);
+            NewGraphNameDraft = string.Empty;
         }).ConfigureAwait(true);
     }
 
@@ -594,7 +767,14 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
                 CurrentWorkingDirectory,
                 SelectedPermission.Key,
                 SelectedModel).ConfigureAwait(true);
+            TaskGraphFactory.EnsureAtLeastOneExecuteNode(graph);
+            if (!string.IsNullOrWhiteSpace(NewGraphNameDraft))
+            {
+                graph.Name = NewGraphNameDraft.Trim();
+            }
+
             await ActivateGraphAsync(graph, "已根据智能编排生成任务图。").ConfigureAwait(true);
+            NewGraphNameDraft = string.Empty;
         }).ConfigureAwait(true);
     }
 
@@ -619,7 +799,14 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
                 CurrentWorkingDirectory,
                 SelectedPermission.Key,
                 SelectedModel).ConfigureAwait(true);
+            TaskGraphFactory.EnsureAtLeastOneExecuteNode(graph);
+            if (!string.IsNullOrWhiteSpace(NewGraphNameDraft))
+            {
+                graph.Name = NewGraphNameDraft.Trim();
+            }
+
             await ActivateGraphAsync(graph, "已根据文档生成任务图。").ConfigureAwait(true);
+            NewGraphNameDraft = string.Empty;
         }).ConfigureAwait(true);
     }
 
@@ -945,6 +1132,14 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
             return;
         }
 
+        // Runtime TaskGraphs must always keep at least one node. Templates can
+        // legitimately be empty (they're inert skeletons).
+        if (IsRuntimeDocument && CurrentGraph.Nodes.Count <= 1)
+        {
+            StatusText = "至少需要保留一个执行节点。";
+            return;
+        }
+
         await ExecuteBusyAsync(async () =>
         {
             var nodeId = SelectedNode.Id;
@@ -958,7 +1153,7 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
             CurrentGraph.RebuildEdges();
             await _store.SaveAsync(CurrentGraph).ConfigureAwait(true);
             SelectNode(CurrentGraph.Nodes.FirstOrDefault());
-            StatusText = $"已删除节点“{title}”。";
+            StatusText = $"已删除节点\u201C{title}\u201D\u3002";
         }).ConfigureAwait(true);
     }
 
@@ -1234,6 +1429,17 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsCreateDialogVisible));
     }
 
+    partial void OnIsNamingDialogVisibleChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsNamingDialogVisible));
+        OnPropertyChanged(nameof(CanConfirmNamingDialog));
+    }
+
+    partial void OnNamingDialogNameDraftChanged(string value)
+    {
+        OnPropertyChanged(nameof(CanConfirmNamingDialog));
+    }
+
     private async Task ActivateGraphAsync(TaskGraph graph, string statusMessage)
     {
         CurrentGraph = graph;
@@ -1346,6 +1552,7 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
         }
 
         RefreshGraphSurface();
+        OnPropertyChanged(nameof(CanDeleteNode));
     }
 
     private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1370,6 +1577,7 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
             OnPropertyChanged(nameof(CanStartLink));
             OnPropertyChanged(nameof(CanCreateLink));
             OnPropertyChanged(nameof(CanRemoveSelectedNodeLinks));
+            OnPropertyChanged(nameof(CanDeleteNode));
             RefreshBugReport();
             RefreshGraphSurface();
         }
@@ -1596,13 +1804,6 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
         _ => throw new TaskGraphValidationException("未知模板类型。"),
     };
 
-    private static TaskGraph BuildGraphFromTemplateKind(TaskGraphTemplateKind templateKind, string templateInput) => templateKind switch
-    {
-        TaskGraphTemplateKind.TaskList => TaskGraphTemplateBuilder.BuildTaskListGraph(templateInput),
-        TaskGraphTemplateKind.FeatureDevelopment => TaskGraphTemplateBuilder.BuildFeatureDevelopmentGraph(templateInput),
-        TaskGraphTemplateKind.BugList => TaskGraphTemplateBuilder.BuildBugListGraph(templateInput),
-        _ => throw new TaskGraphValidationException("当前模板基础骨架暂不支持直接生成任务图。"),
-    };
 }
 
 public enum TaskGraphInputMode

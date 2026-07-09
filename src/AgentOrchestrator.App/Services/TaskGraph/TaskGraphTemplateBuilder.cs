@@ -417,6 +417,82 @@ public static class TaskGraphTemplateBuilder
         };
     }
 
+    /// <summary>
+    /// Build a TaskList template document (always <c>TaskGraphDocumentKind.Template</c>).
+    /// </summary>
+    public static TaskGraphModel BuildTaskListTemplate(string rawText)
+        => BuildTaskListGraph(rawText, TaskGraphDocumentKind.Template);
+
+    /// <summary>
+    /// Build a FeatureDevelopment template document (always <c>TaskGraphDocumentKind.Template</c>).
+    /// </summary>
+    public static TaskGraphModel BuildFeatureDevelopmentTemplate(string userRequirement)
+        => BuildFeatureDevelopmentGraph(userRequirement, TaskGraphDocumentKind.Template);
+
+    /// <summary>
+    /// Build a BugList template document (always <c>TaskGraphDocumentKind.Template</c>).
+    /// </summary>
+    public static TaskGraphModel BuildBugListTemplate(string rawText)
+        => BuildBugListGraph(rawText, TaskGraphDocumentKind.Template);
+
+    /// <summary>
+    /// Generic dispatcher that always produces Template documents.
+    /// Routes to the appropriate builder based on <paramref name="kind"/>.
+    /// </summary>
+    public static TaskGraphModel BuildTemplate(TaskGraphTemplateKind kind, string rawInput = "")
+    {
+        return kind switch
+        {
+            TaskGraphTemplateKind.TaskList => BuildTaskListTemplate(rawInput),
+            TaskGraphTemplateKind.FeatureDevelopment => BuildFeatureDevelopmentTemplate(rawInput),
+            TaskGraphTemplateKind.BugList => BuildBugListTemplate(rawInput),
+            _ => BuildMinimalTemplateStub(rawInput),
+        };
+    }
+
+    private static TaskGraphModel BuildMinimalTemplateStub(string rawInput)
+    {
+        var graph = new TaskGraphModel
+        {
+            Name = "最小模板图",
+            DocumentKind = TaskGraphDocumentKind.Template,
+            IsBuiltInTemplate = true,
+        };
+
+        var node1 = new TaskNode
+        {
+            Id = "stub_parse",
+            Title = "解析输入",
+            Kind = TaskNodeKind.Plan,
+            DelegationStrategy = TaskNodeDelegationStrategy.Inline,
+            Prompt = string.IsNullOrWhiteSpace(rawInput) ? "无输入" : rawInput,
+            IsTemplateLocked = true,
+        };
+        var node2 = new TaskNode
+        {
+            Id = "stub_execute",
+            Title = "执行",
+            Kind = TaskNodeKind.Execute,
+            DelegationStrategy = TaskNodeDelegationStrategy.NewSession,
+            Prompt = $"基于以下输入执行：\n{rawInput}",
+            IsTemplateLocked = true,
+        };
+        node2.DependsOn.Add(node1.Id);
+
+        graph.TemplateNotes = "最小模板图（回退）。";
+        graph.TemplatePlannerPrompt = "Execute the task based on the input.";
+        graph.TemplateMetadata = new TaskGraphTemplateMetadata
+        {
+            AllowDynamicExpansion = false,
+            FixedNodeIds = [node1.Id, node2.Id],
+        };
+
+        graph.Nodes.Add(node1);
+        graph.Nodes.Add(node2);
+        graph.RebuildEdges();
+        return graph;
+    }
+
     private static TaskGraphModel BuildMinimalStub(
         string rawInput,
         TaskGraphDocumentKind documentKind = TaskGraphDocumentKind.Runtime)

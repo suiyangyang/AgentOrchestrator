@@ -62,8 +62,26 @@ public sealed class TaskGraphTemplateInstantiator : ITaskGraphTemplateInstantiat
         clone.ConversationSessionId = null;
         clone.IsCheckpointPending = false;
         clone.ActiveCheckpointNodeId = null;
+        if (options.OriginHint.HasValue)
+        {
+            clone.OriginHint = options.OriginHint.Value;
+        }
+        if (!string.IsNullOrWhiteSpace(options.ConversationSessionId))
+        {
+            clone.ConversationSessionId = options.ConversationSessionId;
+        }
 
-        // 5. Clear runtime state on every node.
+        // 5. Replace {{user_input}} placeholder in every node Prompt.
+        var userInputForPlaceholder = options.UserInput ?? string.Empty;
+        foreach (var node in clone.Nodes)
+        {
+            if (node.Prompt?.Contains("{{user_input}}", StringComparison.Ordinal) == true)
+            {
+                node.Prompt = node.Prompt.Replace("{{user_input}}", userInputForPlaceholder, StringComparison.Ordinal);
+            }
+        }
+
+        // 6. Clear runtime state on every node.
         foreach (var node in clone.Nodes)
         {
             node.Status = TaskNodeStatus.Pending;
@@ -79,7 +97,7 @@ public sealed class TaskGraphTemplateInstantiator : ITaskGraphTemplateInstantiat
             node.ResultTags.Clear();
         }
 
-        // 6. Dynamic zone expansion.
+        // 7. Dynamic zone expansion.
         var expansionSource = options.UserInput ?? template.SourceContent ?? string.Empty;
         ExpandDynamicZones(clone, expansionSource);
 

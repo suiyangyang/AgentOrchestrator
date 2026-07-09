@@ -247,6 +247,80 @@ public sealed partial class TaskGraphDocumentEditorViewModel : ViewModelBase
         return runtime;
     }
 
+    // ── Save As Template ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Saves the current runtime graph as a new template document.
+    /// Performs a deep clone, clears all runtime state, and persists as Template.
+    /// Does NOT modify the original runtime document.
+    /// </summary>
+    [RelayCommand]
+    private async Task SaveAsTemplateAsync(string? templateName = null)
+    {
+        if (CurrentDocument is null || !IsRuntimeDocument)
+        {
+            StatusText = "当前文档不是可执行的编排，无法另存为模板。";
+            return;
+        }
+
+        // Deep clone via JSON roundtrip
+        var cloneJson = System.Text.Json.JsonSerializer.Serialize(CurrentDocument, SystemTextJsonCloneOptions);
+        var template = System.Text.Json.JsonSerializer.Deserialize<TaskGraphModel>(cloneJson, SystemTextJsonCloneOptions)
+            ?? throw new InvalidOperationException("Failed to clone graph for template.");
+
+        // Set template identity
+        template.Id = System.Guid.NewGuid().ToString("N");
+        template.Name = !string.IsNullOrWhiteSpace(templateName)
+            ? templateName.Trim()
+            : $"{CurrentDocument.Name} - 模板";
+        template.DocumentKind = TaskGraphDocumentKind.Template;
+        template.BasedOnTemplateId = null;
+        template.IsBuiltInTemplate = false;
+        template.CreatedAt = System.DateTimeOffset.UtcNow;
+        template.UpdatedAt = template.CreatedAt;
+
+        // Ensure template metadata exists
+        if (template.TemplateMetadata is null)
+        {
+            template.TemplateMetadata = new TaskGraphTemplateMetadata();
+        }
+
+        // Clear graph-level runtime state
+        template.ExecutionState = TaskGraphExecutionState.Draft;
+        template.ExecutionStartedAt = null;
+        template.ExecutionCompletedAt = null;
+        template.ConversationSessionId = null;
+        template.IsCheckpointPending = false;
+        template.ActiveCheckpointNodeId = null;
+
+        // Clear node-level runtime state
+        foreach (var node in template.Nodes)
+        {
+            node.Status = TaskNodeStatus.Pending;
+            node.AgentSessionId = null;
+            node.AttemptCount = 0;
+            node.LastError = null;
+            node.OutputSummary = null;
+            node.RawOutput = null;
+            node.StartedAt = null;
+            node.CompletedAt = null;
+            node.StructuredSummary = null;
+            node.TouchedFiles.Clear();
+            node.ResultTags.Clear();
+        }
+
+        await _store.SaveAsync(template).ConfigureAwait(true);
+        await _sidebar.RefreshTaskGraphsAsync().ConfigureAwait(true);
+        StatusText = $"已另存为模板\u201C{template.Name}\u201D\u3002";
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions SystemTextJsonCloneOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
+    };
+
     // ── Dynamic zones ──────────────────────────────────────────────────
 
     [RelayCommand]

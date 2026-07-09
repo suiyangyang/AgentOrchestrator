@@ -191,12 +191,15 @@ View ── ViewModel ── IAgentGateway / ISidebarRepository
   fresh runtime graph: deep-clone via JSON roundtrip, give every node a
   fresh id and rewrite `DependsOn` references, sync the metadata
   references (`FixedNodeIds`, `AnchorNodeId`, `InsertAfterNodeId`,
-  `ConnectToTerminalNodeId`) to the new ids, clear every runtime state
-  field on graph and nodes, then perform controlled dynamic-zone
-  expansion per the template's `TaskGraphTemplateMetadata.DynamicZones`
-  (parse the user input as lines, generate up to `MaxGeneratedNodeCount`
-  `Execute` nodes, chain them in series, wire the first to the splice
-  anchor and the last to the terminal node, respect `FixedNodeIds`)
+  `ConnectToTerminalNodeId`) to the new ids, apply `OriginHint` and
+  `ConversationSessionId` from `TemplateInstantiationOptions` when
+  present, replace `{{user_input}}` placeholders in every node's `Prompt`
+  with the actual user input, clear every runtime state field on graph
+  and nodes, then perform controlled dynamic-zone expansion per the
+  template's `TaskGraphTemplateMetadata.DynamicZones` (parse the user
+  input as lines, generate up to `MaxGeneratedNodeCount` `Execute` nodes,
+  chain them in series, wire the first to the splice anchor and the last
+  to the terminal node, respect `FixedNodeIds`)
 - `BuiltInTemplateSeeder` seeds the 4 built-in templates on first init
   (3 user-facing: `builtin.task-list` / `builtin.feature-dev` /
   `builtin.bug-list`, plus 1 hidden: `builtin.auto-orchestration` used

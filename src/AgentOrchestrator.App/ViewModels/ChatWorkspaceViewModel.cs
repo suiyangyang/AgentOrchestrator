@@ -2240,10 +2240,10 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                 {
                     UserInput = text,
                     RuntimeGraphName = "Chat 自动编排",
+                    OriginHint = TaskGraphOriginHint.ChatAuto,
+                    ConversationSessionId = _activeState.AgentSessionId,
                 },
                 ct).ConfigureAwait(true);
-            graph.OriginHint = TaskGraphOriginHint.ChatAuto;
-            graph.ConversationSessionId = _activeState.AgentSessionId;
         }
 
         ActiveGraph = graph;
@@ -2284,10 +2284,10 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             {
                 UserInput = rawInput,
                 RuntimeGraphName = "Chat 模板编排",
+                OriginHint = TaskGraphOriginHint.ChatTemplate,
+                ConversationSessionId = _activeState.AgentSessionId,
             },
             ct).ConfigureAwait(true);
-        graph.OriginHint = TaskGraphOriginHint.ChatTemplate;
-        graph.ConversationSessionId = _activeState.AgentSessionId;
 
         ActiveGraph = graph;
         ActiveExecutionContext = CreateExecutionContext(graph);
