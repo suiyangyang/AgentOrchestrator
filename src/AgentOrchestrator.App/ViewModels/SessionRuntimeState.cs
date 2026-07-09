@@ -21,11 +21,15 @@ internal sealed class SessionRuntimeState
     public ObservableCollection<ChatMessageViewModel> Messages { get; } = [];
     public ObservableCollection<ChatAttachment> Attachments { get; } = [];
     public ObservableCollection<SubagentActivityViewModel> SubagentActivities { get; } = [];
+    public ObservableCollection<TodoItemViewModel> Todos { get; } = [];
     public ObservableCollection<QueuedChatDraftViewModel> QueuedDrafts { get; } = [];
+    public ObservableCollection<CommandSuggestionViewModel> CommandSuggestions { get; } = [];
     public Queue<QueuedSendRequest> PendingSendQueue { get; } = new();
     public PendingQuestion? PendingQuestion { get; set; }
     public string? PendingQuestionStatus { get; set; }
     public string? StatusMessage { get; set; }
+    public bool IsCommandPopupOpen { get; set; }
+    public int SelectedCommandSuggestionIndex { get; set; } = -1;
     public bool IsStreaming { get; set; }
     public bool SendPipelineActive { get; set; }
     public CancellationTokenSource? SendCts { get; set; }
@@ -35,4 +39,5 @@ internal sealed class SessionRuntimeState
     public int HistoryWindowSize { get; set; }
     public bool HasOlderHistory { get; set; }
     public bool IsLoadingOlderHistory { get; set; }
+    public bool IsTodoListExpanded { get; set; }
 }

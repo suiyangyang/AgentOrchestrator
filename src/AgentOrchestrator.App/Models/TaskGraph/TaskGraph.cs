@@ -58,6 +58,24 @@ public sealed partial class TaskGraph : ObservableObject
     [ObservableProperty]
     private string? _activeCheckpointNodeId;
 
+    [ObservableProperty]
+    private TaskGraphDocumentKind _documentKind = TaskGraphDocumentKind.Runtime;
+
+    [ObservableProperty]
+    private string? _templateNotes;
+
+    [ObservableProperty]
+    private string? _templatePlannerPrompt;
+
+    [ObservableProperty]
+    private string? _basedOnTemplateId;
+
+    [ObservableProperty]
+    private bool _isBuiltInTemplate;
+
+    [ObservableProperty]
+    private TaskGraphTemplateMetadata? _templateMetadata;
+
     public ObservableCollection<TaskNode> Nodes { get; set; } = [];
 
     public ObservableCollection<TaskEdge> Edges { get; set; } = [];

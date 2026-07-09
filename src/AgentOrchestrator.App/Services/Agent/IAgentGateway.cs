@@ -22,6 +22,18 @@ public sealed class AgentErrorEventArgs : EventArgs
     }
 }
 
+public sealed class AgentTodosUpdatedEventArgs : EventArgs
+{
+    public string AgentSessionId { get; }
+    public IReadOnlyList<AgentTodoSnapshot> Todos { get; }
+
+    public AgentTodosUpdatedEventArgs(string agentSessionId, IReadOnlyList<AgentTodoSnapshot> todos)
+    {
+        AgentSessionId = agentSessionId;
+        Todos = todos;
+    }
+}
+
 /// <summary>Request payload for sending a message to a known Agent session.</summary>
 public sealed record ChatRequest(
     string Prompt,
@@ -39,6 +51,40 @@ public sealed record SessionCreateRequest(
     string? Title
 );
 
+public sealed record AgentTodoSnapshot(
+    string Id,
+    string Content,
+    string Status,
+    string Priority
+);
+
+public sealed record AgentCommandDefinition(
+    string Name,
+    string? Description,
+    string? Agent,
+    string? Model,
+    string? Template,
+    bool IsBuiltIn = false
+);
+
+public sealed record AgentCommandExecutionResult(
+    string MessageId
+);
+
+public sealed record AgentSessionSnapshot(
+    string AgentSessionId,
+    string Title,
+    string? ParentAgentSessionId,
+    string WorkingDirectory,
+    long CreatedAt,
+    long UpdatedAt
+);
+
+public sealed record AgentConfirmationRequest(
+    string Title,
+    string Message
+);
+
 /// <summary>
 /// Agent-agnostic gateway. The ViewModel layer depends only on this
 /// interface; the concrete <c>OpenCodeAgentGateway</c> wraps the
@@ -51,6 +97,9 @@ public interface IAgentGateway
 
     /// <summary>Fired when a public method throws due to connectivity / HTTP error.</summary>
     event EventHandler<AgentErrorEventArgs>? AgentErrorOccurred;
+
+    /// <summary>Fired when the backend pushes fresh todo state for a session.</summary>
+    event EventHandler<AgentTodosUpdatedEventArgs>? TodosUpdated;
 
     /// <summary>Report an agent connectivity error from outside the gateway (ViewModel side-effect).</summary>
     void ReportAgentError(string operation, Exception ex);
@@ -99,6 +148,31 @@ public interface IAgentGateway
         string agentSessionId,
         string requestId,
         IReadOnlyList<IReadOnlyList<string>> answers,
+        CancellationToken ct = default);
+
+    Task<IReadOnlyList<AgentTodoSnapshot>> GetTodosAsync(
+        string agentSessionId,
+        CancellationToken ct = default);
+
+    Task<IReadOnlyList<AgentCommandDefinition>> ListCommandsAsync(
+        string workingDirectory,
+        CancellationToken ct = default);
+
+    Task<AgentCommandExecutionResult> ExecuteCommandAsync(
+        string agentSessionId,
+        string commandName,
+        string arguments,
+        CancellationToken ct = default);
+
+    Task<AgentSessionSnapshot> ForkSessionAsync(
+        string agentSessionId,
+        string messageId,
+        CancellationToken ct = default);
+
+    Task<AgentSessionSnapshot> RevertSessionAsync(
+        string agentSessionId,
+        string messageId,
+        string? partId = null,
         CancellationToken ct = default);
 
     /// <summary>

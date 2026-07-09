@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -53,6 +54,22 @@ public partial class App : Application
             // Hand the parsed startup options to the shell so it can drive auto-open.
             var shell = provider.GetRequiredService<MainWindowViewModel>();
             shell.StartupOptions = StartupOptions;
+
+            // ── Seed built-in templates + migrate old TaskTemplate files ──
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var seeder = provider.GetRequiredService<BuiltInTemplateSeeder>();
+                    await seeder.SeedIfMissingAsync().ConfigureAwait(false);
+                    var migrator = provider.GetRequiredService<TaskTemplateMigrationService>();
+                    await migrator.MigrateAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Seeding/migration failure must not block the UI.
+                }
+            });
 
             if (StartupOptions.PerfTest)
             {
@@ -186,7 +203,10 @@ public partial class App : Application
 
         // ── Sidebar / local persistence ──
         services.AddSingleton<ISidebarRepository, SqliteSidebarRepository>();
-        services.AddSingleton<ITaskGraphStore, JsonTaskGraphStore>();
+        services.AddSingleton<ITaskGraphTemplateInstantiator, TaskGraphTemplateInstantiator>();
+        services.AddSingleton<ITaskGraphStore>(sp => new JsonTaskGraphStore(
+            Path.Combine(DataPathProvider.DataDirectory, "TaskGraphs"),
+            sp.GetRequiredService<ITaskGraphTemplateInstantiator>()));
         services.AddSingleton<ITaskGraphDirectParser, TaskGraphDirectParser>();
         services.AddSingleton<IDocumentReader, DocumentReader>();
         services.AddSingleton<JsonPlanningParser>();
@@ -196,8 +216,10 @@ public partial class App : Application
         services.AddSingleton<ITaskGraphExecutor, TaskGraphExecutor>();
         services.AddSingleton<ITaskGraphExecutionController>(sp => (ITaskGraphExecutionController)sp.GetRequiredService<ITaskGraphExecutor>());
 
-        // ── Task Template services ──
-        services.AddSingleton<ITaskTemplateStore, JsonTaskTemplateStore>();
+        // ── Built-in template seeder + old-template migrator ──
+        services.AddSingleton<BuiltInTemplateSeeder>();
+        services.AddSingleton<TaskTemplateMigrationService>(sp => new TaskTemplateMigrationService(
+            sp.GetRequiredService<ITaskGraphStore>()));
 
         // ── ViewModels ──
         services.AddSingleton<SidebarViewModel>();
@@ -205,10 +227,17 @@ public partial class App : Application
             sp.GetRequiredService<IAgentGateway>(),
             sp.GetRequiredService<ISidebarRepository>(),
             sp.GetRequiredService<SidebarViewModel>(),
+            sp.GetRequiredService<ITaskGraphStore>(),
             sp.GetRequiredService<ITaskGraphExecutionController>(),
             sp.GetRequiredService<ITaskGraphRuntimeHub>()));
         services.AddSingleton<TaskGraphWorkspaceViewModel>();
-        services.AddSingleton<TaskOrchestrationWorkspaceViewModel>();
+        services.AddSingleton<TaskGraphDocumentEditorViewModel>(sp => new TaskGraphDocumentEditorViewModel(
+            sp.GetRequiredService<ITaskGraphStore>(),
+            sp.GetRequiredService<SidebarViewModel>()));
+        services.AddSingleton<TaskOrchestrationWorkspaceViewModel>(sp => new TaskOrchestrationWorkspaceViewModel(
+            sp.GetRequiredService<ITaskGraphStore>(),
+            sp.GetRequiredService<TaskGraphWorkspaceViewModel>(),
+            sp.GetRequiredService<TaskGraphDocumentEditorViewModel>()));
         services.AddTransient<TaskGraphNodeDetailViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<SettingsViewModel>();

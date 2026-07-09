@@ -39,14 +39,23 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     private const int HistoryWindowStep = 40;
     private const int MaxHistoryWindowSize = 400;
 
+    /// <summary>
+    /// Must match <see cref="Services.TaskGraph.BuiltInTemplateSeeder.BuiltInIds.AutoOrchestration"/>.
+    /// </summary>
+    private const string AutoOrchestrationTemplateId = "builtin.auto-orchestration";
+
     private readonly IAgentGateway _agent;
     private readonly ISidebarRepository _repo;
     private readonly SidebarViewModel _sidebar;
+    private readonly ITaskGraphStore _taskGraphStore;
     private readonly ITaskGraphExecutionController? _graphController;
     private readonly ITaskGraphRuntimeHub? _runtimeHub;
     private readonly Dictionary<string, SessionRuntimeState> _sessionStates = new(StringComparer.Ordinal);
     private SessionRuntimeState _activeState = new();
     private readonly Queue<QueuedSendRequest> _pendingSendQueue = new();
+    private IReadOnlyList<AgentCommandDefinition> _availableCommands = [];
+    private string? _availableCommandsWorkingDirectory;
+    private int _commandSuggestionVersion;
 
     // Stage 3: TaskGraph Chat Integration fields.
     private TaskGraphRuntimeHubEventSubscriptions? _hubSubscriptions;
@@ -57,14 +66,17 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         IAgentGateway agent,
         ISidebarRepository repo,
         SidebarViewModel sidebar,
+        ITaskGraphStore taskGraphStore,
         ITaskGraphExecutionController? graphController = null,
         ITaskGraphRuntimeHub? runtimeHub = null)
     {
         _agent = agent;
         _repo = repo;
         _sidebar = sidebar;
+        _taskGraphStore = taskGraphStore;
         _graphController = graphController;
         _runtimeHub = runtimeHub;
+        _agent.TodosUpdated += OnAgentTodosUpdated;
 
         SelectedPermission = Permissions[2];
         SelectedTaskOrchestration = TaskOrchestrationOptions[0];
@@ -125,7 +137,9 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     public ObservableCollection<ChatMessageViewModel> Messages => _activeState.Messages;
     public ObservableCollection<ChatAttachment> Attachments => _activeState.Attachments;
     public ObservableCollection<SubagentActivityViewModel> SubagentActivities => _activeState.SubagentActivities;
+    public ObservableCollection<TodoItemViewModel> Todos => _activeState.Todos;
     public ObservableCollection<QueuedChatDraftViewModel> QueuedDrafts => _activeState.QueuedDrafts;
+    public ObservableCollection<CommandSuggestionViewModel> CommandSuggestions => _activeState.CommandSuggestions;
     public ObservableCollection<PermissionOption> Permissions { get; } =
     [
         new("ask", "请求批准", "编辑外部文件和使用互联网时始终询问", "✋"),
@@ -296,9 +310,71 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     public bool HasAttachments => Attachments.Count > 0;
     public bool HasSubagentActivities => SubagentActivities.Count > 0;
     public bool HasQueuedDrafts => QueuedDrafts.Count > 0;
+    public bool HasCommandSuggestions => CommandSuggestions.Count > 0;
+    public bool HasTodos => Todos.Count > 0;
+    public bool IsTodoListExpanded
+    {
+        get => _activeState.IsTodoListExpanded;
+        set
+        {
+            if (_activeState.IsTodoListExpanded == value)
+            {
+                return;
+            }
+
+            _activeState.IsTodoListExpanded = value;
+            OnPropertyChanged();
+        }
+    }
+    public int TodoCompletedCount => Todos.Count(x => x.IsCompleted);
+    public int TodoTotalCount => Todos.Count;
+    public bool AreAllTodosCompleted => TodoTotalCount > 0 && TodoCompletedCount == TodoTotalCount;
+    public TodoItemViewModel? ActiveTodo => Todos.FirstOrDefault(x => x.IsInProgress) ?? Todos.FirstOrDefault(x => x.IsPending) ?? Todos.FirstOrDefault();
+    public int ActiveTodoPosition => AreAllTodosCompleted
+        ? TodoCompletedCount
+        : ActiveTodo is null ? 0 : Todos.IndexOf(ActiveTodo) + 1;
+    public string TodoSummaryText => TodoTotalCount == 0
+        ? string.Empty
+        : AreAllTodosCompleted
+            ? $"{TodoCompletedCount}/{TodoTotalCount} 已完成"
+            : ActiveTodo is null
+                ? $"{TodoCompletedCount}/{TodoTotalCount}"
+                : $"{ActiveTodoPosition}/{TodoTotalCount} {ActiveTodo.StatusText}";
     public bool HasPendingQuestion => PendingQuestion is not null;
+    public bool IsPendingQuestionOpen => PendingQuestion?.IsExpanded == true;
     public bool HasOlderHistory => _activeState.HasOlderHistory;
     public bool IsLoadingOlderHistory => _activeState.IsLoadingOlderHistory;
+    public bool IsCommandPopupOpen
+    {
+        get => _activeState.IsCommandPopupOpen;
+        set
+        {
+            if (_activeState.IsCommandPopupOpen == value)
+            {
+                return;
+            }
+
+            _activeState.IsCommandPopupOpen = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public int SelectedCommandSuggestionIndex
+    {
+        get => _activeState.SelectedCommandSuggestionIndex;
+        private set
+        {
+            if (_activeState.SelectedCommandSuggestionIndex == value)
+            {
+                return;
+            }
+
+            _activeState.SelectedCommandSuggestionIndex = value;
+            SyncCommandSuggestionSelection();
+            OnPropertyChanged();
+        }
+    }
+
     public bool IsBlankPage => CurrentSessionId is null && Messages.Count == 0;
     public bool CanQueueCurrentDraft => !string.IsNullOrWhiteSpace(DraftText.Trim()) || Attachments.Count > 0;
     public bool ShowSendButton => !ShowStopButton;
@@ -306,20 +382,27 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
     /// <summary>Fired when a brand-new session is created (so MainWindow can switch workspace).</summary>
     public event EventHandler? SessionChanged;
-    public event EventHandler<string>? TemplateOrchestrationRequested;
+    public event EventHandler<TemplateOrchestrationRequest>? TemplateOrchestrationRequested;
+    public event Func<object?, string, CancellationToken, Task>? CopyRequested;
+    public event Func<object?, AgentConfirmationRequest, CancellationToken, Task<bool>>? ConfirmationRequested;
+    public event EventHandler<string>? ToastRequested;
 
     private void AttachActiveStateHandlers(SessionRuntimeState state)
     {
         state.Attachments.CollectionChanged += OnAttachmentsChanged;
         state.SubagentActivities.CollectionChanged += OnSubagentActivitiesChanged;
+        state.Todos.CollectionChanged += OnTodosChanged;
         state.QueuedDrafts.CollectionChanged += OnQueuedDraftsChanged;
+        state.CommandSuggestions.CollectionChanged += OnCommandSuggestionsChanged;
     }
 
     private void DetachActiveStateHandlers(SessionRuntimeState state)
     {
         state.Attachments.CollectionChanged -= OnAttachmentsChanged;
         state.SubagentActivities.CollectionChanged -= OnSubagentActivitiesChanged;
+        state.Todos.CollectionChanged -= OnTodosChanged;
         state.QueuedDrafts.CollectionChanged -= OnQueuedDraftsChanged;
+        state.CommandSuggestions.CollectionChanged -= OnCommandSuggestionsChanged;
     }
 
     private void OnAttachmentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -331,15 +414,38 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     private void OnSubagentActivitiesChanged(object? sender, NotifyCollectionChangedEventArgs e)
         => OnPropertyChanged(nameof(HasSubagentActivities));
 
+    private void OnTodosChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(HasTodos));
+        OnPropertyChanged(nameof(IsTodoListExpanded));
+        OnPropertyChanged(nameof(TodoCompletedCount));
+        OnPropertyChanged(nameof(TodoTotalCount));
+        OnPropertyChanged(nameof(AreAllTodosCompleted));
+        OnPropertyChanged(nameof(ActiveTodo));
+        OnPropertyChanged(nameof(ActiveTodoPosition));
+        OnPropertyChanged(nameof(TodoSummaryText));
+    }
+
     private void OnQueuedDraftsChanged(object? sender, NotifyCollectionChangedEventArgs e)
         => OnPropertyChanged(nameof(HasQueuedDrafts));
+
+    private void OnCommandSuggestionsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(HasCommandSuggestions));
+        if (CommandSuggestions.Count == 0)
+        {
+            SelectedCommandSuggestionIndex = -1;
+        }
+    }
 
     private void OnActiveStateChanged()
     {
         OnPropertyChanged(nameof(Messages));
         OnPropertyChanged(nameof(Attachments));
         OnPropertyChanged(nameof(SubagentActivities));
+        OnPropertyChanged(nameof(Todos));
         OnPropertyChanged(nameof(QueuedDrafts));
+        OnPropertyChanged(nameof(CommandSuggestions));
         OnPropertyChanged(nameof(CurrentSessionId));
         OnPropertyChanged(nameof(CurrentAgentSessionId));
         OnPropertyChanged(nameof(DraftText));
@@ -354,10 +460,21 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         OnPropertyChanged(nameof(PendingQuestionStatus));
         OnPropertyChanged(nameof(HasAttachments));
         OnPropertyChanged(nameof(HasSubagentActivities));
+        OnPropertyChanged(nameof(HasTodos));
+        OnPropertyChanged(nameof(TodoCompletedCount));
+        OnPropertyChanged(nameof(TodoTotalCount));
+        OnPropertyChanged(nameof(AreAllTodosCompleted));
+        OnPropertyChanged(nameof(ActiveTodo));
+        OnPropertyChanged(nameof(ActiveTodoPosition));
+        OnPropertyChanged(nameof(TodoSummaryText));
         OnPropertyChanged(nameof(HasQueuedDrafts));
+        OnPropertyChanged(nameof(HasCommandSuggestions));
         OnPropertyChanged(nameof(HasPendingQuestion));
+        OnPropertyChanged(nameof(IsPendingQuestionOpen));
         OnPropertyChanged(nameof(HasOlderHistory));
         OnPropertyChanged(nameof(IsLoadingOlderHistory));
+        OnPropertyChanged(nameof(IsCommandPopupOpen));
+        OnPropertyChanged(nameof(SelectedCommandSuggestionIndex));
         OnPropertyChanged(nameof(IsBlankPage));
         OnPropertyChanged(nameof(CanQueueCurrentDraft));
         OnPropertyChanged(nameof(ShowSendButton));
@@ -370,6 +487,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowSendButton));
         OnPropertyChanged(nameof(ShowStopButton));
         OnPropertyChanged(nameof(HasPendingQuestion));
+        OnPropertyChanged(nameof(IsPendingQuestionOpen));
         TriggerAutoTaskGraphCommand.NotifyCanExecuteChanged();
         TriggerSelectedTaskOrchestrationCommand.NotifyCanExecuteChanged();
     }
@@ -472,10 +590,17 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     [RelayCommand]
     private void ClosePendingQuestion()
     {
-        PendingQuestion = null;
+        if (PendingQuestion is not null)
+        {
+            PendingQuestion.IsExpanded = false;
+        }
         PendingQuestionStatus = null;
-        OnPropertyChanged(nameof(HasPendingQuestion));
+        OnPropertyChanged(nameof(IsPendingQuestionOpen));
     }
+
+    [RelayCommand]
+    private void ToggleTodoList()
+        => IsTodoListExpanded = !IsTodoListExpanded;
 
     // ── Public session lifecycle (called by MainWindowViewModel) ─────────
 
@@ -509,6 +634,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         PendingQuestion = null;
         PendingQuestionStatus = null;
         await RefreshSubagentActivitiesAsync(state, ct).ConfigureAwait(true);
+        await RefreshTodosAsync(state, ct).ConfigureAwait(true);
         await RefreshPendingQuestionAsync(state, ct).ConfigureAwait(true);
         StatusMessage = null;
         await MarkSessionViewedAsync(state, ct).ConfigureAwait(true);
@@ -530,10 +656,12 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         HeaderTitle = "新对话";
         Messages.Clear();
         SubagentActivities.Clear();
+        Todos.Clear();
         ClearPendingQueue(state);
         PendingQuestion = null;
         PendingQuestionStatus = null;
         StatusMessage = null;
+        CloseCommandPopup();
         CurrentWorkingDirectory = workingDirectory ?? SidebarWorkingDirectoryOrTracked();
         state.HistoryWindowSize = 0;
         state.HasOlderHistory = false;
@@ -676,7 +804,10 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                 await TriggerAutoTaskGraphAsync(DraftText, CancellationToken.None).ConfigureAwait(true);
                 break;
             case "template":
-                TemplateOrchestrationRequested?.Invoke(this, DraftText);
+                TemplateOrchestrationRequested?.Invoke(this, new TemplateOrchestrationRequest(
+                    DraftText,
+                    _activeState.AgentSessionId,
+                    CurrentWorkingDirectory));
                 break;
             default:
                 await SendAsync().ConfigureAwait(true);
@@ -696,6 +827,13 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
     private async Task SendOneAsync(SessionRuntimeState state, QueuedSendRequest request)
     {
+        var commandContext = ParseCommandContext(request.Prompt);
+        if (commandContext is not null && state.AgentSessionId is not null)
+        {
+            await ExecuteSlashCommandAsync(state, request, commandContext, CancellationToken.None).ConfigureAwait(true);
+            return;
+        }
+
         // 1. Build the user message locally so the UI reflects it immediately.
         var userMessage = new ChatMessageViewModel(Guid.NewGuid().ToString("N"), ChatRole.User, "你");
         if (!string.IsNullOrWhiteSpace(request.Prompt))
@@ -736,6 +874,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
                 state.SessionId = record.SessionId;
                 state.AgentSessionId = record.AgentSessionId;
                 state.Record = updatedRecord;
+                _sessionStates[record.SessionId] = state;
                 state.CurrentWorkingDirectory = workingDir;
                 state.HeaderTitle = record.Title;
                 state.HistoryLoaded = true;
@@ -786,6 +925,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
             await SyncFinalAssistantStateAsync(state, assistantMessage, ct).ConfigureAwait(true);
             await RefreshSubagentActivitiesAsync(state, ct).ConfigureAwait(true);
+            await RefreshTodosAsync(state, ct).ConfigureAwait(true);
             await TrySyncTitleAsync(state, ct).ConfigureAwait(true);
             assistantMessage.StreamingStatusText = null;
 
@@ -824,6 +964,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
         DraftText = string.Empty;
         Attachments.Clear();
+        CloseCommandPopup();
         return new QueuedSendRequest(Guid.NewGuid().ToString("N"), prompt, snapshotAttachments);
     }
 
@@ -831,6 +972,85 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     {
         state.PendingSendQueue.Enqueue(request);
         state.QueuedDrafts.Add(new QueuedChatDraftViewModel(request.Id, request.Prompt, request.Attachments));
+    }
+
+    private async Task ExecuteSlashCommandAsync(
+        SessionRuntimeState state,
+        QueuedSendRequest request,
+        SlashCommandContext commandContext,
+        CancellationToken ct)
+    {
+        var normalizedName = commandContext.Name.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            StatusMessage = "请选择要执行的命令";
+            return;
+        }
+
+        if (string.Equals(normalizedName, "revert", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteRevertCommandAsync(state, ct).ConfigureAwait(true);
+            return;
+        }
+
+        await _agent.ExecuteCommandAsync(state.AgentSessionId!, normalizedName, commandContext.Arguments, ct).ConfigureAwait(true);
+        state.LastActivityAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        await ReloadCurrentSessionMessagesAsync(state, ct).ConfigureAwait(true);
+        await PersistSessionStateAsync(state, ct).ConfigureAwait(true);
+    }
+
+    private async Task ExecuteRevertCommandAsync(
+        SessionRuntimeState state,
+        CancellationToken ct)
+    {
+        var targetMessage = state.Messages
+            .LastOrDefault(message => message.IsAssistant && !string.IsNullOrWhiteSpace(message.RemoteMessageId));
+        if (targetMessage?.RemoteMessageId is null)
+        {
+            StatusMessage = "当前会话里没有可回退的助手消息";
+            return;
+        }
+
+        await _agent.RevertSessionAsync(state.AgentSessionId!, targetMessage.RemoteMessageId, partId: null, ct).ConfigureAwait(true);
+        state.LastActivityAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        await ReloadCurrentSessionMessagesAsync(state, ct).ConfigureAwait(true);
+        await PersistSessionStateAsync(state, ct).ConfigureAwait(true);
+    }
+
+    public async Task RevertMessageAsync(ChatMessageViewModel message, CancellationToken ct = default)
+    {
+        if (message is null || string.IsNullOrEmpty(CurrentAgentSessionId))
+        {
+            return;
+        }
+
+        var targetMessageId = message.RemoteMessageId ?? message.Id;
+        if (string.IsNullOrWhiteSpace(targetMessageId))
+        {
+            StatusMessage = "当前消息无法回退";
+            return;
+        }
+
+        var confirmationHandler = ConfirmationRequested;
+        if (confirmationHandler is not null)
+        {
+            var confirmed = await confirmationHandler.Invoke(
+                this,
+                new AgentConfirmationRequest(
+                    "回退对话",
+                    "确定要回退到这条用户消息之后的状态吗？"),
+                ct).ConfigureAwait(true);
+            if (!confirmed)
+            {
+                return;
+            }
+        }
+
+        await _agent.RevertSessionAsync(CurrentAgentSessionId, targetMessageId, partId: null, ct).ConfigureAwait(true);
+        _activeState.LastActivityAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        await ReloadCurrentSessionMessagesAsync(_activeState, ct).ConfigureAwait(true);
+        await PersistSessionStateAsync(_activeState, ct).ConfigureAwait(true);
+        ToastRequested?.Invoke(this, "已回退对话");
     }
 
     private QueuedSendRequest? DequeuePendingDraft(SessionRuntimeState state)
@@ -1036,9 +1256,10 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
     public void RestorePendingQuestion(RemoteQuestion question)
     {
-        PendingQuestion = MapPendingQuestion(question);
+        PendingQuestion = MapPendingQuestion(question, isExpanded: true);
         PendingQuestionStatus = null;
         OnPropertyChanged(nameof(HasPendingQuestion));
+        OnPropertyChanged(nameof(IsPendingQuestionOpen));
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
@@ -1326,10 +1547,46 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         return string.IsNullOrWhiteSpace(fallback) ? "tool" : fallback;
     }
 
+    private SlashCommandContext? ParseCommandContext(string? draftText)
+    {
+        var value = draftText?.TrimStart();
+        if (string.IsNullOrWhiteSpace(value) || !value.StartsWith("/", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var withoutSlash = value[1..];
+        if (withoutSlash.Length == 0)
+        {
+            return new SlashCommandContext(string.Empty, string.Empty, string.Empty);
+        }
+
+        var firstSpace = withoutSlash.IndexOf(' ');
+        if (firstSpace < 0)
+        {
+            return new SlashCommandContext(withoutSlash, withoutSlash, string.Empty);
+        }
+
+        var name = withoutSlash[..firstSpace];
+        var arguments = withoutSlash[(firstSpace + 1)..];
+        return new SlashCommandContext(name, name, arguments);
+    }
+
+    private void SyncCommandSuggestionSelection()
+    {
+        for (var i = 0; i < CommandSuggestions.Count; i++)
+        {
+            CommandSuggestions[i].IsSelected = i == SelectedCommandSuggestionIndex;
+        }
+    }
+
     private ChatMessageViewModel MapRemoteMessage(RemoteMessage msg)
     {
         var author = msg.Role == ChatRole.User ? "你" : "Codex";
-        var vm = new ChatMessageViewModel(msg.Id, msg.Role, author);
+        var vm = new ChatMessageViewModel(msg.Id, msg.Role, author)
+        {
+            RemoteMessageId = msg.Id,
+        };
         foreach (var b in msg.Blocks)
         {
             switch (b.Kind)
@@ -1372,6 +1629,31 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             }
         }
         return vm;
+    }
+
+    private async Task ReloadCurrentSessionMessagesAsync(SessionRuntimeState state, CancellationToken ct)
+    {
+        if (state.AgentSessionId is null)
+        {
+            return;
+        }
+
+        var remote = await _agent.GetMessagesAsync(state.AgentSessionId, limit: null, ct).ConfigureAwait(true);
+        state.Messages.Clear();
+        foreach (var message in remote)
+        {
+            state.Messages.Add(MapRemoteMessage(message));
+        }
+
+        state.HistoryLoaded = true;
+        state.HistoryWindowSize = remote.Count;
+        state.HasOlderHistory = false;
+        state.IsLoadingOlderHistory = false;
+
+        if (ReferenceEquals(state, _activeState))
+        {
+            NotifyHistoryStateChanged();
+        }
     }
 
     private async Task SyncFinalAssistantStateAsync(SessionRuntimeState state, ChatMessageViewModel assistant, CancellationToken ct)
@@ -1485,6 +1767,25 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         }
     }
 
+    private async Task RefreshTodosAsync(SessionRuntimeState state, CancellationToken ct)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(state.AgentSessionId))
+            {
+                state.Todos.Clear();
+                return;
+            }
+
+            var todos = await _agent.GetTodosAsync(state.AgentSessionId, ct).ConfigureAwait(true);
+            ApplyTodos(state, todos);
+        }
+        catch
+        {
+            // Best-effort only.
+        }
+    }
+
     private async Task RefreshPendingQuestionAsync(SessionRuntimeState state, CancellationToken ct)
     {
         try
@@ -1499,11 +1800,12 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             var request = requests.FirstOrDefault();
             if (request is not null)
             {
-                state.PendingQuestion = MapPendingQuestion(request);
+                state.PendingQuestion = MapPendingQuestion(request, isExpanded: ReferenceEquals(state, _activeState) && state.IsStreaming);
                 if (ReferenceEquals(state, _activeState))
                 {
                     PendingQuestion = state.PendingQuestion;
                     OnPropertyChanged(nameof(HasPendingQuestion));
+                    OnPropertyChanged(nameof(IsPendingQuestionOpen));
                 }
                 return;
             }
@@ -1513,6 +1815,7 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
             {
                 PendingQuestion = state.PendingQuestion;
                 OnPropertyChanged(nameof(HasPendingQuestion));
+                OnPropertyChanged(nameof(IsPendingQuestionOpen));
             }
         }
         catch
@@ -1521,13 +1824,53 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         }
     }
 
-    private static PendingQuestion MapPendingQuestion(AgentQuestionRequest request)
+    private void OnAgentTodosUpdated(object? sender, AgentTodosUpdatedEventArgs e)
+    {
+        var state = _sessionStates.Values.FirstOrDefault(x =>
+            string.Equals(x.AgentSessionId, e.AgentSessionId, StringComparison.Ordinal));
+        if (state is null)
+        {
+            return;
+        }
+
+        ApplyTodos(state, e.Todos);
+    }
+
+    private void ApplyTodos(SessionRuntimeState state, IReadOnlyList<AgentTodoSnapshot> todos)
+    {
+        state.Todos.Clear();
+        foreach (var todo in todos)
+        {
+            state.Todos.Add(new TodoItemViewModel
+            {
+                Id = todo.Id,
+                Content = todo.Content,
+                Status = todo.Status,
+                Priority = todo.Priority,
+            });
+        }
+
+        if (ReferenceEquals(state, _activeState))
+        {
+            OnPropertyChanged(nameof(Todos));
+            OnPropertyChanged(nameof(HasTodos));
+            OnPropertyChanged(nameof(TodoCompletedCount));
+            OnPropertyChanged(nameof(TodoTotalCount));
+            OnPropertyChanged(nameof(AreAllTodosCompleted));
+            OnPropertyChanged(nameof(ActiveTodo));
+            OnPropertyChanged(nameof(ActiveTodoPosition));
+            OnPropertyChanged(nameof(TodoSummaryText));
+        }
+    }
+
+    private static PendingQuestion MapPendingQuestion(AgentQuestionRequest request, bool isExpanded = false)
     {
         var vm = new PendingQuestion(request.RequestId, request.Title)
         {
             PromptText = request.Title,
             MultipleSelection = request.Questions.Any(x => x.Multiple),
             AllowCustomAnswer = request.Questions.Any(x => x.Custom),
+            IsExpanded = isExpanded,
         };
 
         foreach (var question in request.Questions)
@@ -1556,13 +1899,14 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         return block?.ToolQuestion is null ? null : MapPendingQuestion(block.ToolQuestion);
     }
 
-    private static PendingQuestion MapPendingQuestion(RemoteQuestion question)
+    private static PendingQuestion MapPendingQuestion(RemoteQuestion question, bool isExpanded = false)
     {
         var vm = new PendingQuestion(question.RequestId, question.Title)
         {
             PromptText = question.Title,
             MultipleSelection = question.Questions.Any(x => x.Multiple),
             AllowCustomAnswer = question.Questions.Any(x => x.Custom),
+            IsExpanded = isExpanded,
         };
 
         foreach (var item in question.Questions)
@@ -1627,6 +1971,196 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         Attachments.Add(new ChatAttachment(displayName, path, isImage: true));
     }
 
+    public async Task UpdateCommandSuggestionsAsync(CancellationToken ct = default)
+    {
+        var commandContext = ParseCommandContext(DraftText);
+        if (commandContext is null)
+        {
+            CloseCommandPopup();
+            return;
+        }
+
+        var workingDirectory = ResolveWorkingDirectory();
+        if (string.IsNullOrWhiteSpace(workingDirectory))
+        {
+            CloseCommandPopup();
+            return;
+        }
+
+        var version = ++_commandSuggestionVersion;
+        try
+        {
+            if (!string.Equals(_availableCommandsWorkingDirectory, workingDirectory, StringComparison.OrdinalIgnoreCase)
+                || _availableCommands.Count == 0)
+            {
+                _availableCommands = await _agent.ListCommandsAsync(workingDirectory, ct).ConfigureAwait(true);
+                _availableCommandsWorkingDirectory = workingDirectory;
+            }
+        }
+        catch
+        {
+            CloseCommandPopup();
+            return;
+        }
+
+        if (version != _commandSuggestionVersion)
+        {
+            return;
+        }
+
+        var matches = _availableCommands
+            .Where(command => command.Name.StartsWith(commandContext.Query, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(command => command.Name.Length)
+            .ThenBy(command => command.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(8)
+            .Select(command => new CommandSuggestionViewModel(
+                command.Name,
+                "/" + command.Name + " ",
+                command.Description,
+                command.IsBuiltIn))
+            .ToList();
+
+        CommandSuggestions.Clear();
+        foreach (var match in matches)
+        {
+            CommandSuggestions.Add(match);
+        }
+
+        if (CommandSuggestions.Count == 0)
+        {
+            CloseCommandPopup();
+            return;
+        }
+
+        SelectedCommandSuggestionIndex = 0;
+        IsCommandPopupOpen = true;
+    }
+
+    public void CloseCommandPopup()
+    {
+        _commandSuggestionVersion++;
+        CommandSuggestions.Clear();
+        SelectedCommandSuggestionIndex = -1;
+        IsCommandPopupOpen = false;
+    }
+
+    public void MoveCommandSuggestionSelection(int delta)
+    {
+        if (!IsCommandPopupOpen || CommandSuggestions.Count == 0)
+        {
+            return;
+        }
+
+        var next = SelectedCommandSuggestionIndex;
+        if (next < 0)
+        {
+            next = 0;
+        }
+        else
+        {
+            next = (next + delta + CommandSuggestions.Count) % CommandSuggestions.Count;
+        }
+
+        SelectedCommandSuggestionIndex = next;
+    }
+
+    public bool TryApplySelectedCommandSuggestion()
+    {
+        if (!IsCommandPopupOpen || CommandSuggestions.Count == 0)
+        {
+            return false;
+        }
+
+        var index = SelectedCommandSuggestionIndex;
+        if (index < 0 || index >= CommandSuggestions.Count)
+        {
+            index = 0;
+        }
+
+        ApplyCommandSuggestion(CommandSuggestions[index]);
+        return true;
+    }
+
+    public void ApplyCommandSuggestion(CommandSuggestionViewModel suggestion)
+    {
+        if (suggestion is null)
+        {
+            return;
+        }
+
+        DraftText = suggestion.InsertText;
+        CloseCommandPopup();
+    }
+
+    public async Task CopyMessageAsync(ChatMessageViewModel message, CancellationToken ct = default)
+    {
+        if (message is null)
+        {
+            return;
+        }
+
+        var handler = CopyRequested;
+        if (handler is null)
+        {
+            return;
+        }
+
+        await handler.Invoke(this, message.BuildCopyText(), ct).ConfigureAwait(true);
+        ToastRequested?.Invoke(this, "已复制消息");
+    }
+
+    public async Task ForkMessageAsync(ChatMessageViewModel message, CancellationToken ct = default)
+    {
+        if (message is null || string.IsNullOrEmpty(CurrentSessionId) || string.IsNullOrEmpty(CurrentAgentSessionId))
+        {
+            return;
+        }
+
+        var confirmationHandler = ConfirmationRequested;
+        if (confirmationHandler is not null)
+        {
+            var confirmed = await confirmationHandler.Invoke(
+                this,
+                new AgentConfirmationRequest(
+                    "分叉对话",
+                    "确定要基于这条消息创建一个新的分叉会话吗？"),
+                ct).ConfigureAwait(true);
+            if (!confirmed)
+            {
+                return;
+            }
+        }
+
+        var remoteMessageId = message.RemoteMessageId ?? message.Id;
+        var snapshot = await _agent.ForkSessionAsync(CurrentAgentSessionId, remoteMessageId, ct).ConfigureAwait(true);
+        var project = await FindOrCreateProjectAsync(snapshot.WorkingDirectory, ct).ConfigureAwait(true);
+
+        var record = new SessionRecord(
+            SessionId: Guid.NewGuid().ToString("N"),
+            AgentSessionId: snapshot.AgentSessionId,
+            Title: string.IsNullOrWhiteSpace(snapshot.Title) ? "新分叉对话" : snapshot.Title,
+            ProjectId: project?.Id,
+            CreatedAt: snapshot.CreatedAt,
+            LastActivityAt: snapshot.UpdatedAt,
+            ViewedAt: null);
+
+        await _repo.CreateSessionAsync(record, ct).ConfigureAwait(true);
+        _sidebar.AddOrUpdateSession(record);
+        ToastRequested?.Invoke(this, "已创建分叉会话");
+    }
+
+    [RelayCommand]
+    private Task CopyMessage(ChatMessageViewModel? message)
+        => message is null ? Task.CompletedTask : CopyMessageAsync(message, CancellationToken.None);
+
+    [RelayCommand]
+    private Task ForkMessage(ChatMessageViewModel? message)
+        => message is null ? Task.CompletedTask : ForkMessageAsync(message, CancellationToken.None);
+
+    [RelayCommand]
+    private Task RevertMessage(ChatMessageViewModel? message)
+        => message is null ? Task.CompletedTask : RevertMessageAsync(message, CancellationToken.None);
+
     [RelayCommand]
     private void OpenPermissionMenu() { }
 
@@ -1650,7 +2184,10 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         return SelectedTaskOrchestration.Key switch
         {
             "auto" => TriggerAutoTaskGraphAsync(DraftText, CancellationToken.None),
-            "template" => Task.Run(() => TemplateOrchestrationRequested?.Invoke(this, DraftText)),
+            "template" => Task.Run(() => TemplateOrchestrationRequested?.Invoke(this, new TemplateOrchestrationRequest(
+                DraftText,
+                _activeState.AgentSessionId,
+                CurrentWorkingDirectory))),
             _ => Task.CompletedTask,
         };
     }
@@ -1661,9 +2198,11 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     // ── Stage 3: TaskGraph Orchestration Entry Points ────────────────────
 
     /// <summary>
-    /// Triggers automatic TaskGraph execution from chat input.
-    /// v3 first-version: builds a minimal stub graph (1 inline node) without
-    /// calling any planner. LLM-based graph generation is deferred per §18.
+    /// Triggers automatic TaskGraph execution from chat input. Loads the
+    /// hidden <c>builtin.auto-orchestration</c> system template from the store
+    /// and instantiates it, so auto-orchestration and template orchestration
+    /// share the same code path. Falls back to a minimal in-memory graph if
+    /// the template is missing (e.g. seeding failed).
     /// </summary>
     public async Task TriggerAutoTaskGraphAsync(string text, CancellationToken ct = default)
     {
@@ -1672,22 +2211,40 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
         if (HasChatExecutionLease)
             throw new InvalidOperationException("当前会话已绑定正在执行的编排。");
 
-        var graph = new TaskGraph
+        // Load the hidden system template; fall back to a minimal inline plan-node
+        // graph so the user is not blocked when seeding has not run yet.
+        var template = await _taskGraphStore.LoadTemplateAsync(AutoOrchestrationTemplateId, ct).ConfigureAwait(true);
+        TaskGraph graph;
+        if (template is null)
         {
-            Name = "Chat 自动编排",
-            OriginHint = TaskGraphOriginHint.ChatAuto,
-            ConversationSessionId = _activeState.AgentSessionId,
-        };
-
-        var node = new TaskNode
+            graph = new TaskGraph
+            {
+                Name = "Chat 自动编排",
+                OriginHint = TaskGraphOriginHint.ChatAuto,
+                ConversationSessionId = _activeState.AgentSessionId,
+            };
+            graph.Nodes.Add(new TaskNode
+            {
+                Title = "解析用户请求",
+                Kind = TaskNodeKind.Plan,
+                DelegationStrategy = TaskNodeDelegationStrategy.Inline,
+                Prompt = text,
+            });
+            graph.RebuildEdges();
+        }
+        else
         {
-            Title = "解析用户请求",
-            Kind = TaskNodeKind.Plan,
-            DelegationStrategy = TaskNodeDelegationStrategy.Inline,
-            Prompt = text,
-        };
-        graph.Nodes.Add(node);
-        graph.RebuildEdges();
+            graph = await _taskGraphStore.InstantiateTemplateAsync(
+                AutoOrchestrationTemplateId,
+                new TemplateInstantiationOptions
+                {
+                    UserInput = text,
+                    RuntimeGraphName = "Chat 自动编排",
+                },
+                ct).ConfigureAwait(true);
+            graph.OriginHint = TaskGraphOriginHint.ChatAuto;
+            graph.ConversationSessionId = _activeState.AgentSessionId;
+        }
 
         ActiveGraph = graph;
         ActiveExecutionContext = CreateExecutionContext(graph);
@@ -1709,16 +2266,26 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Triggers a template-based TaskGraph execution from chat.
+    /// Instantiates the template identified by <paramref name="templateId"/> into
+    /// a runtime graph and starts executing it inside Chat.
     /// </summary>
-    public async Task TriggerTemplateTaskGraphAsync(TaskGraphTemplateKind kind, string rawInput, CancellationToken ct = default)
+    public async Task TriggerTemplateTaskGraphAsync(string templateId, string rawInput, CancellationToken ct = default)
     {
         if (_graphController is null)
             throw new InvalidOperationException("TaskGraph executor is not wired in this host.");
         if (HasChatExecutionLease)
             throw new InvalidOperationException("当前会话已绑定正在执行的编排。");
+        if (string.IsNullOrWhiteSpace(templateId))
+            throw new ArgumentException("Template id is required.", nameof(templateId));
 
-        var graph = BuildTemplateGraph(kind, rawInput);
+        var graph = await _taskGraphStore.InstantiateTemplateAsync(
+            templateId,
+            new TemplateInstantiationOptions
+            {
+                UserInput = rawInput,
+                RuntimeGraphName = "Chat 模板编排",
+            },
+            ct).ConfigureAwait(true);
         graph.OriginHint = TaskGraphOriginHint.ChatTemplate;
         graph.ConversationSessionId = _activeState.AgentSessionId;
 
@@ -2058,28 +2625,10 @@ public partial class ChatWorkspaceViewModel : ViewModelBase
 
     private bool IsOwnedLease(string graphId) => _leasedGraphId == graphId;
 
-    /// <summary>
-    /// Dispatches to the appropriate template builder based on <paramref name="kind"/>.
-    /// </summary>
-    private static TaskGraph BuildTemplateGraph(TaskGraphTemplateKind kind, string rawInput)
-        => TaskGraphTemplateBuilder.Build(kind, rawInput);
-
     // ── Stage 4: UI-facing RelayCommands for orchestration ───────────────
 
     [RelayCommand(CanExecute = nameof(CanTriggerAutoGraph))]
     private Task TriggerAutoTaskGraphAsync() => TriggerAutoTaskGraphAsync(DraftText, CancellationToken.None);
-
-    [RelayCommand]
-    private Task TriggerBugListTemplateAsync() =>
-        TriggerTemplateTaskGraphAsync(TaskGraphTemplateKind.BugList, DraftText, CancellationToken.None);
-
-    [RelayCommand]
-    private Task TriggerFeatureDevTemplateAsync() =>
-        TriggerTemplateTaskGraphAsync(TaskGraphTemplateKind.FeatureDevelopment, DraftText, CancellationToken.None);
-
-    [RelayCommand]
-    private Task TriggerTaskListTemplateAsync() =>
-        TriggerTemplateTaskGraphAsync(TaskGraphTemplateKind.TaskList, DraftText, CancellationToken.None);
 
     [RelayCommand(CanExecute = nameof(CanPauseActiveGraph))]
     private Task PauseActiveGraphAsync() => PauseActiveGraphAsync(CancellationToken.None);
@@ -2126,3 +2675,9 @@ public static class ProjectsTracker
         set => _current = value;
     }
 }
+
+internal sealed record SlashCommandContext(
+    string Query,
+    string Name,
+    string Arguments
+);

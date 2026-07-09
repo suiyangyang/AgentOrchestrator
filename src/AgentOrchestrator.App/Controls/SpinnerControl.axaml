@@ -1,26 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="AgentOrchestrator.App.Controls.SpinnerControl">
-    <Path x:Name="SpinnerPath"
-          Width="14"
-          Height="14">
-        <Path.Data>
-            <PathGeometry>
-                <PathFigure StartPoint="7,1">
-                    <ArcSegment Size="6,6"
-                                SweepDirection="Clockwise"
-                                IsLargeArc="True"
-                                Point="1,7" />
-                </PathFigure>
-            </PathGeometry>
-        </Path.Data>
-        <Path.Fill>
-            <SolidColorBrush Color="Transparent" />
-        </Path.Fill>
-        <Path.Stroke>
-            <SolidColorBrush Color="#7B8088" />
-        </Path.Stroke>
-        <Path.StrokeThickness>1.5</Path.StrokeThickness>
-        <Path.StrokeLineCap>Round</Path.StrokeLineCap>
-    </Path>
-</UserControl>
+             x:Class="AgentOrchestrator.App.Controls.SpinnerControl"
+             Width="16"
+             Height="16" />

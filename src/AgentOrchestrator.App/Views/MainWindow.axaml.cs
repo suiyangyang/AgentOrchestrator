@@ -2,7 +2,9 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using AgentOrchestrator.App.Services.Agent;
 using AgentOrchestrator.App.ViewModels;
+using System.Threading.Tasks;
 
 namespace AgentOrchestrator.App.Views;
 
@@ -24,7 +26,20 @@ public partial class MainWindow : Window
         if (DataContext is MainWindowViewModel vm)
         {
             vm.Storage = StorageProvider;
+            vm.Chat.CopyRequested += OnChatCopyRequestedAsync;
+            vm.Chat.ConfirmationRequested += OnChatConfirmationRequestedAsync;
         }
+    }
+
+    protected override void OnClosed(System.EventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.Chat.CopyRequested -= OnChatCopyRequestedAsync;
+            vm.Chat.ConfirmationRequested -= OnChatConfirmationRequestedAsync;
+        }
+
+        base.OnClosed(e);
     }
 
     // --- Title bar drag-to-move ---
@@ -158,5 +173,28 @@ public partial class MainWindow : Window
         // Mirror the maximize icon swap so the double-tap path stays in sync.
         var isMaximized = WindowState == WindowState.Maximized;
         MaxButton.Content = isMaximized ? "\uE923" : "\uE922";
+    }
+
+    private async Task OnChatCopyRequestedAsync(object? sender, string text, System.Threading.CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        if (TopLevel.GetTopLevel(this)?.Clipboard is IClipboard clipboard)
+        {
+            ct.ThrowIfCancellationRequested();
+            await clipboard.SetTextAsync(text);
+        }
+    }
+
+    private Task<bool> OnChatConfirmationRequestedAsync(
+        object? sender,
+        AgentConfirmationRequest request,
+        System.Threading.CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return DialogHost.ConfirmAsync(this, request.Title, request.Message);
     }
 }

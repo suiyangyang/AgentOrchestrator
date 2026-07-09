@@ -7,7 +7,7 @@ public class AppSettings
     public int Port { get; set; } = 8908;
     public string Username { get; set; } = "opencode";
     public string Password { get; set; } = "";
-    public string UiFontFamily { get; set; } = "Segoe UI, Microsoft YaHei UI, Microsoft YaHei";
+    public string UiFontFamily { get; set; } = "Seogo UI";
     public string CodeFontFamily { get; set; } = "Consolas";
     public double UiFontSize { get; set; } = 14;
     public double CodeFontSize { get; set; } = 12;

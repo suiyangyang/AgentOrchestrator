@@ -1,18 +1,19 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:AgentOrchestrator.App.ViewModels"
-             xmlns:tg="using:AgentOrchestrator.App.Models.TaskGraph"
+             xmlns:controls="using:AgentOrchestrator.App.Controls"
              x:Class="AgentOrchestrator.App.Controls.TaskOrchestrationWorkspaceControl"
+             x:Name="Root"
              x:DataType="vm:TaskOrchestrationWorkspaceViewModel"
              Focusable="True">
 
     <Grid Background="#F7F8FA">
         <Border Background="#F7F8FA"
-                Padding="24">
+                Padding="0">
             <Grid>
                 <!-- Empty state -->
                 <Border Classes="orch-empty-hint"
-                        IsVisible="{Binding IsEmpty}"
+                        IsVisible="{Binding Editor.IsEmpty}"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center">
                     <StackPanel Spacing="12" HorizontalAlignment="Center">
@@ -24,7 +25,7 @@
                                    FontWeight="SemiBold"
                                    Foreground="#6E727A"
                                    HorizontalAlignment="Center" />
-                        <TextBlock Text="左侧选择一个模板来编辑和生成任务图，或选择一个已有任务图查看详情。"
+                        <TextBlock Text="左侧选择一个模板来编辑和生成任务图，或选择一个已有任务图查看并执行。"
                                    FontSize="13"
                                    Foreground="#9096A0"
                                    TextWrapping="Wrap"
@@ -33,157 +34,209 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Template detail -->
-                <Border Classes="orch-detail-card"
-                        IsVisible="{Binding IsTemplateSelected}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel Spacing="16">
-                            <TextBlock Text="模板详情"
-                                       Classes="orch-detail-title" />
+                <!-- Document view: graph canvas on top, editor panel on bottom -->
+                <Grid IsVisible="{Binding Editor.HasDocument}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-                            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
-                                <!-- Name -->
-                                <StackPanel Grid.Row="0" Spacing="4">
-                                    <TextBlock Text="模板名称" Classes="orch-detail-meta" />
-                                    <TextBox Text="{Binding TemplateDetailName, Mode=TwoWay}"
-                                             Classes="orch-detail-input"
-                                             IsReadOnly="{Binding IsTemplateDetailBuiltIn}" />
-                                </StackPanel>
+                    <!-- Graph canvas — reuses the shared TaskGraphWorkspaceControl -->
+                    <Border Grid.Row="0">
+                        <controls:TaskGraphWorkspaceControl DataContext="{Binding Workspace}"/>
+                    </Border>
 
-                                <!-- Description -->
-                                <StackPanel Grid.Row="1" Spacing="4">
-                                    <TextBlock Text="模板说明" Classes="orch-detail-meta" />
-                                    <TextBox Text="{Binding TemplateDetailDescription, Mode=TwoWay}"
-                                             Classes="orch-detail-input"
-                                             AcceptsReturn="True"
-                                             TextWrapping="Wrap"
-                                             MinHeight="64"
-                                             IsReadOnly="{Binding IsTemplateDetailBuiltIn}" />
-                                </StackPanel>
+                    <!-- Editor panel — template rules or runtime info -->
+                    <Border Grid.Row="1"
+                            Background="#FFFFFF"
+                            BorderBrush="#E2E5EA"
+                            BorderThickness="0,1,0,0"
+                            MaxHeight="320">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="14" Margin="16,14,16,14">
 
-                                <!-- Base kind -->
-                                <StackPanel Grid.Row="2" Spacing="4">
-                                    <TextBlock Text="基础骨架" Classes="orch-detail-meta" />
-                                    <ComboBox SelectedItem="{Binding TemplateDetailBaseKind, Mode=TwoWay}"
-                                              Classes="orch-detail-input"
-                                              ItemsSource="{x:Static vm:TaskOrchestrationWorkspaceViewModel.TemplateKindOptions}"
-                                              IsEnabled="{Binding !IsTemplateDetailBuiltIn}">
-                                    </ComboBox>
-                                </StackPanel>
+                                <!-- ============================================ -->
+                                <!-- Template mode editor                        -->
+                                <!-- ============================================ -->
+                                <Border IsVisible="{Binding Editor.IsTemplateDocument}">
+                                    <StackPanel Spacing="12">
+                                        <TextBlock Text="模板编辑"
+                                                   Classes="orch-detail-title" />
 
-                                <!-- Default Input -->
-                                <StackPanel Grid.Row="3" Spacing="4">
-                                    <TextBlock Text="默认输入" Classes="orch-detail-meta" />
-                                    <TextBox Text="{Binding TemplateDetailDefaultInput, Mode=TwoWay}"
-                                             Classes="orch-detail-input"
-                                             AcceptsReturn="True"
-                                             TextWrapping="Wrap"
-                                             MinHeight="120"
-                                             IsReadOnly="{Binding IsTemplateDetailBuiltIn}" />
-                                </StackPanel>
+                                        <!-- Name -->
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="模板名称" Classes="orch-detail-meta" />
+                                            <TextBox Text="{Binding Editor.Name, Mode=TwoWay}"
+                                                     Classes="orch-detail-input"
+                                                     IsReadOnly="{Binding Editor.IsBuiltInTemplate}" />
+                                        </StackPanel>
 
-                                <!-- 内置标签 -->
-                                <Border Grid.Row="4"
-                                        Background="#E8EEF9"
-                                        CornerRadius="6"
-                                        Padding="10,6"
-                                        IsVisible="{Binding IsTemplateDetailBuiltIn}">
-                                    <TextBlock Text="此模板为内置模板，不可直接编辑。可以使用「复制」创建自定义副本后再编辑。"
-                                               FontSize="13"
-                                               Foreground="#2459B8"
-                                               TextWrapping="Wrap" />
+                                        <!-- Notes -->
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="模板说明 Note" Classes="orch-detail-meta" />
+                                            <TextBox Text="{Binding Editor.TemplateNotesDraft, Mode=TwoWay}"
+                                                     Classes="orch-detail-input"
+                                                     AcceptsReturn="True"
+                                                     TextWrapping="Wrap"
+                                                     MinHeight="60"
+                                                     IsReadOnly="{Binding Editor.IsBuiltInTemplate}" />
+                                        </StackPanel>
+
+                                        <!-- Planner Prompt -->
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="Planner 提示词" Classes="orch-detail-meta" />
+                                            <TextBox Text="{Binding Editor.TemplatePlannerPromptDraft, Mode=TwoWay}"
+                                                     Classes="orch-detail-input"
+                                                     AcceptsReturn="True"
+                                                     TextWrapping="Wrap"
+                                                     MinHeight="40"
+                                                     IsReadOnly="{Binding Editor.IsBuiltInTemplate}" />
+                                        </StackPanel>
+
+                                        <!-- Template rules -->
+                                        <TextBlock Text="模板规则" Classes="orch-detail-title" />
+                                        <CheckBox IsChecked="{Binding Editor.AllowDynamicExpansion, Mode=TwoWay}"
+                                                  Content="允许动态扩图"
+                                                  IsEnabled="{Binding Editor.CanEditTemplateRules}" />
+
+                                        <TextBlock Text="动态区域" Classes="orch-detail-meta" />
+                                        <ItemsControl ItemsSource="{Binding Editor.DynamicZones}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border BorderBrush="#E2E5EA"
+                                                            BorderThickness="1"
+                                                            CornerRadius="6"
+                                                            Padding="10,8"
+                                                            Margin="0,0,0,6">
+                                                        <StackPanel Spacing="6">
+                                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                                                <TextBlock Grid.Column="0"
+                                                                           Text="名称"
+                                                                           VerticalAlignment="Center"
+                                                                           Foreground="#6E727A"
+                                                                           FontSize="13" />
+                                                                <TextBox Grid.Column="1"
+                                                                         Text="{Binding Name, Mode=TwoWay}"
+                                                                         FontSize="13" />
+                                                            </Grid>
+                                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                                                <TextBlock Grid.Column="0"
+                                                                           Text="锚点节点"
+                                                                           VerticalAlignment="Center"
+                                                                           Foreground="#6E727A"
+                                                                           FontSize="13" />
+                                                                <TextBox Grid.Column="1"
+                                                                         Text="{Binding AnchorNodeId, Mode=TwoWay}"
+                                                                         FontSize="13" />
+                                                            </Grid>
+                                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                                                <TextBlock Grid.Column="0"
+                                                                           Text="插入位置"
+                                                                           VerticalAlignment="Center"
+                                                                           Foreground="#6E727A"
+                                                                           FontSize="13" />
+                                                                <TextBox Grid.Column="1"
+                                                                         Text="{Binding InsertAfterNodeId, Mode=TwoWay}"
+                                                                         FontSize="13" />
+                                                            </Grid>
+                                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                                                <TextBlock Grid.Column="0"
+                                                                           Text="连接到终端"
+                                                                           VerticalAlignment="Center"
+                                                                           Foreground="#6E727A"
+                                                                           FontSize="13" />
+                                                                <TextBox Grid.Column="1"
+                                                                         Text="{Binding ConnectToTerminalNodeId, Mode=TwoWay}"
+                                                                         FontSize="13" />
+                                                            </Grid>
+                                                            <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="12">
+                                                                <CheckBox IsChecked="{Binding AllowParallelNodes, Mode=TwoWay}"
+                                                                          Content="允许并行节点" />
+                                                                <Border Grid.Column="1">
+                                                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                                                        <TextBlock Text="最大节点数"
+                                                                                   VerticalAlignment="Center"
+                                                                                   Foreground="#6E727A"
+                                                                                   FontSize="13" />
+                                                                        <TextBox Text="{Binding MaxGeneratedNodeCount, Mode=TwoWay}"
+                                                                                 Width="60"
+                                                                                 FontSize="13" />
+                                                                    </StackPanel>
+                                                                </Border>
+                                                            </Grid>
+                                                            <StackPanel Spacing="2">
+                                                                <TextBlock Text="生成指令"
+                                                                           Foreground="#6E727A"
+                                                                           FontSize="13" />
+                                                                <TextBox Text="{Binding GenerationInstruction, Mode=TwoWay}"
+                                                                         AcceptsReturn="True"
+                                                                         TextWrapping="Wrap"
+                                                                         MinHeight="40"
+                                                                         FontSize="13" />
+                                                            </StackPanel>
+                                                            <Button Content="删除"
+                                                                    HorizontalAlignment="Right"
+                                                                    Click="OnDeleteZoneClick"
+                                                                    Tag="{Binding}"
+                                                                    Classes="orch-secondary-btn" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <Button Content="+ 添加动态区域"
+                                                Command="{Binding Editor.AddDynamicZoneCommand}"
+                                                IsEnabled="{Binding Editor.CanEditTemplateRules}"
+                                                Classes="orch-secondary-btn" />
+
+                                        <!-- Actions -->
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="8"
+                                                    HorizontalAlignment="Right"
+                                                    Margin="0,8,0,0">
+                                            <Button Content="保存模板"
+                                                    Command="{Binding Editor.SaveCommand}"
+                                                    IsEnabled="{Binding Editor.CanSave}"
+                                                    Classes="orch-secondary-btn" />
+                                            <Button Content="基于此模板生成任务图"
+                                                    Command="{Binding Editor.InstantiateCommand}"
+                                                    IsEnabled="{Binding Editor.CanInstantiate}"
+                                                    Classes="orch-primary-btn" />
+                                        </StackPanel>
+                                    </StackPanel>
                                 </Border>
 
-                                <StackPanel Grid.Row="5" Spacing="4">
-                                    <TextBlock Text="本次生成输入" Classes="orch-detail-meta" />
-                                    <TextBox Text="{Binding TemplateGenerationInput, Mode=TwoWay}"
-                                             Classes="orch-detail-input"
-                                             AcceptsReturn="True"
-                                             TextWrapping="Wrap"
-                                             MinHeight="120" />
-                                </StackPanel>
-
-                                <!-- Actions -->
-                                <StackPanel Grid.Row="6"
-                                            Orientation="Horizontal"
-                                            Spacing="12"
-                                            HorizontalAlignment="Right">
-                                    <TextBox Text="{Binding TemplateGenerationGraphName, Mode=TwoWay}"
-                                             Width="220"
-                                             PlaceholderText="任务图名称（可选）"
-                                             Classes="orch-detail-input" />
-                                    <Button Classes="orch-primary-btn"
-                                            Content="保存"
-                                            Command="{Binding SaveTemplateDetailCommand}"
-                                            IsVisible="{Binding !IsTemplateDetailBuiltIn}" />
-                                    <Button Classes="orch-secondary-btn"
-                                            Content="基于此模板生成任务图"
-                                            Command="{Binding GenerateTaskGraphFromSelectedTemplateCommand}" />
-                                </StackPanel>
-                            </Grid>
-                        </StackPanel>
-                    </ScrollViewer>
-                </Border>
-
-                <!-- Task graph summary -->
-                <Border Classes="orch-detail-card"
-                        IsVisible="{Binding IsTaskGraphSelected}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel Spacing="16">
-                            <TextBlock Text="任务图概要"
-                                       Classes="orch-detail-title" />
-
-                            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
-
-                                <!-- Name -->
-                                <StackPanel Grid.Row="0" Spacing="4">
-                                    <TextBlock Text="名称" Classes="orch-detail-meta" />
-                                    <TextBlock Text="{Binding SelectedTaskGraphName}"
-                                               FontSize="16"
-                                               FontWeight="SemiBold"
-                                               Foreground="#1F2328" />
-                                </StackPanel>
-
-                                <!-- Status pill -->
-                                <StackPanel Grid.Row="1" Spacing="4">
-                                    <TextBlock Text="执行状态" Classes="orch-detail-meta" />
-                                    <Border Classes="orch-status-pill">
-                                        <TextBlock Text="{Binding SelectedTaskGraphStatusText}"
-                                                   FontSize="13"
+                                <!-- ============================================ -->
+                                <!-- Runtime mode info                           -->
+                                <!-- ============================================ -->
+                                <Border IsVisible="{Binding Editor.IsRuntimeDocument}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="任务图信息"
+                                                   Classes="orch-detail-title" />
+                                        <TextBlock Text="{Binding Editor.Name}"
+                                                   FontSize="15"
                                                    FontWeight="SemiBold"
                                                    Foreground="#1F2328" />
-                                    </Border>
-                                </StackPanel>
+                                        <TextBlock Text="当前模式: 任务图（可执行）"
+                                                   FontSize="13"
+                                                   Foreground="#6E727A" />
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="8"
+                                                    HorizontalAlignment="Right"
+                                                    Margin="0,4,0,0">
+                                            <Button Content="保存"
+                                                    Command="{Binding Editor.SaveCommand}"
+                                                    IsEnabled="{Binding Editor.CanSave}"
+                                                    Classes="orch-secondary-btn" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
 
-                                <!-- Node count -->
-                                <StackPanel Grid.Row="2" Spacing="4">
-                                    <TextBlock Text="节点数量" Classes="orch-detail-meta" />
-                                    <TextBlock Text="{Binding SelectedTaskGraphNodeCount}"
-                                               FontSize="15"
-                                               Foreground="#1F2328" />
-                                </StackPanel>
-
-                                <!-- Updated -->
-                                <StackPanel Grid.Row="3" Spacing="4">
-                                    <TextBlock Text="最后更新" Classes="orch-detail-meta" />
-                                    <TextBlock Text="{Binding SelectedTaskGraphUpdatedText}"
-                                               FontSize="14"
-                                               Foreground="#1F2328" />
-                                </StackPanel>
-
-                                <!-- Actions -->
-                                <StackPanel Grid.Row="4"
-                                            Orientation="Horizontal"
-                                            Spacing="12"
-                                            HorizontalAlignment="Right">
-                                    <Button Classes="orch-primary-btn"
-                                            Content="打开图编辑"
-                                            Command="{Binding OpenSelectedTaskGraphInEditorCommand}" />
-                                </StackPanel>
-                            </Grid>
-                        </StackPanel>
-                    </ScrollViewer>
-                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
             </Grid>
         </Border>
     </Grid>

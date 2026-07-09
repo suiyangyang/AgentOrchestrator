@@ -192,6 +192,18 @@ public sealed class TaskGraphExecutorTests
             Saved.Remove(id);
             return Task.CompletedTask;
         }
+
+        public Task<IReadOnlyList<TaskGraphListItem>> ListTemplatesAsync(CancellationToken ct = default)
+            => throw new System.NotImplementedException();
+
+        public Task<IReadOnlyList<TaskGraphListItem>> ListRuntimeGraphsAsync(CancellationToken ct = default)
+            => throw new System.NotImplementedException();
+
+        public Task<TaskGraphModel?> LoadTemplateAsync(string id, CancellationToken ct = default)
+            => throw new System.NotImplementedException();
+
+        public Task<TaskGraphModel> InstantiateTemplateAsync(string templateId, TemplateInstantiationOptions options, CancellationToken ct = default)
+            => throw new System.NotImplementedException();
     }
 
     private sealed class FakeAgentGateway : IAgentGateway
@@ -202,6 +214,7 @@ public sealed class TaskGraphExecutorTests
         public string AgentKind => "fake";
 
         public event EventHandler<AgentErrorEventArgs>? AgentErrorOccurred;
+        public event EventHandler<AgentTodosUpdatedEventArgs>? TodosUpdated;
 
         public Dictionary<string, IReadOnlyList<RemoteMessage>> MessagesAfterSend { get; } = new(StringComparer.Ordinal);
 
@@ -247,6 +260,33 @@ public sealed class TaskGraphExecutorTests
 
         public Task SubmitQuestionAnswerAsync(string agentSessionId, string requestId, IReadOnlyList<IReadOnlyList<string>> answers, CancellationToken ct = default)
             => Task.CompletedTask;
+
+        public Task<IReadOnlyList<AgentTodoSnapshot>> GetTodosAsync(string agentSessionId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<AgentTodoSnapshot>>([]);
+
+        public Task<IReadOnlyList<AgentCommandDefinition>> ListCommandsAsync(string workingDirectory, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<AgentCommandDefinition>>([]);
+
+        public Task<AgentCommandExecutionResult> ExecuteCommandAsync(string agentSessionId, string commandName, string arguments, CancellationToken ct = default)
+            => Task.FromResult(new AgentCommandExecutionResult("message-command"));
+
+        public Task<AgentSessionSnapshot> ForkSessionAsync(string agentSessionId, string messageId, CancellationToken ct = default)
+            => Task.FromResult(new AgentSessionSnapshot(
+                $"{agentSessionId}-fork",
+                "fork",
+                agentSessionId,
+                AppContext.BaseDirectory,
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
+
+        public Task<AgentSessionSnapshot> RevertSessionAsync(string agentSessionId, string messageId, string? partId = null, CancellationToken ct = default)
+            => Task.FromResult(new AgentSessionSnapshot(
+                agentSessionId,
+                agentSessionId,
+                null,
+                AppContext.BaseDirectory,
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
 
         public async IAsyncEnumerable<ChatStreamChunk> SendMessageAsync(string agentSessionId, AgentChatRequest request, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
         {

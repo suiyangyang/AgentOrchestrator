@@ -25,6 +25,7 @@ public sealed record Todo
     public required string Content { get; init; }
     public required string Status { get; init; }
     public required string Priority { get; init; }
+    public string? Id { get; init; }
 }
 
 public sealed record Command
@@ -33,8 +34,9 @@ public sealed record Command
     public string? Description { get; init; }
     public string? Agent { get; init; }
     public string? Model { get; init; }
-    public required string Template { get; init; }
+    public JsonElement? Template { get; init; }
     public bool? Subtask { get; init; }
+    public bool? BuiltIn { get; init; }
 }
 
 public sealed record Agent

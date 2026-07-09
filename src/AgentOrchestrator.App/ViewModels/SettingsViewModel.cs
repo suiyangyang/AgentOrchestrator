@@ -36,7 +36,7 @@ public partial class SettingsViewModel : ViewModelBase
     private string _password = "";
 
     [ObservableProperty]
-    private string _uiFontFamily = "Segoe UI, Microsoft YaHei UI, Microsoft YaHei";
+    private string _uiFontFamily = "Segoe UI";
 
     [ObservableProperty]
     private string _codeFontFamily = "Consolas";

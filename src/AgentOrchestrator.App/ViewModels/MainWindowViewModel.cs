@@ -4,7 +4,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using AgentOrchestrator.App.Models.Chat;
 using AgentOrchestrator.App.Models.Sidebar;
+using AgentOrchestrator.App.Models.TaskGraph;
 using AgentOrchestrator.App.Services.Agent;
 using AgentOrchestrator.App.Services.Settings;
 using AgentOrchestrator.App.Services.Sidebar;
@@ -61,6 +63,7 @@ public partial class MainWindowViewModel : ViewModelBase
         TaskOrchestration = taskOrchestration;
 
         Chat.TemplateOrchestrationRequested += OnChatTemplateOrchestrationRequested;
+        Chat.ToastRequested += OnChatToastRequested;
         Sidebar.SessionSelected += OnSidebarSessionSelected;
         Sidebar.NewSessionRequested += OnSidebarNewSessionRequested;
         Sidebar.TaskGraphRequested += (_, _) => ActiveWorkspace = TaskGraph;
@@ -77,8 +80,7 @@ public partial class MainWindowViewModel : ViewModelBase
         TaskOrchestration.NewTaskGraphRequested += OnTaskOrchestrationNewTaskGraphRequested;
         TaskOrchestration.TaskGraphOpenRequested += OnTaskOrchestrationTaskGraphOpenRequested;
         TaskOrchestration.TaskGraphActionRequested += OnTaskOrchestrationTaskGraphActionRequested;
-        TaskOrchestration.TemplateGenerateRequested += OnTaskOrchestrationTemplateGenerateRequested;
-        TaskOrchestration.TemplateFocusRequested += OnTaskOrchestrationTemplateFocusRequested;
+        TaskOrchestration.Editor.GraphInstantiated += OnEditorGraphInstantiated;
 
         // Persist focus changes back to the settings file so the next
         // launch can restore the same working directory.
@@ -154,6 +156,12 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string? _agentErrorMessage;
 
+    [ObservableProperty]
+    private string? _toastMessage;
+
+    [ObservableProperty]
+    private bool _isToastVisible;
+
     /// <summary>Derived visibility toggle for the error banner.</summary>
     public bool HasAgentError => !string.IsNullOrEmpty(AgentErrorMessage);
 
@@ -165,6 +173,18 @@ public partial class MainWindowViewModel : ViewModelBase
     private void OnAgentErrorOccurred(object? sender, AgentErrorEventArgs e)
     {
         AgentErrorMessage = e.UserMessage;
+    }
+
+    private async void OnChatToastRequested(object? sender, string message)
+    {
+        ToastMessage = message;
+        IsToastVisible = true;
+        await Task.Delay(1800).ConfigureAwait(true);
+        if (string.Equals(ToastMessage, message, StringComparison.Ordinal))
+        {
+            IsToastVisible = false;
+            ToastMessage = null;
+        }
     }
 
     [RelayCommand]
@@ -504,10 +524,9 @@ public partial class MainWindowViewModel : ViewModelBase
         await TaskGraph.NewGraphCommand.ExecuteAsync(null);
     }
 
-    private void OnChatTemplateOrchestrationRequested(object? sender, string prompt)
+    private void OnChatTemplateOrchestrationRequested(object? sender, TemplateOrchestrationRequest request)
     {
         OpenOrchestrationWorkspace();
-        TaskOrchestration.PrepareTemplateGenerationFromChat(prompt);
     }
 
     private async Task OnAddProjectRequested()
@@ -651,6 +670,13 @@ public partial class MainWindowViewModel : ViewModelBase
         await TaskGraph.NewGraphCommand.ExecuteAsync(null);
     }
 
+    private async void OnEditorGraphInstantiated(object? sender, TaskGraph graph)
+    {
+        // Open the newly instantiated runtime graph in the independent TaskGraph workspace.
+        ActiveWorkspace = TaskGraph;
+        await TaskGraph.OpenGraphByIdAsync(graph.Id);
+    }
+
     private async void OnTaskOrchestrationTaskGraphOpenRequested(object? sender, string taskGraphId)
     {
         ActiveWorkspace = TaskGraph;
@@ -754,21 +780,6 @@ public partial class MainWindowViewModel : ViewModelBase
                 break;
             }
         }
-    }
-
-    private async void OnTaskOrchestrationTemplateGenerateRequested(object? sender, TaskTemplateGenerationRequest req)
-    {
-        ActiveWorkspace = TaskGraph;
-        await TaskGraph.CreateGraphFromTemplateAsync(
-            req.BaseKind,
-            req.Input,
-            req.GraphName,
-            req.TemplateName).ConfigureAwait(true);
-    }
-
-    private void OnTaskOrchestrationTemplateFocusRequested(object? sender, EventArgs e)
-    {
-        ActiveWorkspace = TaskOrchestration;
     }
 
     private bool TryGetProject(string projectId, out SidebarProjectViewModel pvm)

@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOrchestrator.App.Models.TaskGraph;
@@ -13,24 +15,29 @@ namespace AgentOrchestrator.App.ViewModels;
 
 /// <summary>
 /// Owns the task orchestration independent workspace. Left panel: quick actions +
-/// two collapsible groups (模板 / 任务图). Right panel: template detail or task graph
-/// summary, switched via selection.
+/// two collapsible groups (模板 / 任务图). Right panel: unified graph canvas
+/// (via <see cref="Workspace"/>) with editor panel (via <see cref="Editor"/>).
+/// Phase 3 removes the separate template detail form and task graph summary form;
+/// both modes now share the same graph canvas and document editor.
 /// </summary>
 public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
 {
-    private readonly ITaskTemplateStore _templateStore;
     private readonly ITaskGraphStore _taskGraphStore;
-    private readonly Dictionary<string, TaskTemplateItemViewModel> _templatesById = new(StringComparer.Ordinal);
+    private readonly TaskGraphWorkspaceViewModel _workspace;
+    private readonly TaskGraphDocumentEditorViewModel _editor;
+    private readonly Dictionary<string, SidebarTaskGraphItemViewModel> _templatesById = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SidebarTaskGraphItemViewModel> _taskGraphsById = new(StringComparer.Ordinal);
-    private IReadOnlyList<TaskTemplateListItem> _allTemplateItems = [];
+    private IReadOnlyList<TaskGraphListItem> _allTemplateItems = [];
     private IReadOnlyList<TaskGraphListItem> _allTaskGraphItems = [];
 
     public TaskOrchestrationWorkspaceViewModel(
-        ITaskTemplateStore templateStore,
-        ITaskGraphStore taskGraphStore)
+        ITaskGraphStore taskGraphStore,
+        TaskGraphWorkspaceViewModel workspace,
+        TaskGraphDocumentEditorViewModel editor)
     {
-        _templateStore = templateStore;
         _taskGraphStore = taskGraphStore;
+        _workspace = workspace;
+        _editor = editor;
         _ = InitializeAsync();
     }
 
@@ -39,8 +46,21 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
 
     public string SearchPlaceholder => "搜索模板和任务图";
 
-    public ObservableCollection<TaskTemplateItemViewModel> Templates { get; } = [];
+    public ObservableCollection<SidebarTaskGraphItemViewModel> Templates { get; } = [];
     public ObservableCollection<SidebarTaskGraphItemViewModel> TaskGraphs { get; } = [];
+
+    /// <summary>
+    /// The shared graph canvas view model. Both template and runtime documents
+    /// are displayed on the same canvas, with execution buttons gated by
+    /// <see cref="TaskGraphWorkspaceViewModel.IsRuntimeDocument"/>.
+    /// </summary>
+    public TaskGraphWorkspaceViewModel Workspace => _workspace;
+
+    /// <summary>
+    /// The unified document editor context. Drives the right-side editor panel
+    /// (name, template rules, dynamic zones, save/instantiate actions).
+    /// </summary>
+    public TaskGraphDocumentEditorViewModel Editor => _editor;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -57,51 +77,10 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
     // ---- Selection state ----
 
     [ObservableProperty]
-    private TaskTemplateItemViewModel? _selectedTemplate;
+    private SidebarTaskGraphItemViewModel? _selectedTemplate;
 
     [ObservableProperty]
     private SidebarTaskGraphItemViewModel? _selectedTaskGraph;
-
-    public bool IsTemplateSelected => SelectedTemplate is not null;
-    public bool IsTaskGraphSelected => SelectedTaskGraph is not null;
-    public bool IsEmpty => SelectedTemplate is null && SelectedTaskGraph is null;
-
-    // ---- Template detail bindings (when a template is selected) ----
-
-    [ObservableProperty]
-    private string _templateDetailName = string.Empty;
-
-    [ObservableProperty]
-    private string _templateDetailDescription = string.Empty;
-
-    [ObservableProperty]
-    private TaskGraphTemplateKind _templateDetailBaseKind = TaskGraphTemplateKind.TaskList;
-
-    [ObservableProperty]
-    private string _templateDetailDefaultInput = string.Empty;
-
-    [ObservableProperty]
-    private bool _isTemplateDetailBuiltIn;
-
-    [ObservableProperty]
-    private string _templateGenerationInput = string.Empty;
-
-    [ObservableProperty]
-    private string _templateGenerationGraphName = string.Empty;
-
-    // ---- Task graph summary bindings (when a task graph is selected) ----
-
-    [ObservableProperty]
-    private string _selectedTaskGraphName = string.Empty;
-
-    [ObservableProperty]
-    private string _selectedTaskGraphStatusText = "草稿";
-
-    [ObservableProperty]
-    private int _selectedTaskGraphNodeCount;
-
-    [ObservableProperty]
-    private string _selectedTaskGraphUpdatedText = string.Empty;
 
     // ---- Template kind options for the ComboBox ----
 
@@ -126,8 +105,6 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
     public event EventHandler? NewTaskGraphRequested;
     public event EventHandler<string>? TaskGraphOpenRequested;
     public event EventHandler<TaskGraphActionRequest>? TaskGraphActionRequested;
-    public event EventHandler<TaskTemplateGenerationRequest>? TemplateGenerateRequested;
-    public event EventHandler? TemplateFocusRequested;
 
     // ================================================================
     // Initialization
@@ -149,13 +126,26 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
         IsBusy = true;
         try
         {
-            var templates = await _templateStore.ListAsync().ConfigureAwait(true);
-            var taskGraphs = await _taskGraphStore.ListAsync().ConfigureAwait(true);
+            var templates = await _taskGraphStore.ListTemplatesAsync().ConfigureAwait(true);
+            var taskGraphs = await _taskGraphStore.ListRuntimeGraphsAsync().ConfigureAwait(true);
 
             _allTemplateItems = templates;
             _allTaskGraphItems = taskGraphs;
 
             ApplyFilter();
+
+            // Re-load the current selection into the editor and workspace
+            // in case the underlying data changed.
+            if (SelectedTemplate is not null)
+            {
+                _ = LoadTemplateIntoEditorAsync(SelectedTemplate.Id);
+                _ = _workspace.OpenTemplateByIdAsync(SelectedTemplate.Id);
+            }
+            else if (SelectedTaskGraph is not null)
+            {
+                _ = LoadTaskGraphIntoEditorAsync(SelectedTaskGraph.Id);
+                _ = _workspace.OpenGraphByIdAsync(SelectedTaskGraph.Id);
+            }
         }
         finally
         {
@@ -184,19 +174,19 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
         IsBusy = true;
         try
         {
-            var template = new TaskTemplate
+            // Create a minimal template via the builder, then save.
+            var graph = TaskGraphTemplateBuilder.Build(TaskGraphTemplateKind.Custom, string.Empty, TaskGraphDocumentKind.Template);
+            graph.Id = Guid.NewGuid().ToString("N");
+            graph.Name = "新模板";
+            graph.IsBuiltInTemplate = false;
+            graph.TemplateMetadata = new TaskGraphTemplateMetadata
             {
-                Name = "新模板",
-                Description = string.Empty,
-                BaseKind = TaskGraphTemplateKind.TaskList,
-                DefaultInput = "- 任务 1\n- 任务 2\n- 任务 3",
-                IsBuiltIn = false,
+                AllowDynamicExpansion = true,
             };
-
-            await _templateStore.SaveAsync(template).ConfigureAwait(true);
+            await _taskGraphStore.SaveAsync(graph).ConfigureAwait(true);
             await RefreshAsync();
 
-            if (_templatesById.TryGetValue(template.Id, out var vm))
+            if (_templatesById.TryGetValue(graph.Id, out var vm))
             {
                 SelectTemplate(vm);
             }
@@ -212,7 +202,7 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
     // ================================================================
 
     [RelayCommand]
-    private void SelectTemplate(TaskTemplateItemViewModel? template)
+    private void SelectTemplate(SidebarTaskGraphItemViewModel? template)
     {
         if (ReferenceEquals(SelectedTemplate, template))
         {
@@ -235,12 +225,14 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
         if (template is not null)
         {
             template.IsSelected = true;
-            PopulateTemplateDetail(template);
+            _ = LoadTemplateIntoEditorAsync(template.Id);
+            _ = _workspace.OpenTemplateByIdAsync(template.Id);
         }
-
-        OnPropertyChanged(nameof(IsTemplateSelected));
-        OnPropertyChanged(nameof(IsTaskGraphSelected));
-        OnPropertyChanged(nameof(IsEmpty));
+        else
+        {
+            _ = _editor.LoadDocumentAsync(null);
+            _workspace.CurrentGraph = null;
+        }
     }
 
     [RelayCommand]
@@ -267,89 +259,95 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
         if (taskGraph is not null)
         {
             taskGraph.IsSelected = true;
-            PopulateTaskGraphSummary(taskGraph);
+            _ = LoadTaskGraphIntoEditorAsync(taskGraph.Id);
+            _ = _workspace.OpenGraphByIdAsync(taskGraph.Id);
         }
-
-        OnPropertyChanged(nameof(IsTemplateSelected));
-        OnPropertyChanged(nameof(IsTaskGraphSelected));
-        OnPropertyChanged(nameof(IsEmpty));
-    }
-
-    /// <summary>
-    /// Called by the control when the "打开图编辑" button is clicked in the
-    /// right-pane task graph summary. Raises <see cref="TaskGraphOpenRequested"/>
-    /// so the shell can switch to the full graph workspace.
-    /// </summary>
-    [RelayCommand]
-    private void OpenSelectedTaskGraphInEditor()
-    {
-        if (SelectedTaskGraph is null)
+        else
         {
-            return;
+            _ = _editor.LoadDocumentAsync(null);
+            _workspace.CurrentGraph = null;
         }
-
-        TaskGraphOpenRequested?.Invoke(this, SelectedTaskGraph.Id);
     }
 
     // ================================================================
-    // Template detail actions
+    // Template detail actions (kept for sidebar interactions)
     // ================================================================
 
     [RelayCommand]
-    private async Task SaveTemplateDetailAsync()
+    private async Task DeleteTemplateAsync(SidebarTaskGraphItemViewModel? template)
     {
-        if (SelectedTemplate is null)
-        {
-            return;
-        }
-
-        var template = await _templateStore.LoadAsync(SelectedTemplate.Id).ConfigureAwait(true);
         if (template is null)
         {
             return;
         }
 
-        template.Name = string.IsNullOrWhiteSpace(TemplateDetailName) ? "未命名模板" : TemplateDetailName.Trim();
-        template.Description = TemplateDetailDescription?.Trim() ?? string.Empty;
-        template.BaseKind = TemplateDetailBaseKind;
-        template.DefaultInput = TemplateDetailDefaultInput?.Trim() ?? string.Empty;
+        if (template.IsBuiltIn)
+        {
+            return;
+        }
 
-        await _templateStore.SaveAsync(template).ConfigureAwait(true);
+        try
+        {
+            await _taskGraphStore.DeleteAsync(template.Id).ConfigureAwait(true);
+        }
+        catch (InvalidOperationException)
+        {
+            // Deletion of built-in was rejected.
+        }
+
+        if (SelectedTemplate is not null && SelectedTemplate.Id == template.Id)
+        {
+            SelectTemplate(null!);
+        }
+
+        await RefreshAsync();
+    }
+
+    [RelayCommand]
+    private async Task DuplicateTemplateAsync(SidebarTaskGraphItemViewModel? template)
+    {
+        if (template is null)
+        {
+            return;
+        }
+
+        var source = await _taskGraphStore.LoadTemplateAsync(template.Id).ConfigureAwait(true);
+        if (source is null)
+        {
+            return;
+        }
+
+        // Use JSON roundtrip to deep-clone (same approach as TaskGraphTemplateInstantiator).
+        var cloneOptions = new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNameCaseInsensitive = true,
+            Converters = { new JsonStringEnumConverter() },
+        };
+        var cloneJson = JsonSerializer.Serialize(source, cloneOptions);
+        var clone = JsonSerializer.Deserialize<TaskGraph>(cloneJson, cloneOptions);
+        if (clone is null)
+        {
+            return;
+        }
+
+        clone.Id = Guid.NewGuid().ToString("N");
+        clone.Name = $"{source.Name} 副本";
+        clone.IsBuiltInTemplate = false;
+        await _taskGraphStore.SaveAsync(clone).ConfigureAwait(true);
         await RefreshAsync();
 
-        if (_templatesById.TryGetValue(template.Id, out var vm))
+        if (_templatesById.TryGetValue(clone.Id, out var vm))
         {
             SelectTemplate(vm);
         }
     }
 
-    [RelayCommand]
-    private void GenerateTaskGraphFromSelectedTemplate()
-    {
-        if (SelectedTemplate is null)
-        {
-            return;
-        }
-
-        var input = string.IsNullOrWhiteSpace(TemplateGenerationInput)
-            ? TemplateDetailDefaultInput
-            : TemplateGenerationInput.Trim();
-
-        TemplateGenerateRequested?.Invoke(this, new TaskTemplateGenerationRequest(
-            SelectedTemplate.Id,
-            TemplateDetailName,
-            TemplateDetailBaseKind,
-            input,
-            string.IsNullOrWhiteSpace(TemplateGenerationGraphName) ? null : TemplateGenerationGraphName.Trim()));
-    }
-
     /// <summary>
     /// Initiate inline rename on the selected template row.
-    /// The control's pointer handler toggles IsEditing on the VM,
-    /// and the inline TextBox commits the rename.
     /// </summary>
     [RelayCommand]
-    private void BeginRenameTemplate(TaskTemplateItemViewModel? template)
+    private void BeginRenameTemplate(SidebarTaskGraphItemViewModel? template)
     {
         if (template is null || template.IsBuiltIn)
         {
@@ -361,90 +359,26 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
 
     /// <summary>
     /// Commits an inline rename from the row's TextBox.
-    /// Called by the control when Enter is pressed or focus is lost.
     /// </summary>
     [RelayCommand]
-    private async Task CommitTemplateRenameAsync(TaskTemplateItemViewModel? template)
+    private async Task CommitTemplateRenameAsync(SidebarTaskGraphItemViewModel? template)
     {
         if (template is null || template.IsBuiltIn)
         {
             return;
         }
 
-        var storeTemplate = await _templateStore.LoadAsync(template.Id).ConfigureAwait(true);
-        if (storeTemplate is null)
+        var graph = await _taskGraphStore.LoadTemplateAsync(template.Id).ConfigureAwait(true);
+        if (graph is null)
         {
             return;
         }
 
-        storeTemplate.Name = string.IsNullOrWhiteSpace(template.Name) ? "未命名模板" : template.Name.Trim();
+        graph.Name = string.IsNullOrWhiteSpace(template.Name) ? "未命名模板" : template.Name.Trim();
 
-        await _templateStore.SaveAsync(storeTemplate).ConfigureAwait(true);
+        await _taskGraphStore.SaveAsync(graph).ConfigureAwait(true);
         template.IsEditing = false;
         await RefreshAsync();
-    }
-
-    [RelayCommand]
-    private async Task DeleteTemplateAsync(TaskTemplateItemViewModel? template)
-    {
-        if (template is null)
-        {
-            return;
-        }
-
-        if (template.IsBuiltIn)
-        {
-            // Built-in templates cannot be deleted.
-            return;
-        }
-
-        try
-        {
-            await _templateStore.DeleteAsync(template.Id).ConfigureAwait(true);
-        }
-        catch (InvalidOperationException)
-        {
-            // Deletion of built-in was rejected.
-        }
-
-        if (SelectedTemplate == template)
-        {
-            SelectTemplate(null!);
-        }
-
-        await RefreshAsync();
-    }
-
-    [RelayCommand]
-    private async Task DuplicateTemplateAsync(TaskTemplateItemViewModel? template)
-    {
-        if (template is null)
-        {
-            return;
-        }
-
-        var source = await _templateStore.LoadAsync(template.Id).ConfigureAwait(true);
-        if (source is null)
-        {
-            return;
-        }
-
-        var duplicate = new TaskTemplate
-        {
-            Name = $"{source.Name} 副本",
-            Description = source.Description,
-            BaseKind = source.BaseKind,
-            DefaultInput = source.DefaultInput,
-            IsBuiltIn = false,
-        };
-
-        await _templateStore.SaveAsync(duplicate).ConfigureAwait(true);
-        await RefreshAsync();
-
-        if (_templatesById.TryGetValue(duplicate.Id, out var vm))
-        {
-            SelectTemplate(vm);
-        }
     }
 
     // ================================================================
@@ -510,6 +444,47 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
     }
 
     // ================================================================
+    // Editor loading helpers
+    // ================================================================
+
+    private async Task LoadTemplateIntoEditorAsync(string templateId)
+    {
+        if (_editor is null)
+        {
+            return;
+        }
+
+        await _editor.LoadDocumentByIdAsync(templateId).ConfigureAwait(true);
+    }
+
+    private async Task LoadTaskGraphIntoEditorAsync(string graphId)
+    {
+        if (_editor is null)
+        {
+            return;
+        }
+
+        var graph = await _taskGraphStore.LoadAsync(graphId).ConfigureAwait(true);
+        if (graph is null || graph.DocumentKind != TaskGraphDocumentKind.Runtime)
+        {
+            return;
+        }
+
+        await _editor.LoadDocumentAsync(graph).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Kept as a no-op for backward compatibility with the sidebar control's
+    /// code-behind double-click handler. The graph is already loaded into the
+    /// editor and workspace when selected — no separate "open" step is needed.
+    /// </summary>
+    [RelayCommand]
+    private void OpenSelectedTaskGraphInEditor()
+    {
+        // No-op: the graph is already loaded into the editor when selected.
+    }
+
+    // ================================================================
     // Internals
     // ================================================================
 
@@ -527,7 +502,7 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
         {
             bool wasSelected = SelectedTemplate is not null &&
                 string.Equals(SelectedTemplate.Id, item.Id, StringComparison.Ordinal);
-            var vm = new TaskTemplateItemViewModel(item) { IsSelected = wasSelected };
+            var vm = new SidebarTaskGraphItemViewModel(item) { IsSelected = wasSelected };
             Templates.Add(vm);
             _templatesById[item.Id] = vm;
 
@@ -556,69 +531,4 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
             }
         }
     }
-
-    private void PopulateTemplateDetail(TaskTemplateItemViewModel vm)
-    {
-        // For a richer detail view, load the full template from the store.
-        // But for immediate UI responsiveness, use the lightweight list data first.
-        TemplateDetailName = vm.Name;
-        TemplateDetailDescription = string.Empty;
-        TemplateDetailBaseKind = vm.BaseKind;
-        IsTemplateDetailBuiltIn = vm.IsBuiltIn;
-        TemplateGenerationInput = string.Empty;
-        TemplateGenerationGraphName = string.Empty;
-
-        // Fire-and-forget: load full template details asynchronously.
-        _ = PopulateTemplateDetailAsync(vm.Id);
-    }
-
-    private async Task PopulateTemplateDetailAsync(string templateId)
-    {
-        var template = await _templateStore.LoadAsync(templateId).ConfigureAwait(true);
-        if (template is null || SelectedTemplate is null || !string.Equals(SelectedTemplate.Id, templateId, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        TemplateDetailName = template.Name;
-        TemplateDetailDescription = template.Description;
-        TemplateDetailBaseKind = template.BaseKind;
-        TemplateDetailDefaultInput = template.DefaultInput;
-        IsTemplateDetailBuiltIn = template.IsBuiltIn;
-        TemplateGenerationInput = template.DefaultInput;
-        TemplateGenerationGraphName = string.Empty;
-    }
-
-    private void PopulateTaskGraphSummary(SidebarTaskGraphItemViewModel vm)
-    {
-        SelectedTaskGraphName = vm.Name;
-        SelectedTaskGraphStatusText = vm.ExecutionStateText;
-        SelectedTaskGraphNodeCount = vm.NodeCount;
-        SelectedTaskGraphUpdatedText = vm.UpdatedAtText;
-    }
-
-    public void PrepareTemplateGenerationFromChat(string userInput)
-    {
-        if (SelectedTemplate is null && Templates.Count > 0)
-        {
-            SelectTemplate(Templates[0]);
-        }
-
-        if (!string.IsNullOrWhiteSpace(userInput))
-        {
-            TemplateGenerationInput = userInput.Trim();
-        }
-    }
-
-    public void RequestTemplateFocus()
-    {
-        TemplateFocusRequested?.Invoke(this, EventArgs.Empty);
-    }
 }
-
-public sealed record TaskTemplateGenerationRequest(
-    string TemplateId,
-    string TemplateName,
-    TaskGraphTemplateKind BaseKind,
-    string Input,
-    string? GraphName);

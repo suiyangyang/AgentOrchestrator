@@ -56,4 +56,95 @@ public sealed class OpenCodeJsonSerializerContextTests
         Assert.Equal("q-1", question.Id);
         Assert.Single(question.Options);
     }
+
+    [Fact]
+    public void Deserialize_TodoReadOnlyList_UsesGeneratedMetadata()
+    {
+        const string json =
+            """
+            [
+              {
+                "id": "todo-1",
+                "content": "实现输入区 Todo 条",
+                "status": "in_progress",
+                "priority": "high"
+              }
+            ]
+            """;
+
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var context = new OpenCodeJsonSerializerContext(options);
+
+        var result = JsonSerializer.Deserialize<IReadOnlyList<Todo>>(json, context.Options);
+
+        Assert.NotNull(result);
+        var todo = Assert.Single(result);
+        Assert.Equal("todo-1", todo.Id);
+        Assert.Equal("实现输入区 Todo 条", todo.Content);
+        Assert.Equal("in_progress", todo.Status);
+        Assert.Equal("high", todo.Priority);
+    }
+
+    [Fact]
+    public void Deserialize_TodoWithoutId_AllowsOpenCodeRuntimePayload()
+    {
+        const string json =
+            """
+            [
+              {
+                "content": "实现输入区 Todo 条",
+                "status": "in_progress",
+                "priority": "high"
+              }
+            ]
+            """;
+
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var context = new OpenCodeJsonSerializerContext(options);
+
+        var result = JsonSerializer.Deserialize<IReadOnlyList<Todo>>(json, context.Options);
+
+        Assert.NotNull(result);
+        var todo = Assert.Single(result);
+        Assert.Null(todo.Id);
+        Assert.Equal("实现输入区 Todo 条", todo.Content);
+    }
+
+    [Fact]
+    public void Deserialize_CommandReadOnlyList_AllowsObjectTemplatePayload()
+    {
+        const string json =
+            """
+            [
+              {
+                "name": "revert",
+                "description": "Revert the session",
+                "agent": "codex",
+                "model": "gpt-5",
+                "template": {
+                  "type": "form",
+                  "fields": [
+                    {
+                      "name": "message"
+                    }
+                  ]
+                },
+                "subtask": false,
+                "builtIn": true
+              }
+            ]
+            """;
+
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var context = new OpenCodeJsonSerializerContext(options);
+
+        var result = JsonSerializer.Deserialize<IReadOnlyList<Command>>(json, context.Options);
+
+        Assert.NotNull(result);
+        var command = Assert.Single(result);
+        Assert.Equal("revert", command.Name);
+        Assert.True(command.Template.HasValue);
+        Assert.Equal(JsonValueKind.Object, command.Template.Value.ValueKind);
+        Assert.True(command.BuiltIn);
+    }
 }

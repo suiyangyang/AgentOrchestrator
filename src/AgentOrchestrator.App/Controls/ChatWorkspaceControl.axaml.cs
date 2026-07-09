@@ -48,6 +48,32 @@ public partial class ChatWorkspaceControl : UserControl
     {
         if (DataContext is not ViewModels.ChatWorkspaceViewModel viewModel) return;
 
+        if (viewModel.IsCommandPopupOpen)
+        {
+            switch (e.Key)
+            {
+                case Key.Down:
+                    viewModel.MoveCommandSuggestionSelection(1);
+                    e.Handled = true;
+                    return;
+                case Key.Up:
+                    viewModel.MoveCommandSuggestionSelection(-1);
+                    e.Handled = true;
+                    return;
+                case Key.Tab:
+                    if (viewModel.TryApplySelectedCommandSuggestion())
+                    {
+                        e.Handled = true;
+                        return;
+                    }
+                    break;
+                case Key.Escape:
+                    viewModel.CloseCommandPopup();
+                    e.Handled = true;
+                    return;
+            }
+        }
+
         if (e.Key != Key.Enter) return;
 
         if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
@@ -372,6 +398,32 @@ public partial class ChatWorkspaceControl : UserControl
         catch
         {
             return null;
+        }
+    }
+
+    private async Task UpdateCommandPopupAsync()
+    {
+        if (DataContext is not ViewModels.ChatWorkspaceViewModel viewModel)
+        {
+            return;
+        }
+
+        await viewModel.UpdateCommandSuggestionsAsync().ConfigureAwait(true);
+    }
+
+    private async void OnDraftTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        await UpdateCommandPopupAsync().ConfigureAwait(true);
+    }
+
+    private void OnCommandSuggestionClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { CommandParameter: ViewModels.CommandSuggestionViewModel suggestion }
+            && DataContext is ViewModels.ChatWorkspaceViewModel viewModel)
+        {
+            viewModel.ApplyCommandSuggestion(suggestion);
+            DraftTextBox.Focus();
+            DraftTextBox.CaretIndex = (DraftTextBox.Text ?? string.Empty).Length;
         }
     }
 }

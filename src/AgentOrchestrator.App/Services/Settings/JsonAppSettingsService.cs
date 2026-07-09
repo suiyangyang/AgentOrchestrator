@@ -10,8 +10,9 @@ public sealed class JsonAppSettingsService : IAppSettingsService
     private const string EmbeddedResourceName = "AgentOrchestrator.App.appsettings.json";
     private const string LocalFileName = "appsettings.local.json";
     private const string AppFolderName = "AgentOrchestrator";
-    private const string LegacyUiFontFamily = "Source Han Sans";
-    private const string DefaultUiFontFamily = "Segoe UI, Microsoft YaHei UI, Microsoft YaHei";
+    private const string LegacyUiFontFamily = "Segoe UI";
+    private const string PreviousDefaultUiFontFamily = "Segoe UI";
+    private const string DefaultUiFontFamily = "Segoe UI";
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
@@ -69,7 +70,8 @@ public sealed class JsonAppSettingsService : IAppSettingsService
 
     private static AppSettings Normalize(AppSettings settings)
     {
-        if (string.Equals(settings.UiFontFamily, LegacyUiFontFamily, StringComparison.Ordinal))
+        if (string.Equals(settings.UiFontFamily, LegacyUiFontFamily, StringComparison.Ordinal) ||
+            string.Equals(settings.UiFontFamily, PreviousDefaultUiFontFamily, StringComparison.Ordinal))
         {
             settings.UiFontFamily = DefaultUiFontFamily;
         }

@@ -137,6 +137,7 @@
                             <Button Grid.Column="10"
                                     Classes="task-toolbar-btn task-toolbar-btn-primary"
                                     Command="{Binding UseCurrentInChatCommand}"
+                                    IsVisible="{Binding IsRuntimeDocument}"
                                     ToolTip.Tip="在 Chat 中调用">
                                 <Path Classes="toolbar-icon-path toolbar-icon-chat" />
                             </Button>

@@ -22,6 +22,9 @@ public sealed class NotImplementedAgentGateway : IAgentGateway
     public event EventHandler<AgentErrorEventArgs>? AgentErrorOccurred;
 
     /// <inheritdoc />
+    public event EventHandler<AgentTodosUpdatedEventArgs>? TodosUpdated;
+
+    /// <inheritdoc />
     public void ReportAgentError(string operation, Exception ex)
     {
         // No-op: this gateway never performs real I/O, so connectivity
@@ -70,6 +73,36 @@ public sealed class NotImplementedAgentGateway : IAgentGateway
         string agentSessionId,
         string requestId,
         IReadOnlyList<IReadOnlyList<string>> answers,
+        CancellationToken ct = default)
+        => throw new NotImplementedException();
+
+    public Task<IReadOnlyList<AgentTodoSnapshot>> GetTodosAsync(
+        string agentSessionId,
+        CancellationToken ct = default)
+        => throw new NotImplementedException();
+
+    public Task<IReadOnlyList<AgentCommandDefinition>> ListCommandsAsync(
+        string workingDirectory,
+        CancellationToken ct = default)
+        => throw new NotImplementedException();
+
+    public Task<AgentCommandExecutionResult> ExecuteCommandAsync(
+        string agentSessionId,
+        string commandName,
+        string arguments,
+        CancellationToken ct = default)
+        => throw new NotImplementedException();
+
+    public Task<AgentSessionSnapshot> ForkSessionAsync(
+        string agentSessionId,
+        string messageId,
+        CancellationToken ct = default)
+        => throw new NotImplementedException();
+
+    public Task<AgentSessionSnapshot> RevertSessionAsync(
+        string agentSessionId,
+        string messageId,
+        string? partId = null,
         CancellationToken ct = default)
         => throw new NotImplementedException();
 

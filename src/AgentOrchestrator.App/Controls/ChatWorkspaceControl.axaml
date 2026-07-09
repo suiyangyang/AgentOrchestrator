@@ -12,8 +12,11 @@
                  <ItemsControl ItemsSource="{Binding Messages}" Margin="38,18,38,16">
                  <ItemsControl.ItemTemplate>
                      <DataTemplate DataType="vm:ChatMessageViewModel">
-                         <Grid Margin="0,0,0,14">
-                             <StackPanel Spacing="10" MaxWidth="900">
+                         <Grid Margin="0,0,0,14"
+                               Background="Transparent"
+                               x:Name="MessageHost">
+                             <StackPanel Spacing="10"
+                                         MaxWidth="{DynamicResource Chat.Content.MaxWidth}">
                                  <Border Classes="user-bubble"
                                          IsVisible="{Binding IsUser}"
                                          HorizontalAlignment="Right">
@@ -88,6 +91,41 @@
                                          </ItemsControl.ItemTemplate>
                                      </ItemsControl>
                                  </StackPanel>
+                                 <Border Classes="message-action-bar"
+                                         HorizontalAlignment="Right"
+                                         IsVisible="{Binding IsUser}">
+                                 <StackPanel Orientation="Horizontal" Spacing="6">
+                                     <Button Classes="message-action-button"
+                                             Command="{Binding #Root.DataContext.CopyMessageCommand}"
+                                             CommandParameter="{Binding}">
+                                         <Path Classes="message-action-icon message-copy-icon" />
+                                     </Button>
+                                     <Button Classes="message-action-button"
+                                             Command="{Binding #Root.DataContext.RevertMessageCommand}"
+                                             CommandParameter="{Binding}">
+                                         <Path Classes="message-action-icon message-revert-icon" />
+                                     </Button>
+                                 </StackPanel>
+                                 </Border>
+                                 <Border Classes="message-action-bar"
+                                         HorizontalAlignment="Left"
+                                         IsVisible="{Binding IsAssistant}">
+                                     <StackPanel Orientation="Horizontal" Spacing="6">
+                                         <Button Classes="message-action-button"
+                                                 Command="{Binding #Root.DataContext.CopyMessageCommand}"
+                                                 CommandParameter="{Binding}">
+                                             <Path Classes="message-action-icon message-copy-icon" />
+                                         </Button>
+                                         <Button Classes="message-action-button"
+                                                 Command="{Binding #Root.DataContext.ForkMessageCommand}"
+                                                 CommandParameter="{Binding}">
+                                             <Grid Width="13" Height="13">
+                                                 <Path Classes="message-action-icon message-fork-main-icon" />
+                                                 <Path Classes="message-action-icon message-fork-branch-icon" />
+                                             </Grid>
+                                         </Button>
+                                     </StackPanel>
+                                 </Border>
                              </StackPanel>
                          </Grid>
                      </DataTemplate>
@@ -141,12 +179,57 @@
              </Panel>
          </Border>
 
-         <Border Grid.Row="2"
-                Classes="composer-shell"
-                HorizontalAlignment="Stretch"
-                MaxWidth="900"
-                Margin="38,0,38,22">
-            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+         <Grid Grid.Row="2"
+               HorizontalAlignment="Stretch"
+               MaxWidth="900"
+               Margin="20,0,20,10"
+               RowDefinitions="Auto,Auto">
+            <Border Grid.Row="0"
+                    Classes="todo-strip-shell"
+                    IsVisible="{Binding HasTodos}">
+                <StackPanel Classes="todo-strip-content" Spacing="8">
+                    <Button Classes="todo-strip-toggle"
+                            Command="{Binding ToggleTodoListCommand}">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                            <TextBlock Text="Todos"
+                                       Classes="todo-strip-title"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding TodoSummaryText}"
+                                       Classes="todo-strip-summary"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                            <Path Grid.Column="2"
+                                  Classes="todo-strip-caret"
+                                  Classes.todo-strip-caret-expanded="{Binding IsTodoListExpanded}" />
+                        </Grid>
+                    </Button>
+
+                    <ItemsControl ItemsSource="{Binding Todos}"
+                                  Classes="todo-strip-list"
+                                  IsVisible="{Binding IsTodoListExpanded}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:TodoItemViewModel">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                    <Border Classes="todo-status-dot"
+                                            Classes.todo-status-dot-active="{Binding IsInProgress}"
+                                            Classes.todo-status-dot-done="{Binding IsCompleted}" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding Content}"
+                                               Classes="todo-strip-item-text"
+                                               TextWrapping="Wrap"
+                                               VerticalAlignment="Top" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="1"
+                    Classes="composer-shell"
+                    HorizontalAlignment="Stretch">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto">
                 <ItemsControl Grid.Row="0"
                               ItemsSource="{Binding QueuedDrafts}"
                               IsVisible="{Binding HasQueuedDrafts}"
@@ -230,19 +313,51 @@
 
                 <Grid Grid.Row="2">
                     <TextBox Text="{Binding DraftText, Mode=TwoWay}"
+                              x:Name="DraftTextBox"
                               AcceptsReturn="False"
                               TextWrapping="Wrap"
                               BorderThickness="0"
                               Background="Transparent"
-                              MinHeight="64"
+                              MinHeight="52"
                               PlaceholderText="要求后续变更"
                                FontSize="{DynamicResource UiFontSize}"
                                FontFamily="{DynamicResource UiFontFamily}"
                               KeyDown="OnDraftKeyDown"
+                              TextChanged="OnDraftTextChanged"
                               PastingFromClipboard="OnDraftPasting" />
+
+                    <Popup x:Name="CommandPopup"
+                           Placement="Top"
+                           PlacementTarget="{Binding #DraftTextBox}"
+                           HorizontalOffset="0"
+                           VerticalOffset="-8"
+                           IsOpen="{Binding IsCommandPopupOpen}">
+                        <Border Classes="popup-shell command-popup-shell">
+                            <ItemsControl ItemsSource="{Binding CommandSuggestions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vm:CommandSuggestionViewModel">
+                                        <Button Classes="command-suggestion-item"
+                                                Click="OnCommandSuggestionClick"
+                                                CommandParameter="{Binding}">
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                                <TextBlock Text="{Binding Name}"
+                                                           Classes="command-suggestion-name"
+                                                           VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding Description}"
+                                                           Classes="command-suggestion-description"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </Popup>
                 </Grid>
 
-                <Grid Grid.Row="3" ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto" VerticalAlignment="Center" Margin="0,12,0,0">
+                <Grid Grid.Row="3" ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto" VerticalAlignment="Center" Margin="0,6,0,0">
                     <Button Grid.Column="0" Classes="toolbar-icon-button" Command="{Binding AddAttachmentCommand}">
                         <TextBlock Text="+" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="20" />
                     </Button>
@@ -375,6 +490,7 @@
                 </Grid>
 
             </Grid>
-        </Border>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

@@ -102,7 +102,7 @@
 
     <Style Selector="Button.title-bar-service-btn">
         <Setter Property="Margin" Value="0" />
-        <Setter Property="FontFamily" Value="Inter, Segoe UI, Microsoft YaHei UI" />
+        <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}" />
     </Style>
 
     <Style Selector="Path.title-bar-service-icon">

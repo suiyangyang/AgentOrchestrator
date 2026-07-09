@@ -16,7 +16,9 @@ public static class TaskGraphTemplateBuilder
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .ToList();
 
-    public static TaskGraphModel BuildTaskListGraph(string rawText)
+    public static TaskGraphModel BuildTaskListGraph(
+        string rawText,
+        TaskGraphDocumentKind documentKind = TaskGraphDocumentKind.Runtime)
     {
         var lines = ParseInputLines(rawText);
         if (lines.Count == 0)
@@ -24,7 +26,14 @@ public static class TaskGraphTemplateBuilder
             throw new TaskGraphValidationException("请先输入任务列表内容。");
         }
 
-        var graph = CreateBaseGraph("长任务列表", TaskGraphTemplateKind.TaskList, TaskGraphMode.Direct, rawText, null);
+        var graph = CreateBaseGraph(
+            "长任务列表",
+            TaskGraphTemplateKind.TaskList,
+            TaskGraphMode.Direct,
+            rawText,
+            null,
+            documentKind);
+
         TaskNode? previous = null;
         for (var index = 0; index < lines.Count; index++)
         {
@@ -40,8 +49,36 @@ public static class TaskGraphTemplateBuilder
                 node.DependsOn.Add(previous.Id);
             }
 
+            if (documentKind == TaskGraphDocumentKind.Template)
+            {
+                node.IsTemplateLocked = true;
+            }
+
             graph.Nodes.Add(node);
             previous = node;
+        }
+
+        // ── Template-population for TaskList ──
+        if (documentKind == TaskGraphDocumentKind.Template && graph.Nodes.Count > 0)
+        {
+            graph.TemplateNotes = "适合 1-20 个长链任务，按顺序逐项执行。";
+            graph.TemplatePlannerPrompt = "Plan the execution steps in order.";
+            graph.TemplateMetadata = new TaskGraphTemplateMetadata
+            {
+                AllowDynamicExpansion = true,
+                FixedNodeIds = [graph.Nodes[0].Id],
+                DynamicZones =
+                [
+                    new DynamicZoneDefinition
+                    {
+                        Name = "任务执行区",
+                        AnchorNodeId = graph.Nodes[0].Id,
+                        InsertAfterNodeId = graph.Nodes[0].Id,
+                        MaxGeneratedNodeCount = 20,
+                        GenerationInstruction = "为每一行任务生成一个串行 Execute 节点，自动连接到上一节点",
+                    },
+                ],
+            };
         }
 
         TaskGraphFactory.ApplyLayeredPositions(graph);
@@ -49,14 +86,22 @@ public static class TaskGraphTemplateBuilder
         return graph;
     }
 
-    public static TaskGraphModel BuildFeatureDevelopmentGraph(string userRequirement)
+    public static TaskGraphModel BuildFeatureDevelopmentGraph(
+        string userRequirement,
+        TaskGraphDocumentKind documentKind = TaskGraphDocumentKind.Runtime)
     {
         if (string.IsNullOrWhiteSpace(userRequirement))
         {
             throw new TaskGraphValidationException("请先输入功能需求。");
         }
 
-        var graph = CreateBaseGraph("复杂功能开发", TaskGraphTemplateKind.FeatureDevelopment, TaskGraphMode.Intent, userRequirement.Trim(), null);
+        var graph = CreateBaseGraph(
+            "复杂功能开发",
+            TaskGraphTemplateKind.FeatureDevelopment,
+            TaskGraphMode.Intent,
+            userRequirement.Trim(),
+            null,
+            documentKind);
 
         var inputNode = CreateNode(
             "feature_requirement",
@@ -100,6 +145,46 @@ public static class TaskGraphTemplateBuilder
         executeGateNode.DependsOn.Add(planNode.Id);
         executeGateNode.Tags.Add("DynamicPlanTerminal");
 
+        // ── Template-population for FeatureDevelopment ──
+        if (documentKind == TaskGraphDocumentKind.Template)
+        {
+            inputNode.IsTemplateLocked = true;
+            solutionNode.IsTemplateLocked = true;
+            confirmNode.IsTemplateLocked = true;
+            planNode.IsTemplateLocked = true;
+            executeGateNode.IsTemplateLocked = true;
+            // plan and gate are fixed anchor/terminal, not the dynamic part.
+            planNode.IsDynamicPlaceholder = false;
+            executeGateNode.IsDynamicPlaceholder = false;
+
+            graph.TemplateNotes = "先生成方案，等待确认，再动态注入开发计划并执行。适合复杂功能的分阶段开发。";
+            graph.TemplatePlannerPrompt = "Plan the feature development phases: requirement, solution, confirmation, plan, execute, verify.";
+            graph.TemplateMetadata = new TaskGraphTemplateMetadata
+            {
+                AllowDynamicExpansion = true,
+                FixedNodeIds =
+                [
+                    inputNode.Id,
+                    solutionNode.Id,
+                    confirmNode.Id,
+                    planNode.Id,
+                    executeGateNode.Id,
+                ],
+                DynamicZones =
+                [
+                    new DynamicZoneDefinition
+                    {
+                        Name = "开发执行区",
+                        AnchorNodeId = planNode.Id,
+                        InsertAfterNodeId = planNode.Id,
+                        ConnectToTerminalNodeId = executeGateNode.Id,
+                        MaxGeneratedNodeCount = 12,
+                        GenerationInstruction = "在 plan 之后、gate 之前插入开发执行节点，每节点类型默认 Execute 或 Verify",
+                    },
+                ],
+            };
+        }
+
         graph.Nodes.Add(inputNode);
         graph.Nodes.Add(solutionNode);
         graph.Nodes.Add(confirmNode);
@@ -110,7 +195,9 @@ public static class TaskGraphTemplateBuilder
         return graph;
     }
 
-    public static TaskGraphModel BuildBugListGraph(string rawText)
+    public static TaskGraphModel BuildBugListGraph(
+        string rawText,
+        TaskGraphDocumentKind documentKind = TaskGraphDocumentKind.Runtime)
     {
         var bugs = ParseInputLines(rawText);
         if (bugs.Count == 0)
@@ -118,7 +205,14 @@ public static class TaskGraphTemplateBuilder
             throw new TaskGraphValidationException("请先输入 bug 列表，每行一个问题。");
         }
 
-        var graph = CreateBaseGraph("Bug 列表处理", TaskGraphTemplateKind.BugList, TaskGraphMode.Direct, rawText, null);
+        var graph = CreateBaseGraph(
+            "Bug 列表处理",
+            TaskGraphTemplateKind.BugList,
+            TaskGraphMode.Direct,
+            rawText,
+            null,
+            documentKind);
+
         var reportNode = CreateNode(
             "bug_report",
             "生成 Bug 分析报告",
@@ -198,6 +292,32 @@ public static class TaskGraphTemplateBuilder
         foreach (var nodeId in allNodeIds)
         {
             reportNode.DependsOn.Add(nodeId);
+        }
+
+        // ── Template-population for BugList ──
+        if (documentKind == TaskGraphDocumentKind.Template)
+        {
+            reportNode.IsTemplateLocked = true;
+            reportNode.IsDynamicPlaceholder = false;
+
+            graph.TemplateNotes = "逐个分析 bug，自动区分可修复项与待补充项，最后输出报告。";
+            graph.TemplatePlannerPrompt = "For each bug, analyze, decide, fix/review or mark unresolved, then summarize.";
+            graph.TemplateMetadata = new TaskGraphTemplateMetadata
+            {
+                AllowDynamicExpansion = true,
+                FixedNodeIds = [reportNode.Id],
+                DynamicZones =
+                [
+                    new DynamicZoneDefinition
+                    {
+                        Name = "Bug 处理区",
+                        AnchorNodeId = reportNode.Id,
+                        ConnectToTerminalNodeId = reportNode.Id,
+                        MaxGeneratedNodeCount = 30,
+                        GenerationInstruction = "为每个 bug 生成一个 [read → analyze → decision → (fix → review | unresolved)] 子链，所有子链都连回 bug_report",
+                    },
+                ],
+            };
         }
 
         graph.Nodes.Add(reportNode);
@@ -283,20 +403,31 @@ public static class TaskGraphTemplateBuilder
     /// based on <paramref name="kind"/>. For unsupported kinds, returns a
     /// minimal 2-node linear graph suitable for v3 first-version testing.
     /// </summary>
-    public static TaskGraphModel Build(TaskGraphTemplateKind kind, string rawInput = "")
+    public static TaskGraphModel Build(
+        TaskGraphTemplateKind kind,
+        string rawInput = "",
+        TaskGraphDocumentKind documentKind = TaskGraphDocumentKind.Runtime)
     {
         return kind switch
         {
-            TaskGraphTemplateKind.TaskList => BuildTaskListGraph(rawInput),
-            TaskGraphTemplateKind.FeatureDevelopment => BuildFeatureDevelopmentGraph(rawInput),
-            TaskGraphTemplateKind.BugList => BuildBugListGraph(rawInput),
-            _ => BuildMinimalStub(rawInput),
+            TaskGraphTemplateKind.TaskList => BuildTaskListGraph(rawInput, documentKind),
+            TaskGraphTemplateKind.FeatureDevelopment => BuildFeatureDevelopmentGraph(rawInput, documentKind),
+            TaskGraphTemplateKind.BugList => BuildBugListGraph(rawInput, documentKind),
+            _ => BuildMinimalStub(rawInput, documentKind),
         };
     }
 
-    private static TaskGraphModel BuildMinimalStub(string rawInput)
+    private static TaskGraphModel BuildMinimalStub(
+        string rawInput,
+        TaskGraphDocumentKind documentKind = TaskGraphDocumentKind.Runtime)
     {
-        var graph = new TaskGraphModel { Name = "最小模板图" };
+        var graph = new TaskGraphModel
+        {
+            Name = "最小模板图",
+            DocumentKind = documentKind,
+            IsBuiltInTemplate = false,
+        };
+
         var node1 = new TaskNode
         {
             Id = "stub_parse",
@@ -314,6 +445,20 @@ public static class TaskGraphTemplateBuilder
             Prompt = $"基于以下输入执行：\n{rawInput}",
         };
         node2.DependsOn.Add(node1.Id);
+
+        if (documentKind == TaskGraphDocumentKind.Template)
+        {
+            node1.IsTemplateLocked = true;
+            node2.IsTemplateLocked = true;
+            graph.TemplateNotes = "最小模板图（回退）。";
+            graph.TemplatePlannerPrompt = "Execute the task based on the input.";
+            graph.TemplateMetadata = new TaskGraphTemplateMetadata
+            {
+                AllowDynamicExpansion = false,
+                FixedNodeIds = [node1.Id, node2.Id],
+            };
+        }
+
         graph.Nodes.Add(node1);
         graph.Nodes.Add(node2);
         graph.RebuildEdges();
@@ -325,7 +470,8 @@ public static class TaskGraphTemplateBuilder
         TaskGraphTemplateKind templateKind,
         TaskGraphMode mode,
         string? sourceContent,
-        string? sourceFilePath)
+        string? sourceFilePath,
+        TaskGraphDocumentKind documentKind)
         => new()
         {
             Name = name,
@@ -336,6 +482,8 @@ public static class TaskGraphTemplateBuilder
             ExecutionState = TaskGraphExecutionState.Draft,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
+            DocumentKind = documentKind,
+            IsBuiltInTemplate = documentKind == TaskGraphDocumentKind.Template,
         };
 
     private static TaskNode CreateNode(
@@ -367,13 +515,13 @@ public static class TaskGraphTemplateBuilder
 
     private static string BuildExecutePrompt(string title, string extraInstruction)
         => $"""
-            你正在执行 TaskGraph 模板节点。
+             你正在执行 TaskGraph 模板节点。
 
-            节点标题: {title}
+             节点标题: {title}
 
-            请完成当前节点，并输出清晰结论。
-            {extraInstruction}
-            """;
+             请完成当前节点，并输出清晰结论。
+             {extraInstruction}
+             """;
 
     private static string BuildFeaturePlanPrompt()
     {
@@ -402,47 +550,47 @@ public static class TaskGraphTemplateBuilder
 
     private static string BuildBugDecisionPrompt(string bugLabel)
         => $$"""
-            你正在判断一个 bug 是否具备继续修复的信息。
+             你正在判断一个 bug 是否具备继续修复的信息。
 
-            Bug 描述: {{bugLabel}}
+             Bug 描述: {{bugLabel}}
 
-            请仅输出一个 JSON 对象，不要输出 markdown code fence，不要补充解释。
-            JSON schema:
-            {
-              "decision": "EnoughInfo" | "NeedMoreInfo",
-              "reason": "简洁说明判断原因",
-              "missingInfo": ["缺失信息 1", "缺失信息 2"]
-            }
+             请仅输出一个 JSON 对象，不要输出 markdown code fence，不要补充解释。
+             JSON schema:
+             {
+               "decision": "EnoughInfo" | "NeedMoreInfo",
+               "reason": "简洁说明判断原因",
+               "missingInfo": ["缺失信息 1", "缺失信息 2"]
+             }
 
-            规则:
-            - 如果信息充分，decision 必须为 EnoughInfo，missingInfo 输出空数组。
-            - 如果需要用户补充，decision 必须为 NeedMoreInfo，并把缺失信息拆到 missingInfo 中。
-            """;
+             规则:
+             - 如果信息充分，decision 必须为 EnoughInfo，missingInfo 输出空数组。
+             - 如果需要用户补充，decision 必须为 NeedMoreInfo，并把缺失信息拆到 missingInfo 中。
+             """;
 
     private static string BuildBugReviewPrompt(string bugLabel)
         => $$"""
-            你正在对 bug 修复结果进行自检。
+             你正在对 bug 修复结果进行自检。
 
-            Bug 描述: {{bugLabel}}
+             Bug 描述: {{bugLabel}}
 
-            请仅输出一个 JSON 对象，不要输出 markdown code fence，不要补充解释。
-            JSON schema:
-            {
-              "resolved": true,
-              "reliability": 8,
-              "reason": "说明为什么给这个可靠性评分",
-              "verification": "建议的验证方案"
-            }
+             请仅输出一个 JSON 对象，不要输出 markdown code fence，不要补充解释。
+             JSON schema:
+             {
+               "resolved": true,
+               "reliability": 8,
+               "reason": "说明为什么给这个可靠性评分",
+               "verification": "建议的验证方案"
+             }
 
-            规则:
-            - reliability 取值 1-10。
-            - resolved 为 false 时，也要说明原因与验证建议。
-            """;
+             规则:
+             - reliability 取值 1-10。
+             - resolved 为 false 时，也要说明原因与验证建议。
+             """;
 
     private static string BuildBugReportPrompt()
         => """
-            请汇总全部 bug 的处理结果。
-            上游节点已经提供了结构化结论，请输出简洁的 Markdown 表格，列必须包含：
-            问题描述 | 已解决 | 可靠性 | 原因 | 验证方案
-            """;
+             请汇总全部 bug 的处理结果。
+             上游节点已经提供了结构化结论，请输出简洁的 Markdown 表格，列必须包含：
+             问题描述 | 已解决 | 可靠性 | 原因 | 验证方案
+             """;
 }

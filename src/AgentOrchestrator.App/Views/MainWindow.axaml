@@ -296,7 +296,7 @@
 
         <Grid Grid.RowSpan="3"
               Background="#26000000"
-              IsVisible="{Binding Chat.HasPendingQuestion}"
+              IsVisible="{Binding Chat.IsPendingQuestionOpen}"
               ZIndex="101"
               PointerPressed="OnQuestionBannerPointerPressed">
             <Border Classes="question-banner-card"
@@ -381,5 +381,16 @@
                 </Grid>
             </Border>
         </Grid>
+
+        <Border Classes="toast-shell"
+                IsVisible="{Binding IsToastVisible}"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Margin="0,0,0,28"
+                ZIndex="120">
+            <TextBlock Text="{Binding ToastMessage}"
+                       Classes="toast-text"
+                       TextWrapping="Wrap" />
+        </Border>
     </Grid>
 </Window>

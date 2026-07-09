@@ -56,6 +56,10 @@
 - Assistant messages show a left-side loading placeholder immediately
   after send; the placeholder is replaced by normal blocks when the first
   streamed block arrives
+- 聊天消息项底部现在预留一条 hover 操作带：默认透明但始终占位，
+  当鼠标移入消息本体或底部预留区域时显示操作按钮。当前包含
+  `复制` 与 `分叉` 两个按钮，用户消息与助手消息都可复制，分叉按钮
+  调用 OpenCode `POST /session/:id/fork` 基于目标消息创建新会话
 - Thinking / Tool / Task blocks keep the spinner on the leading icon slot
   while running, then fall back to the static header once completed
 - ChatWorkspaceControl only auto-scrolls when the viewport is already near
@@ -68,6 +72,14 @@
 - While a response is streaming, additional composer submissions are
   added to a visible queue above the input and are sent automatically in
   order after the current response finishes
+- Composer 输入框上方新增 Todo 条带：默认仅显示当前进行中的一条摘要，
+  形如 `1/3 进行中 xxx`；鼠标悬停时自动展开当前会话全部 Todos。
+  数据来自 OpenCode `GET /session/:id/todo` 与 SSE `todo.updated`，
+  `ChatWorkspaceViewModel` 按会话缓存 Todo 列表并在切换会话时保留状态
+- Composer 文本框支持 slash command 补全：当输入以 `/` 开头时，
+  `ChatWorkspaceViewModel` 会从 OpenCode `GET /command` 拉取当前目录下
+  可用命令，按前缀过滤后在输入框上方 popup 中展示；支持键盘上下选择、
+  `Tab` 采纳、`Esc` 关闭
 - Streamed chat blocks are created as soon as the first block header is
   detected, then their text/tool body is updated in place as later stream
   chunks arrive
@@ -78,8 +90,8 @@
 - `tool.state` 若出现未知枚举值，`OpenCode.Client` 需要保底反序列化，
   `OpenCodeAgentGateway` 再按普通 Tool 运行态渲染，避免 SSE 流因单个工具状态退出
 - 结构化 question 交互走单独的数据流：`OpenCode.Client` 负责读取会话挂起问题列表并提交
-  `answers[][]`，`ChatWorkspaceViewModel` 维护当前挂起问题状态，`MainWindow` 在标题栏下方渲染
-  顶部确认面板，而不是把它塞进消息流或权限菜单
+  `answers[][]`，`ChatWorkspaceViewModel` 维护当前挂起问题状态与展开态，`MainWindow` 在标题栏下方渲染
+  顶部确认面板，而不是把它塞进消息流或权限菜单；切换会话时仅保留消息内恢复入口，不自动展开面板
 - `TaskGraphWorkspaceControl` is the TaskGraph orchestration workspace.
   It contains:
   - a saved-plan list backed by JSON files under the local app data directory
@@ -167,14 +179,47 @@ View ── ViewModel ── IAgentGateway / ISidebarRepository
 - `ITaskGraphStore` is a JSON-backed local store for TaskGraph plans;
   it persists the graph structure, execution state, node session ids,
   summaries, and recovery metadata under `%LOCALAPPDATA%/AgentOrchestrator/Datas/TaskGraphs`
-- `ITaskTemplateStore` is a JSON-backed local store for `TaskTemplate`
-  generation assets under `%LOCALAPPDATA%/AgentOrchestrator/Templates`;
-  it seeds the three built-in templates on first init and rejects
-  deletion of built-ins
+- `ITaskTemplateStore` no longer exists — templates and runtime graphs
+  share `ITaskGraphStore` and are distinguished by `TaskGraph.DocumentKind`
+  (Runtime vs Template). All `TaskGraph` JSON files live under
+  `%LOCALAPPDATA%/AgentOrchestrator/Datas/TaskGraphs/` with prefixed file
+  names: `template.{id}.json` for templates and `runtime.{id}.json` for
+  runtime graphs (legacy unprefixed `{id}.json` files remain readable
+  for backward compat)
+- `ITaskGraphTemplateInstantiator` (`TaskGraphTemplateInstantiator` impl)
+  is the transformation service that turns a `TaskGraph` template into a
+  fresh runtime graph: deep-clone via JSON roundtrip, give every node a
+  fresh id and rewrite `DependsOn` references, sync the metadata
+  references (`FixedNodeIds`, `AnchorNodeId`, `InsertAfterNodeId`,
+  `ConnectToTerminalNodeId`) to the new ids, clear every runtime state
+  field on graph and nodes, then perform controlled dynamic-zone
+  expansion per the template's `TaskGraphTemplateMetadata.DynamicZones`
+  (parse the user input as lines, generate up to `MaxGeneratedNodeCount`
+  `Execute` nodes, chain them in series, wire the first to the splice
+  anchor and the last to the terminal node, respect `FixedNodeIds`)
+- `BuiltInTemplateSeeder` seeds the 4 built-in templates on first init
+  (3 user-facing: `builtin.task-list` / `builtin.feature-dev` /
+  `builtin.bug-list`, plus 1 hidden: `builtin.auto-orchestration` used
+  by Chat's "自动编排" mode). Seeding is idempotent — built-in ids are
+  stable and the seeder skips any id that already exists
+- `TaskTemplateMigrationService` is a one-time, fire-and-forget legacy
+  data migrator. It scans the legacy `%LOCALAPPDATA%/AgentOrchestrator/Templates/`
+  directory for old pre-refactor template JSON files, reads them directly
+  via `JsonDocument` (the old `TaskTemplate` model class no longer
+  exists), converts each to a `TaskGraph` template document, saves it to
+  the new store, and moves the source file to `Templates/_migrated/`.
+  Safe to run multiple times; no-op once all data is migrated
 - `OpenCodeAgentGateway` wraps `OpenCodeClient`, translates Part/Message/
   ToolState into the chat-block vocabulary, routes SSE events into
-  streaming `ChatStreamChunk` envelopes, and queries child sessions plus
-  session status for subagent activity snapshots
+  streaming `ChatStreamChunk` envelopes, forwards `todo.updated` into
+  agent-agnostic Todo snapshots, queries child sessions plus session
+  status for subagent activity snapshots, and additionally exposes
+  command list / command execution / session fork / session revert
+  through `IAgentGateway`
+- slash command 当前分两类执行路径：
+  - 普通命令：调用 `POST /session/:id/command`，执行后整段重新拉取当前会话消息
+  - `/revert`：在当前实现中回退最近一条助手消息，调用
+    `POST /session/:id/revert` 后刷新当前消息列表
 - `TaskGraphExecutor` runs graph nodes against `IAgentGateway` with one
   agent session per node, persists state after each node transition,
   reconciles interrupted `Running` nodes back to `Failed` on reload,
@@ -228,7 +273,10 @@ the executor is the execution plane. Both surfaces communicate through
   switches to `ChatWorkspaceViewModel`, which calls
   `StartExistingTaskGraphAsync(...)` so the same persisted graph entity
   executes under Chat's checkpoint/status surface instead of a separate
-  TaskGraph-page run button set.
+  TaskGraph-page run button set. This is the "in-graph" path: the
+  template selection in the chat's "使用模板" mode is a separate
+  "out-of-graph" path that goes through the orchestration workspace
+  (see "Task Orchestration Independent Workspace" above)
 - **Execution plane** — `TaskGraphExecutor` implements both
   `ITaskGraphExecutor` (existing entry points, unchanged signatures)
   and `ITaskGraphExecutionController` (new `StartAsync` / `ResumeAsync`
@@ -275,9 +323,14 @@ the executor is the execution plane. Both surfaces communicate through
   decision counts, pause/cancel/continue/summarize/detach buttons)
   when `HasActiveGraph` is true. 编排模式当前为 `普通对话 / 自动编排 / 使用模板`；
   选择模式本身不会立即执行，真正执行发生在点击主发送按钮时；选择
-  `使用模板` 时，shell 会切到独立任务编排工作区，并把当前输入灌入模板的
-  “本次生成输入” 区域。All bindings
-  use compiled bindings with `x:DataType`.
+  `自动编排` 时，Chat 加载内置的 `builtin.auto-orchestration` 模板并通过
+  `ITaskGraphTemplateInstantiator` 主链路实例化运行图（带 `BasedOnTemplateId`
+  回写）后启动 chat 内执行；选择 `使用模板` 时，Chat 触发
+  `TemplateOrchestrationRequested`（payload 含 prompt + agent session id +
+  working directory），shell 切到独立任务编排工作区并交给
+  `TaskGraphDocumentEditorViewModel` 处理 — 用户选模板 + 填输入 →
+  `InstantiateCommand` → `GraphInstantiated` 事件 → shell 切到
+  任务图页打开新图。All bindings use compiled bindings with `x:DataType`.
 
 ## Task Orchestration Independent Workspace
 
@@ -286,45 +339,99 @@ from a dedicated title-bar button. It is independent from the chat
 sidebar, and the main left navigation no longer renders a top-level
 `任务编排` section.
 
-- **Domain split** — `Template` (`Models/TaskGraph/TaskTemplate.cs`) is
-  a generation asset (id, name, description, base kind, default input,
-  `isBuiltIn`); `TaskGraph` remains the execution entity. The two are
-  persisted to different directories: templates live in
-  `%LOCALAPPDATA%/AgentOrchestrator/Templates/*.json` via
-  `JsonTaskTemplateStore`; task graphs keep their existing location
-  under `Datas/TaskGraphs/*.json` via `JsonTaskGraphStore`.
-- **Built-in templates** — the store seeds three built-ins on first
-  init: `task-list`, `feature-dev`, `bug-list`. They carry stable ids
-  (`builtin.task-list` etc.), `isBuiltIn=true`, and are protected from
-  deletion. Users can duplicate them to create custom copies.
+- **Unified domain** — templates and runtime graphs are both
+  `TaskGraph` documents distinguished by `TaskGraph.DocumentKind`
+  (`Runtime` vs `Template`). A template IS a graph: it has the same
+  node / edge / metadata shape, is persisted in the same directory
+  (`Datas/TaskGraphs/`) with the `template.{id}.json` prefix, and is
+  loaded by the same `ITaskGraphStore.LoadTemplateAsync` method.
+  Templates are not directly executable; instantiation is the act of
+  cloning a template, clearing all runtime state, performing controlled
+  dynamic-zone expansion, and saving the result as a `Runtime` graph
+  with `BasedOnTemplateId` set
+- **Built-in templates** — `BuiltInTemplateSeeder` seeds four on first
+  init: 3 user-facing (`builtin.task-list`, `builtin.feature-dev`,
+  `builtin.bug-list`) plus 1 hidden (`builtin.auto-orchestration`,
+  consumed by Chat's "自动编排" mode and hidden from the orchestration
+  sidebar's `模板` group). They carry `IsBuiltInTemplate = true`, are
+  read-only, and the seeder skips any id that already exists so user
+  edits to the name survive
+- **Template metadata** — every template carries a
+  `TaskGraphTemplateMetadata` payload:
+  `AllowDynamicExpansion` (gates the instantiator's expansion pass),
+  `FixedNodeIds` (unmutable anchor nodes), `FixedEdgeKeys`
+  (unmutable edges), `DynamicZones` (list of `DynamicZoneDefinition`
+  with `AnchorNodeId`, `InsertAfterNodeId`, `ConnectToTerminalNodeId`,
+  `AllowParallelNodes`, `MaxGeneratedNodeCount`, `GenerationInstruction`),
+  plus three rule string lists (`NodeGenerationRules`,
+  `EdgeGenerationRules`, `ExecutionRules`)
+- **Node-level template flags** — `TaskNode` carries three template-only
+  fields: `IsTemplateLocked` (fixed skeleton node, not removed at
+  instantiation), `IsDynamicPlaceholder` (an expansion anchor), and
+  `TemplateRole` (semantic role: `Input` / `Plan` / `Checkpoint` /
+  `ExpansionAnchor` / `ExpansionTerminal` / `Report`)
 - **Left nav** — `TaskOrchestrationWorkspaceControl` renders a 320px
   panel with: top quick actions (`新任务图` / `搜索`), a `模板` group
-  with template rows (name + base-kind + `内置` tag + hover `...` for
-  重命名 / 复制 / 删除), a `+` action on the group header to create a
-  new custom template, and a `任务图` group with task-graph rows
-  (name + second-line project-or-summary text + updated + hover `...`
-  for 删除 / 重命名 / 修改所属项目). `修改所属项目` 当前通过轻量选择弹窗实现，
+  with template rows (name + `TemplateKindText` for the kind name + an
+  `内置` tag for built-ins + hover `...` for 重命名 / 复制 / 删除), a
+  `+` action on the group header to create a new custom template
+  (which becomes a `TaskGraph` template document), and a `任务图` group
+  with runtime graph rows (name + second-line project-or-summary text +
+  updated + hover `...` for 删除 / 重命名 / 修改所属项目). Both groups
+  use the same `SidebarTaskGraphItemViewModel` row VM, distinguished
+  only by `DocumentKind`. `修改所属项目` 当前通过轻量选择弹窗实现，
   列出全部已有项目，并提供 `无所属项目` 选项
-- **Right pane** — switches on selection:
-  - nothing selected → empty hint "从模板或既有任务图开始"
-  - template selected → name TextBox, description TextBox, base-kind
-    ComboBox, default-input TextBox, a transient `本次生成输入` TextBox,
-    optional graph-name input, `保存` button, and a
-    `基于此模板生成任务图` action
-  - task graph selected → summary card (name, status pill, node count,
-    last-updated, project) plus a `打开图编辑` button that fires
-    `TaskGraphOpenRequested(id)` to switch the shell to the full
-    `TaskGraphWorkspaceViewModel`
-- **Shell integration** — `MainWindowViewModel` subscribes to three
-  events on the new VM:
+- **Right pane** — hosts the shared `TaskGraphWorkspaceControl` on top
+  (the same canvas control used by the independent TaskGraph workspace)
+  plus a `TaskGraphDocumentEditorViewModel`-backed editor panel below.
+  When a template is selected, the editor shows template-only fields
+  (`TemplateNotes` draft, `TemplatePlannerPrompt` draft,
+  `AllowDynamicExpansion` checkbox, `DynamicZones` ItemsControl with
+  per-zone editor, `保存模板` button, and a `基于此模板生成任务图`
+  button bound to the editor's `InstantiateCommand`). When a runtime
+  graph is selected, the editor shows runtime info only (name, a
+  read-only template-mode indicator, and a note that execution controls
+  live in the canvas toolbar). Execution buttons in the canvas
+  (`CanExecute` / `CanRetryFailed` / `CanCancelExecution` /
+  `CanContinue`) all return false when `IsTemplateDocument` is true;
+  the `在 Chat 中调用` button is hidden in template mode
+- **Canvas reuse** — both the orchestration workspace AND the
+  independent TaskGraph workspace share the same
+  `TaskGraphWorkspaceViewModel` singleton. The orchestration VM holds
+  a reference to that singleton; when a row is selected, it loads the
+  document into the shared canvas via `OpenTemplateByIdAsync` (no
+  `ReconcileAsync` since templates have no execution state) or
+  `OpenGraphByIdAsync` (full reconcile for runtime graphs). The
+  canvas's `IsTemplateDocument` / `IsRuntimeDocument` properties
+  drive the toolbar's enable state and the "use in chat" visibility
+- **Instantiation handoff** — when the editor's `InstantiateCommand`
+  creates a runtime graph, it raises `GraphInstantiated` with the new
+  graph as the payload. The shell subscribes to this event on the
+  editor and switches to the TaskGraph workspace via
+  `OpenGraphByIdAsync(graph.Id)`, so the user lands on the canvas view
+  of the just-instantiated graph. Chat's "使用模板" flow goes through
+  the same path: chat's "使用模板" → switch to orchestration workspace
+  → user picks template + enters input → editor's `InstantiateCommand`
+  → shell's `GraphInstantiated` handler → open new graph in canvas
+- **Shell integration** — `MainWindowViewModel` subscribes to four
+  events on the orchestration VM:
   - `NewTaskGraphRequested` → switch to `TaskGraph` and run
     `NewGraphAsync`
   - `TaskGraphOpenRequested(id)` → switch to `TaskGraph` and run
     `OpenGraphByIdAsync(id)`
   - `TaskGraphActionRequested` → reuse the existing sidebar action
     pipeline (Rename / Remove) for the embedded task-graph rows
-  - `TemplateGenerateRequested` → materialize a real `TaskGraph` from the
-    selected template input and open it in the task-graph workspace
+  - `Editor.GraphInstantiated(graph)` → switch to `TaskGraph` and open
+    the new graph in the canvas
+- **Chat integration** — Chat's "自动编排" and "使用模板" both go
+  through the same `ITaskGraphTemplateInstantiator` main path as the
+  orchestration workspace. "自动编排" loads the hidden
+  `builtin.auto-orchestration` template, instantiates it with the
+  chat input as `UserInput`, sets the result as `ActiveGraph`, and
+  starts execution. "使用模板" raises `TemplateOrchestrationRequested`
+  (payload: prompt + chat session id + working directory); the shell
+  switches to the orchestration workspace and lets the user pick a
+  template + input
 - **CLI** — `AgentOrchestrator.Cli orchestration open` prints the
   hint; the App accepts `--open-orchestration` on launch to switch to
   the new workspace (used by `scripts/verify-orchestration-workspace.ps1`
@@ -363,10 +470,10 @@ sidebar, and the main left navigation no longer renders a top-level
   `Application.Current.Resources` so every view that references the
   `UiFontFamily` / `UiFontSize` / `CodeFontFamily` / `CodeFontSize`
   DynamicResource tokens picks up the saved values automatically
-- UI 默认字体链为 `Segoe UI, Microsoft YaHei UI, Microsoft YaHei`；
+- UI 默认字体链为 `SimHei, Segoe UI, Microsoft YaHei UI, Microsoft YaHei`；
   `JsonAppSettingsService.Load()` 会把旧配置中的 `Source Han Sans`
-  自动迁移到这条系统字体链，避免 Avalonia/Skia 在 Windows 上把常规中文
-  文本渲染得过重、发虚
+  和旧默认 `Segoe UI, Microsoft YaHei UI, Microsoft YaHei`
+  自动迁移到这条系统字体链，确保 Windows 桌面端普通中文文本优先按黑体渲染
 - `OpenCodeEnabled` is the runtime gate: `SettingsViewModel`
   short-circuits the health check and reports the service as `断开`
   whenever the flag is off; live connection status is refreshed

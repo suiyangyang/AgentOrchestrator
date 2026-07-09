@@ -28,6 +28,9 @@ public partial class PendingQuestion : ObservableObject
     [ObservableProperty]
     private string _customAnswer = string.Empty;
 
+    [ObservableProperty]
+    private bool _isExpanded;
+
     public ObservableCollection<PendingQuestionItem> Questions { get; } = [];
 }
 

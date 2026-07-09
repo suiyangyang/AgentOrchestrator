@@ -5,8 +5,10 @@ using AgentOrchestrator.App.Services;
 using AgentOrchestrator.App.ViewModels;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Media;
 
 namespace AgentOrchestrator.App.Controls;
 
@@ -96,14 +98,14 @@ public partial class CollapsibleBlockControl : UserControl
 
     private Control BuildQuestionBody(RemoteQuestion question)
     {
-        var layout = new StackPanel { Spacing = 10 };
+        var contentLayout = new StackPanel { Spacing = 10 };
 
         foreach (var item in question.Questions)
         {
-            layout.Children.Add(new TextBlock { Text = item.Header, Classes = { "question-item-header" } });
+            contentLayout.Children.Add(new TextBlock { Text = item.Header, Classes = { "question-item-header" } });
             if (!string.IsNullOrWhiteSpace(item.Question))
             {
-                layout.Children.Add(new TextBlock { Text = item.Question, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Classes = { "question-item-question" } });
+                contentLayout.Children.Add(new TextBlock { Text = item.Question, TextWrapping = TextWrapping.Wrap, Classes = { "question-item-question" } });
             }
 
             foreach (var option in item.Options)
@@ -111,26 +113,59 @@ public partial class CollapsibleBlockControl : UserControl
                 var text = string.IsNullOrWhiteSpace(option.Description)
                     ? option.Label
                     : $"{option.Label} - {option.Description}";
-                layout.Children.Add(new TextBlock { Text = $"• {text}", TextWrapping = Avalonia.Media.TextWrapping.Wrap, Classes = { "question-option-description" } });
+                contentLayout.Children.Add(new TextBlock { Text = $"• {text}", TextWrapping = TextWrapping.Wrap, Classes = { "question-option-description" } });
             }
 
             if (item.Custom)
             {
-                layout.Children.Add(new TextBlock { Text = "• 自定义答案", Classes = { "question-option-description" } });
+                contentLayout.Children.Add(new TextBlock { Text = "• 自定义答案", Classes = { "question-option-description" } });
             }
         }
 
         var button = new Button
         {
-            Content = "继续回答",
-            Classes = { "question-confirm-button" },
-            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left
+            Classes = { "question-inline-link-button" },
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 4,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "继续回答",
+                        Classes = { "question-inline-link-text" },
+                        VerticalAlignment = VerticalAlignment.Center
+                    },
+                    new Path
+                    {
+                        Classes = { "question-inline-link-icon" },
+                        VerticalAlignment = VerticalAlignment.Center
+                    }
+                }
+            }
         };
         button.Click += OnContinueQuestionClick;
         button.Tag = question;
-        layout.Children.Add(button);
 
-        return layout;
+        var root = new Grid
+        {
+            RowDefinitions = new RowDefinitions("*,Auto"),
+            RowSpacing = 12
+        };
+
+        root.Children.Add(new ScrollViewer
+        {
+            Content = contentLayout,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        });
+
+        Grid.SetRow(button, 1);
+        root.Children.Add(button);
+
+        return root;
     }
 
     private void OnContinueQuestionClick(object? sender, RoutedEventArgs e)

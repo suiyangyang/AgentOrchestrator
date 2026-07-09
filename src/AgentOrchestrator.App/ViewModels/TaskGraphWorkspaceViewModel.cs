@@ -223,7 +223,7 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
     public TaskGraph? CurrentGraph
     {
         get => _currentGraph;
-        private set
+        internal set
         {
             if (ReferenceEquals(_currentGraph, value))
             {
@@ -238,6 +238,8 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
             OnPropertyChanged(nameof(HeaderTitle));
             OnPropertyChanged(nameof(HasCurrentGraph));
             OnPropertyChanged(nameof(HasNoCurrentGraph));
+            OnPropertyChanged(nameof(IsTemplateDocument));
+            OnPropertyChanged(nameof(IsRuntimeDocument));
             OnPropertyChanged(nameof(CurrentGraphName));
             OnPropertyChanged(nameof(CurrentGraphExecutionText));
             OnPropertyChanged(nameof(CurrentGraphSummaryText));
@@ -254,6 +256,10 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
     public bool HasCurrentGraph => CurrentGraph is not null;
 
     public bool HasNoCurrentGraph => CurrentGraph is null;
+
+    public bool IsTemplateDocument => CurrentGraph?.DocumentKind == TaskGraphDocumentKind.Template;
+
+    public bool IsRuntimeDocument => CurrentGraph?.DocumentKind == TaskGraphDocumentKind.Runtime;
 
     public string CurrentGraphName => CurrentGraph?.Name ?? "未命名编排";
 
@@ -277,19 +283,23 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
            ?? ProjectsTracker.CurrentWorkingDirectory
            ?? Environment.CurrentDirectory;
 
-    public bool CanExecute => CurrentGraph is not null
+    public bool CanExecute => IsRuntimeDocument
+        && CurrentGraph is not null
         && CurrentGraph.Nodes.Count > 0
         && !IsBusy
         && CurrentGraph.ExecutionState is not TaskGraphExecutionState.Running and not TaskGraphExecutionState.WaitingForInput;
 
-    public bool CanRetryFailed => CurrentGraph is not null
+    public bool CanRetryFailed => IsRuntimeDocument
+        && CurrentGraph is not null
         && CurrentGraph.Nodes.Any(x => x.Status == TaskNodeStatus.Failed)
         && !IsBusy;
 
-    public bool CanCancelExecution => CurrentGraph is not null
+    public bool CanCancelExecution => IsRuntimeDocument
+        && CurrentGraph is not null
         && CurrentGraph.ExecutionState == TaskGraphExecutionState.Running;
 
-    public bool CanContinue => CurrentGraph is not null
+    public bool CanContinue => IsRuntimeDocument
+        && CurrentGraph is not null
         && CurrentGraph.ExecutionState == TaskGraphExecutionState.WaitingForInput
         && !IsBusy;
 
@@ -654,6 +664,38 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
         CurrentGraph = graph;
         SelectNode(graph.Nodes.FirstOrDefault());
         StatusText = $"已打开编排“{CurrentGraph.Name}”。";
+    }
+
+    /// <summary>
+    /// Opens a template document by id into the graph canvas without invoking
+    /// the runtime execution reconciler (templates are non-executable).
+    /// </summary>
+    public async Task OpenTemplateByIdAsync(string id, CancellationToken ct = default)
+    {
+        var graph = await _store.LoadTemplateAsync(id, ct).ConfigureAwait(true);
+        if (graph is null)
+        {
+            return;
+        }
+
+        CurrentGraph = graph;
+        SelectNode(graph.Nodes.FirstOrDefault());
+        StatusText = $"已打开模板“{graph.Name}”。";
+    }
+
+    /// <summary>
+    /// Instantiates the current template document as a runtime graph.
+    /// Phase 3 implementation is simple (delegates to store); Phase 4 will
+    /// replace the body with full dynamic-expansion logic.
+    /// </summary>
+    public async Task<TaskGraph> InstantiateAsRuntimeAsync(TemplateInstantiationOptions options, CancellationToken ct = default)
+    {
+        if (CurrentGraph is null || !IsTemplateDocument)
+        {
+            throw new InvalidOperationException("当前文档不是模板。");
+        }
+
+        return await _store.InstantiateTemplateAsync(CurrentGraph.Id, options, ct).ConfigureAwait(true);
     }
 
     [RelayCommand]

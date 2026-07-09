@@ -11,5 +11,7 @@ public sealed record TaskGraphListItem(
     int NodeCount,
     TaskGraphTemplateKind TemplateKind,
     string? ProjectId,
-    string? ProjectName
+    string? ProjectName,
+    bool IsBuiltIn,
+    TaskGraphDocumentKind DocumentKind
 );

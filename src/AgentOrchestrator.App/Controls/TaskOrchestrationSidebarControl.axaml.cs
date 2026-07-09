@@ -19,11 +19,10 @@ public sealed partial class TaskOrchestrationSidebarControl : UserControl
 
     private void OnTemplateRowClick(object? sender, RoutedEventArgs e)
     {
-        if (sender is Control { DataContext: TaskTemplateItemViewModel templateVm }
+        if (sender is Control { DataContext: SidebarTaskGraphItemViewModel templateVm }
             && DataContext is TaskOrchestrationWorkspaceViewModel vm)
         {
             vm.SelectTemplateCommand.Execute(templateVm);
-            vm.RequestTemplateFocus();
         }
     }
 
@@ -31,11 +30,11 @@ public sealed partial class TaskOrchestrationSidebarControl : UserControl
     {
         e.Handled = true;
         if (sender is not Control btn) return;
-        if (btn.Tag is not TaskTemplateItemViewModel templateVm) return;
+        if (btn.Tag is not SidebarTaskGraphItemViewModel templateVm) return;
         ShowTemplateMenu(btn, templateVm);
     }
 
-    private void ShowTemplateMenu(Control anchor, TaskTemplateItemViewModel templateVm)
+    private void ShowTemplateMenu(Control anchor, SidebarTaskGraphItemViewModel templateVm)
     {
         var vm = DataContext;
         if (vm is null) return;
@@ -84,7 +83,7 @@ public sealed partial class TaskOrchestrationSidebarControl : UserControl
     {
         if (e.Key != Key.Enter) return;
 
-        if (sender is TextBox { Tag: TaskTemplateItemViewModel templateVm }
+        if (sender is TextBox { Tag: SidebarTaskGraphItemViewModel templateVm }
             && DataContext is TaskOrchestrationWorkspaceViewModel vm)
         {
             vm.CommitTemplateRenameCommand.Execute(templateVm);
@@ -93,7 +92,7 @@ public sealed partial class TaskOrchestrationSidebarControl : UserControl
 
     private void OnTemplateRenameLostFocus(object? sender, RoutedEventArgs e)
     {
-        if (sender is TextBox { Tag: TaskTemplateItemViewModel templateVm }
+        if (sender is TextBox { Tag: SidebarTaskGraphItemViewModel templateVm }
             && DataContext is TaskOrchestrationWorkspaceViewModel vm)
         {
             vm.CommitTemplateRenameCommand.Execute(templateVm);
@@ -102,11 +101,18 @@ public sealed partial class TaskOrchestrationSidebarControl : UserControl
 
     private void OnTaskGraphRowClick(object? sender, RoutedEventArgs e)
     {
-        if (sender is Control { DataContext: SidebarTaskGraphItemViewModel graphVm }
+        if (sender is Control { DataContext: SidebarTaskGraphItemViewModel itemVm }
             && DataContext is TaskOrchestrationWorkspaceViewModel vm)
         {
-            vm.SelectTaskGraphCommand.Execute(graphVm);
-            vm.OpenSelectedTaskGraphInEditorCommand.Execute(null);
+            if (itemVm.IsTemplate)
+            {
+                vm.SelectTemplateCommand.Execute(itemVm);
+            }
+            else
+            {
+                vm.SelectTaskGraphCommand.Execute(itemVm);
+                vm.OpenSelectedTaskGraphInEditorCommand.Execute(null);
+            }
         }
     }
 
@@ -114,8 +120,15 @@ public sealed partial class TaskOrchestrationSidebarControl : UserControl
     {
         e.Handled = true;
         if (sender is not Control btn) return;
-        if (btn.Tag is not SidebarTaskGraphItemViewModel graphVm) return;
-        ShowTaskGraphMenu(btn, graphVm);
+        if (btn.Tag is not SidebarTaskGraphItemViewModel itemVm) return;
+        if (itemVm.IsTemplate)
+        {
+            ShowTemplateMenu(btn, itemVm);
+        }
+        else
+        {
+            ShowTaskGraphMenu(btn, itemVm);
+        }
     }
 
     private void ShowTaskGraphMenu(Control anchor, SidebarTaskGraphItemViewModel graphVm)

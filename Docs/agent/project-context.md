@@ -18,9 +18,10 @@ Current product focus:
   graph canvas editing, drag-link dependencies, node detail drill-down, bug report export,
   and a focus mode that lets the graph canvas fill the window)
 - task-orchestration independent workspace (top-level entry in the title bar; own left
-  nav with quick actions + 模板 / 任务图 collapsible groups; right content area shows
-  template detail or task-graph summary; `Template` and `TaskGraph` are first-class
-  separate assets — templates are generation assets, task graphs are execution entities)
+  nav with quick actions + 模板 / 任务图 collapsible groups; the right content area hosts the
+  unified graph canvas plus template rules / runtime info; **templates are `TaskGraph` documents
+  with `DocumentKind = Template`** — the template IS a graph, the document kind is the only
+  difference between a blueprint and a runnable instance)
 - in-conversation TaskGraph orchestrator: chat workspace owns the active graph
   as the control plane, app executor runs it as the execution plane; checkpoint-based
   pauses publish results back through the runtime hub and a context bridge so the
@@ -31,6 +32,6 @@ Current product focus:
 - compiled bindings
 - MVVM with CommunityToolkit.Mvvm
 - local SQLite for sidebar metadata
-- dependency-inversion: ViewModel ↔ IAgentGateway / ISidebarRepository / ITaskGraphStore / ITaskTemplateStore
+- dependency-inversion: ViewModel ↔ IAgentGateway / ISidebarRepository / ITaskGraphStore / ITaskGraphTemplateInstantiator
 
 Keep this file concise and current.

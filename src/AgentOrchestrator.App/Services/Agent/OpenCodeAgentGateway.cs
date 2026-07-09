@@ -37,6 +37,7 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
     private readonly bool _ownsClient;
 
     public event EventHandler<AgentErrorEventArgs>? AgentErrorOccurred;
+    public event EventHandler<AgentTodosUpdatedEventArgs>? TodosUpdated;
 
     public OpenCodeAgentGateway(OpenCodeClient client, bool ownsClient = false)
     {
@@ -311,6 +312,148 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         }
     }
 
+    public async Task<IReadOnlyList<AgentTodoSnapshot>> GetTodosAsync(
+        string agentSessionId,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var session = await _client.Sessions
+                .GetAsync(agentSessionId, directory: null, ct: ct)
+                .ConfigureAwait(false);
+            var todos = await _client.Sessions
+                .TodoAsync(agentSessionId, directory: session.Directory, ct: ct)
+                .ConfigureAwait(false);
+            return todos.Select(MapTodo).ToArray();
+        }
+        catch (Exception ex)
+        {
+            ReportError("获取待办", ex);
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyList<AgentCommandDefinition>> ListCommandsAsync(
+        string workingDirectory,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var commands = await _client.Commands
+                .ListAsync(directory: workingDirectory, ct: ct)
+                .ConfigureAwait(false);
+
+            return commands
+                .Select(command => new AgentCommandDefinition(
+                    command.Name,
+                    command.Description,
+                    command.Agent,
+                    command.Model,
+                    command.Template?.ToString(),
+                    command.BuiltIn == true))
+                .ToArray();
+        }
+        catch (Exception ex)
+        {
+            ReportError("获取命令列表", ex);
+            throw;
+        }
+    }
+
+    public async Task<AgentCommandExecutionResult> ExecuteCommandAsync(
+        string agentSessionId,
+        string commandName,
+        string arguments,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var session = await _client.Sessions
+                .GetAsync(agentSessionId, directory: null, ct: ct)
+                .ConfigureAwait(false);
+
+            var result = await _client.Sessions
+                .CommandAsync(
+                    agentSessionId,
+                    new SessionCommandRequest
+                    {
+                        Command = commandName,
+                        Arguments = arguments,
+                    },
+                    directory: session.Directory,
+                    ct: ct)
+                .ConfigureAwait(false);
+
+            return new AgentCommandExecutionResult(ExtractMessageId(result.Info));
+        }
+        catch (Exception ex)
+        {
+            ReportError("执行命令", ex);
+            throw;
+        }
+    }
+
+    public async Task<AgentSessionSnapshot> ForkSessionAsync(
+        string agentSessionId,
+        string messageId,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var session = await _client.Sessions
+                .GetAsync(agentSessionId, directory: null, ct: ct)
+                .ConfigureAwait(false);
+
+            var forked = await _client.Sessions
+                .ForkAsync(
+                    agentSessionId,
+                    new SessionForkRequest { MessageID = messageId },
+                    directory: session.Directory,
+                    ct: ct)
+                .ConfigureAwait(false);
+
+            return MapSessionSnapshot(forked);
+        }
+        catch (Exception ex)
+        {
+            ReportError("分叉会话", ex);
+            throw;
+        }
+    }
+
+    public async Task<AgentSessionSnapshot> RevertSessionAsync(
+        string agentSessionId,
+        string messageId,
+        string? partId = null,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var session = await _client.Sessions
+                .GetAsync(agentSessionId, directory: null, ct: ct)
+                .ConfigureAwait(false);
+
+            var reverted = await _client.Sessions
+                .RevertAsync(
+                    agentSessionId,
+                    new SessionRevertRequest
+                    {
+                        MessageID = messageId,
+                        PartID = partId,
+                    },
+                    directory: session.Directory,
+                    ct: ct)
+                .ConfigureAwait(false);
+
+            return MapSessionSnapshot(reverted);
+        }
+        catch (Exception ex)
+        {
+            ReportError("回退会话", ex);
+            throw;
+        }
+    }
+
     public async Task<IReadOnlyList<RemoteMessage>> GetMessagesAsync(
         string agentSessionId,
         int? limit = null,
@@ -479,6 +622,20 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
                     }
                     break;
                 }
+                case EventTodoUpdated todoUpdated:
+                {
+                    if (!string.Equals(todoUpdated.Properties.SessionID, agentSessionId, StringComparison.Ordinal))
+                    {
+                        break;
+                    }
+
+                    TodosUpdated?.Invoke(
+                        this,
+                        new AgentTodosUpdatedEventArgs(
+                            agentSessionId,
+                            todoUpdated.Properties.Todos.Select(MapTodo).ToArray()));
+                    break;
+                }
             }
 
             if (idle)
@@ -510,6 +667,13 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         _ => null,
     };
 
+    private static AgentTodoSnapshot MapTodo(Todo todo)
+        => new(
+            todo.Id ?? string.Empty,
+            todo.Content ?? string.Empty,
+            todo.Status ?? string.Empty,
+            todo.Priority ?? string.Empty);
+
     private static string? GetPartMessageId(Part p) => p switch
     {
         TextPart tp => tp.MessageID,
@@ -533,6 +697,15 @@ public sealed class OpenCodeAgentGateway : IAgentGateway, IAsyncDisposable
         AssistantMessageWrapper a => a.Value.Id,
         _ => Guid.NewGuid().ToString("N"),
     };
+
+    private static AgentSessionSnapshot MapSessionSnapshot(Session session)
+        => new(
+            session.Id,
+            session.Title,
+            session.ParentID,
+            session.Directory,
+            session.Time.Created,
+            session.Time.Updated);
 
     private static ChatRole? ResolveRole(Message message) => message switch
     {

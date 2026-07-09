@@ -100,6 +100,15 @@ public sealed partial class TaskNode : ObservableObject
     [ObservableProperty]
     private string? _structuredSummary;
 
+    [ObservableProperty]
+    private bool _isTemplateLocked;
+
+    [ObservableProperty]
+    private bool _isDynamicPlaceholder;
+
+    [ObservableProperty]
+    private string? _templateRole;
+
     public ObservableCollection<string> Tags { get; set; } = [];
 
     public ObservableCollection<string> DependsOn { get; set; } = [];

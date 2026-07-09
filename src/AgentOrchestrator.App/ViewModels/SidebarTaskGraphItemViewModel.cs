@@ -40,6 +40,10 @@ public sealed class SidebarTaskGraphItemViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(HasProject));
             OnPropertyChanged(nameof(UpdatedAtText));
             OnPropertyChanged(nameof(SubtitleText));
+            OnPropertyChanged(nameof(IsBuiltIn));
+            OnPropertyChanged(nameof(IsTemplate));
+            OnPropertyChanged(nameof(IsRuntime));
+            OnPropertyChanged(nameof(TemplateKindText));
         }
     }
 
@@ -74,6 +78,23 @@ public sealed class SidebarTaskGraphItemViewModel : INotifyPropertyChanged
     public string? ProjectName => Item.ProjectName;
 
     public bool HasProject => !string.IsNullOrWhiteSpace(ProjectName);
+
+    public bool IsBuiltIn => Item.IsBuiltIn;
+
+    public bool IsTemplate => Item.DocumentKind == TaskGraphDocumentKind.Template;
+
+    public bool IsRuntime => Item.DocumentKind == TaskGraphDocumentKind.Runtime;
+
+    public string TemplateKindText => IsTemplate
+        ? Item.TemplateKind switch
+        {
+            TaskGraphTemplateKind.TaskList => "任务列表",
+            TaskGraphTemplateKind.FeatureDevelopment => "功能开发",
+            TaskGraphTemplateKind.BugList => "Bug 列表",
+            TaskGraphTemplateKind.Custom => "自定义",
+            _ => "自定义",
+        }
+        : string.Empty;
 
     public string ExecutionStateText => ExecutionState switch
     {
@@ -117,6 +138,28 @@ public sealed class SidebarTaskGraphItemViewModel : INotifyPropertyChanged
             OnPropertyChanged();
         }
     }
+
+    /// <summary>
+    /// When true, the row renders a TextBox for inline rename instead of a TextBlock.
+    /// </summary>
+    private bool _isEditing;
+    public bool IsEditing
+    {
+        get => _isEditing;
+        set
+        {
+            if (_isEditing == value)
+            {
+                return;
+            }
+
+            _isEditing = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsNotEditing));
+        }
+    }
+
+    public bool IsNotEditing => !IsEditing;
 
     public void Update(TaskGraphListItem item)
     {

@@ -54,7 +54,7 @@
                         <ItemsControl ItemsSource="{Binding Templates}"
                                       IsVisible="{Binding AreTemplatesExpanded}">
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="vm:TaskTemplateItemViewModel">
+                                <DataTemplate DataType="vm:SidebarTaskGraphItemViewModel">
                                     <Button x:Name="TemplateRow"
                                             Classes="sidebar-session-item"
                                             Classes.sidebar-session-item-selected="{Binding IsSelected}"
@@ -82,7 +82,7 @@
                                                         Orientation="Horizontal"
                                                         Spacing="4"
                                                         VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding BaseKindText}" Classes="sidebar-session-time" />
+                                                <TextBlock Text="{Binding TemplateKindText}" Classes="sidebar-session-time" />
                                                 <TextBlock Text="·" Classes="sidebar-session-time" IsVisible="{Binding IsBuiltIn}" />
                                                 <TextBlock Text="内置" Foreground="#2F7CF6" FontSize="12" IsVisible="{Binding IsBuiltIn}" />
                                             </StackPanel>
