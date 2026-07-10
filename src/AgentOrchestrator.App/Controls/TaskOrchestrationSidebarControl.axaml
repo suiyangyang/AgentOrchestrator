@@ -51,7 +51,7 @@
                             </Grid>
                         </Button>
 
-                        <ItemsControl ItemsSource="{Binding Templates}"
+                        <ItemsControl ItemsSource="{Binding VisibleTemplates}"
                                       IsVisible="{Binding AreTemplatesExpanded}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vm:SidebarTaskGraphItemViewModel">
@@ -102,6 +102,19 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="12"
+                                    Margin="10,2,4,0"
+                                    IsVisible="{Binding ShowTemplatesPagination}">
+                            <Button Classes="sidebar-session-page-action"
+                                    Content="展开显示"
+                                    Command="{Binding ExpandTemplatesCommand}"
+                                    IsVisible="{Binding HasMoreTemplates}" />
+                            <Button Classes="sidebar-session-page-action"
+                                    Content="折叠显示"
+                                    Command="{Binding CollapseTemplatesCommand}"
+                                    IsVisible="{Binding CanCollapseTemplates}" />
+                        </StackPanel>
                     </StackPanel>
 
                     <StackPanel Margin="0,8,0,0">
@@ -125,7 +138,7 @@
                             </Grid>
                         </Button>
 
-                        <ItemsControl ItemsSource="{Binding TaskGraphs}"
+                        <ItemsControl ItemsSource="{Binding VisibleTaskGraphs}"
                                       IsVisible="{Binding AreTaskGraphsExpanded}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vm:SidebarTaskGraphItemViewModel">
@@ -166,6 +179,19 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="12"
+                                    Margin="10,2,4,0"
+                                    IsVisible="{Binding ShowTaskGraphsPagination}">
+                            <Button Classes="sidebar-session-page-action"
+                                    Content="展开显示"
+                                    Command="{Binding ExpandTaskGraphsCommand}"
+                                    IsVisible="{Binding HasMoreTaskGraphs}" />
+                            <Button Classes="sidebar-session-page-action"
+                                    Content="折叠显示"
+                                    Command="{Binding CollapseTaskGraphsCommand}"
+                                    IsVisible="{Binding CanCollapseTaskGraphs}" />
+                        </StackPanel>
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>

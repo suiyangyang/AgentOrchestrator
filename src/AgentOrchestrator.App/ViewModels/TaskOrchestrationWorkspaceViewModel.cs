@@ -46,8 +46,28 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
 
     public string SearchPlaceholder => "搜索模板和任务图";
 
+    /// <summary>Filtered (by search) but full data.</summary>
     public ObservableCollection<SidebarTaskGraphItemViewModel> Templates { get; } = [];
     public ObservableCollection<SidebarTaskGraphItemViewModel> TaskGraphs { get; } = [];
+
+    /// <summary>Paginated, visible subsets bound to the UI.</summary>
+    public ObservableCollection<SidebarTaskGraphItemViewModel> VisibleTemplates { get; } = [];
+    public ObservableCollection<SidebarTaskGraphItemViewModel> VisibleTaskGraphs { get; } = [];
+
+    private const int _pageSize = 5;
+
+    private int _templateVisibleCount = _pageSize;
+    private int _taskGraphVisibleCount = _pageSize;
+
+    public bool HasMoreTemplates => Templates.Count > _templateVisibleCount;
+    public bool CanCollapseTemplates => _templateVisibleCount > _pageSize && Templates.Count > _pageSize;
+    public bool HasTemplatePaginationControls => Templates.Count > _pageSize;
+    public bool ShowTemplatesPagination => AreTemplatesExpanded && HasTemplatePaginationControls;
+
+    public bool HasMoreTaskGraphs => TaskGraphs.Count > _taskGraphVisibleCount;
+    public bool CanCollapseTaskGraphs => _taskGraphVisibleCount > _pageSize && TaskGraphs.Count > _pageSize;
+    public bool HasTaskGraphPaginationControls => TaskGraphs.Count > _pageSize;
+    public bool ShowTaskGraphsPagination => AreTaskGraphsExpanded && HasTaskGraphPaginationControls;
 
     /// <summary>
     /// The shared graph canvas view model. Both template and runtime documents
@@ -426,12 +446,76 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
     private void ToggleTemplatesExpanded()
     {
         AreTemplatesExpanded = !AreTemplatesExpanded;
+        OnPropertyChanged(nameof(ShowTemplatesPagination));
     }
 
     [RelayCommand]
     private void ToggleTaskGraphsExpanded()
     {
         AreTaskGraphsExpanded = !AreTaskGraphsExpanded;
+        OnPropertyChanged(nameof(ShowTaskGraphsPagination));
+    }
+
+    // ================================================================
+    // Pagination
+    // ================================================================
+
+    [RelayCommand]
+    private void ExpandTemplates()
+    {
+        if (!HasMoreTemplates) return;
+        _templateVisibleCount = Math.Min(_templateVisibleCount + _pageSize, Templates.Count);
+        RefreshVisibleTemplates();
+        OnPropertyChanged(nameof(HasMoreTemplates));
+        OnPropertyChanged(nameof(CanCollapseTemplates));
+        OnPropertyChanged(nameof(HasTemplatePaginationControls));
+    }
+
+    [RelayCommand]
+    private void CollapseTemplates()
+    {
+        _templateVisibleCount = _pageSize;
+        RefreshVisibleTemplates();
+        OnPropertyChanged(nameof(HasMoreTemplates));
+        OnPropertyChanged(nameof(CanCollapseTemplates));
+        OnPropertyChanged(nameof(HasTemplatePaginationControls));
+    }
+
+    [RelayCommand]
+    private void ExpandTaskGraphs()
+    {
+        if (!HasMoreTaskGraphs) return;
+        _taskGraphVisibleCount = Math.Min(_taskGraphVisibleCount + _pageSize, TaskGraphs.Count);
+        RefreshVisibleTaskGraphs();
+        OnPropertyChanged(nameof(HasMoreTaskGraphs));
+        OnPropertyChanged(nameof(CanCollapseTaskGraphs));
+        OnPropertyChanged(nameof(HasTaskGraphPaginationControls));
+    }
+
+    [RelayCommand]
+    private void CollapseTaskGraphs()
+    {
+        _taskGraphVisibleCount = _pageSize;
+        RefreshVisibleTaskGraphs();
+        OnPropertyChanged(nameof(HasMoreTaskGraphs));
+        OnPropertyChanged(nameof(CanCollapseTaskGraphs));
+        OnPropertyChanged(nameof(HasTaskGraphPaginationControls));
+    }
+
+    private void RefreshVisibleTemplates()
+    {
+        var limit = Math.Min(_templateVisibleCount, Templates.Count);
+        VisibleTemplates.Clear();
+        foreach (var item in Templates.Take(limit))
+            VisibleTemplates.Add(item);
+    }
+
+    private void RefreshVisibleTaskGraphs()
+    {
+        var limit = Math.Min(_taskGraphVisibleCount, TaskGraphs.Count);
+        VisibleTaskGraphs.Clear();
+        foreach (var item in TaskGraphs.Take(limit))
+            VisibleTaskGraphs.Add(item);
     }
 
     // ================================================================
@@ -530,5 +614,17 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
                 SelectedTaskGraph = vm;
             }
         }
+
+        // Reset pagination and refresh visible subsets
+        _templateVisibleCount = _pageSize;
+        _taskGraphVisibleCount = _pageSize;
+        RefreshVisibleTemplates();
+        RefreshVisibleTaskGraphs();
+        OnPropertyChanged(nameof(HasMoreTemplates));
+        OnPropertyChanged(nameof(CanCollapseTemplates));
+        OnPropertyChanged(nameof(HasTemplatePaginationControls));
+        OnPropertyChanged(nameof(HasMoreTaskGraphs));
+        OnPropertyChanged(nameof(CanCollapseTaskGraphs));
+        OnPropertyChanged(nameof(HasTaskGraphPaginationControls));
     }
 }
