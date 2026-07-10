@@ -70,6 +70,41 @@ public static class TaskGraphFactory
         return graph;
     }
 
+    /// <summary>
+    /// If <paramref name="graph"/> has zero nodes AND its DocumentKind is Runtime, append a single
+    /// default <see cref="TaskNodeKind.Execute"/> node so the user always opens onto a usable graph.
+    /// Templates are intentionally left untouched — they are inert skeletons that get filled by the
+    /// dynamic expander / instantiator at runtime.
+    /// Returns the newly added node, or null when nothing was added.
+    /// </summary>
+    public static TaskNode? EnsureAtLeastOneExecuteNode(TaskGraphModel graph)
+    {
+        if (graph is null) return null;
+        if (graph.DocumentKind != TaskGraphDocumentKind.Runtime || graph.Nodes.Count > 0) return null;
+
+        var existingIds = new HashSet<string>(graph.Nodes.Select(n => n.Id), StringComparer.Ordinal);
+        var n = 1;
+        while (existingIds.Contains($"default_{n}"))
+        {
+            n++;
+        }
+
+        var node = new TaskNode
+        {
+            Id = $"default_{n}",
+            Title = "新任务",
+            Description = string.Empty,
+            Kind = TaskNodeKind.Execute,
+            Status = TaskNodeStatus.Pending,
+            Prompt = BuildPrompt("新任务", string.Empty, TaskNodeKind.Execute),
+            Position = new NodePosition(120, 120),
+        };
+
+        graph.Nodes.Add(node);
+        graph.RebuildEdges();
+        return node;
+    }
+
     public static void ApplyLayeredPositions(TaskGraphModel graph)
     {
         var layers = TaskGraphTopology.BuildLayers(graph);
