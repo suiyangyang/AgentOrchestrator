@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using AgentOrchestrator.App.Models.Chat;
 using AgentOrchestrator.App.Models.Sidebar;
 using AgentOrchestrator.App.Models.TaskGraph;
+using AgentOrchestrator.App.Services.DialogHost;
 using AgentOrchestrator.App.Services.Sidebar;
 using AgentOrchestrator.App.Services.TaskGraph;
 using AgentOrchestrator.App.ViewModels;
@@ -162,7 +163,8 @@ public sealed class TaskGraphWorkspaceViewModelTemplateModeTests : IDisposable
             new FakePlanner(),
             new FakeDocumentReader(),
             new FakeExecutor(),
-            sidebar);
+            sidebar,
+            new AvaloniaDialogHost());
     }
 
     private sealed class FakeDirectParser : ITaskGraphDirectParser

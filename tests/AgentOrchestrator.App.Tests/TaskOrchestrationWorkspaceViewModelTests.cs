@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using AgentOrchestrator.App.Models.TaskGraph;
+using AgentOrchestrator.App.Services.DialogHost;
 using AgentOrchestrator.App.Services.Sidebar;
 using AgentOrchestrator.App.Services.TaskGraph;
 using AgentOrchestrator.App.ViewModels;
@@ -49,7 +50,8 @@ public sealed class TaskOrchestrationWorkspaceViewModelTests : IDisposable
             new FakePlanner(),
             new FakeDocumentReader(),
             new FakeExecutor(),
-            sidebar);
+            sidebar,
+            new AvaloniaDialogHost());
         var editor = new TaskGraphDocumentEditorViewModel(store, sidebar);
         return new TaskOrchestrationWorkspaceViewModel(store, workspace, editor);
     }
@@ -205,6 +207,8 @@ public sealed class TaskOrchestrationWorkspaceViewModelTests : IDisposable
             Id = "run-1",
             Name = "运行图",
             DocumentKind = TaskGraphDocumentKind.Runtime,
+            // Runtime graphs must keep at least one node (SaveAsync guard).
+            Nodes = { new TaskNode { Id = "run_1_seed", Title = "seed", Kind = TaskNodeKind.Execute } },
         });
 
         var vm = CreateVM(store);

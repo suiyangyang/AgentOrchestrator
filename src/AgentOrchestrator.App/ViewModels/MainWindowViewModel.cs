@@ -8,6 +8,7 @@ using AgentOrchestrator.App.Models.Chat;
 using AgentOrchestrator.App.Models.Sidebar;
 using AgentOrchestrator.App.Models.TaskGraph;
 using AgentOrchestrator.App.Services.Agent;
+using AgentOrchestrator.App.Services.DialogHost;
 using AgentOrchestrator.App.Services.Settings;
 using AgentOrchestrator.App.Services.Sidebar;
 using Avalonia;
@@ -36,6 +37,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IAppSettingsService _settingsService;
     private readonly IServiceProvider _services;
     private readonly IAgentGateway _agent;
+    private readonly IDialogHost _dialogHost = new AvaloniaDialogHost();
     private GridLength _leftSidebarExpandedWidth = DefaultLeftSidebarWidth;
     private GridLength _rightSidebarExpandedWidth = DefaultRightSidebarWidth;
     private bool _isRestoringTaskGraphShell;
@@ -521,7 +523,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private async void OnSidebarNewTaskGraphRequested(object? sender, EventArgs e)
     {
         ActiveWorkspace = TaskGraph;
-        await TaskGraph.NewGraphCommand.ExecuteAsync(null);
+        TaskGraph.NewGraphCommand.Execute(null);
     }
 
     private void OnChatTemplateOrchestrationRequested(object? sender, TemplateOrchestrationRequest request)
@@ -654,7 +656,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     await Sidebar.RemoveTaskGraphAsync(req.TaskGraphId);
                     if (TaskGraph.CurrentGraph?.Id == req.TaskGraphId)
                     {
-                        await TaskGraph.NewGraphCommand.ExecuteAsync(null);
+                        await TaskGraph.ClearCurrentGraphAsync();
                     }
                 }
                 break;
@@ -667,7 +669,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private async void OnTaskOrchestrationNewTaskGraphRequested(object? sender, EventArgs e)
     {
         ActiveWorkspace = TaskGraph;
-        await TaskGraph.NewGraphCommand.ExecuteAsync(null);
+        TaskGraph.NewGraphCommand.Execute(null);
     }
 
     private async void OnEditorGraphInstantiated(object? sender, TaskGraph graph)
@@ -716,7 +718,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     await Sidebar.RemoveTaskGraphAsync(req.TaskGraphId);
                     if (TaskGraph.CurrentGraph?.Id == req.TaskGraphId)
                     {
-                        await TaskGraph.NewGraphCommand.ExecuteAsync(null);
+                        await TaskGraph.ClearCurrentGraphAsync();
                     }
                 }
                 break;
@@ -811,13 +813,13 @@ public partial class MainWindowViewModel : ViewModelBase
     // ── Simple modal dialog helpers ────────────────────────────────────
 
     private Task<bool> PromptConfirmAsync(string title, string message) =>
-        DialogHost.ConfirmAsync(GetOwnerWindow(), title, message);
+        _dialogHost.ConfirmAsync(GetOwnerWindow(), title, message);
 
     private Task<string?> PromptInputAsync(string title, string label, string initial) =>
-        DialogHost.InputAsync(GetOwnerWindow(), title, label, initial);
+        _dialogHost.InputAsync(GetOwnerWindow(), title, label, initial);
 
     private Task<string?> PromptSelectAsync(string title, string label, IReadOnlyList<string> options, string? selectedOption) =>
-        DialogHost.SelectAsync(GetOwnerWindow(), title, label, options, selectedOption);
+        _dialogHost.SelectAsync(GetOwnerWindow(), title, label, options, selectedOption);
 
     private static Window? GetOwnerWindow()
     {

@@ -11,6 +11,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Threading;
 using AgentOrchestrator.App.Services.Agent;
+using AgentOrchestrator.App.Services.DialogHost;
 using AgentOrchestrator.App.Services.Settings;
 using AgentOrchestrator.App.Services.Sidebar;
 using AgentOrchestrator.App.Services.TaskGraph;
@@ -223,6 +224,7 @@ public partial class App : Application
 
         // ── ViewModels ──
         services.AddSingleton<SidebarViewModel>();
+        services.AddSingleton<IDialogHost, AvaloniaDialogHost>();
         services.AddSingleton<ChatWorkspaceViewModel>(sp => new ChatWorkspaceViewModel(
             sp.GetRequiredService<IAgentGateway>(),
             sp.GetRequiredService<ISidebarRepository>(),
@@ -230,7 +232,14 @@ public partial class App : Application
             sp.GetRequiredService<ITaskGraphStore>(),
             sp.GetRequiredService<ITaskGraphExecutionController>(),
             sp.GetRequiredService<ITaskGraphRuntimeHub>()));
-        services.AddSingleton<TaskGraphWorkspaceViewModel>();
+        services.AddSingleton<TaskGraphWorkspaceViewModel>(sp => new TaskGraphWorkspaceViewModel(
+            sp.GetRequiredService<ITaskGraphStore>(),
+            sp.GetRequiredService<ITaskGraphDirectParser>(),
+            sp.GetRequiredService<ITaskGraphPlanner>(),
+            sp.GetRequiredService<IDocumentReader>(),
+            sp.GetRequiredService<ITaskGraphExecutor>(),
+            sp.GetRequiredService<SidebarViewModel>(),
+            sp.GetRequiredService<IDialogHost>()));
         services.AddSingleton<TaskGraphDocumentEditorViewModel>(sp => new TaskGraphDocumentEditorViewModel(
             sp.GetRequiredService<ITaskGraphStore>(),
             sp.GetRequiredService<SidebarViewModel>()));
