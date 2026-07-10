@@ -144,6 +144,9 @@ public sealed class TaskGraphDocumentEditorViewModelTests : IDisposable
         // Arrange
         var store = CreateStore();
         var graph = CreateRuntimeGraph("r1", "运行图");
+        // Runtime graphs must keep at least one node (enforced by
+        // JsonTaskGraphStore.SaveAsync since the "no empty graphs" change).
+        graph.Nodes.Add(new TaskNode { Id = "r1_n1", Title = "seed", Kind = TaskNodeKind.Execute });
         await store.SaveAsync(graph);
 
         var editor = CreateEditor();
@@ -264,6 +267,11 @@ public sealed class TaskGraphDocumentEditorViewModelTests : IDisposable
         var store = CreateStore();
         var template = CreateTemplateGraph("t5", "功能模板");
         template.TemplateMetadata = new TaskGraphTemplateMetadata();
+        // Instantiate clones the template into a runtime graph, which is
+        // saved back through the store. The instantiated runtime must keep
+        // at least one node — seed the template with one so the clone is
+        // also non-empty.
+        template.Nodes.Add(new TaskNode { Id = "t5_seed", Title = "seed", Kind = TaskNodeKind.Execute });
         await store.SaveAsync(template);
 
         var editor = CreateEditor();

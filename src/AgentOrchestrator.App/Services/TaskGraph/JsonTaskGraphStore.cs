@@ -185,6 +185,12 @@ public sealed class JsonTaskGraphStore : ITaskGraphStore
     public async Task SaveAsync(TaskGraphModel graph, CancellationToken ct = default)
     {
         Directory.CreateDirectory(_graphsDirectory);
+
+        if (graph.DocumentKind == TaskGraphDocumentKind.Runtime && graph.Nodes.Count == 0)
+        {
+            throw new TaskGraphValidationException("任务编排不能为空,至少需要一个节点。");
+        }
+
         NormalizeGraph(graph);
         graph.UpdatedAt = DateTimeOffset.UtcNow;
         graph.RebuildEdges();
