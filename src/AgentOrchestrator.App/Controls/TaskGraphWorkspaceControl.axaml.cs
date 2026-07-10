@@ -1392,6 +1392,50 @@ public partial class TaskGraphWorkspaceControl : UserControl
         if (_vm is null) return;
         await _vm.ConfirmCreateDialogAsync().ConfigureAwait(true);
     }
+
+    // ============================================================
+    // Naming dialog event handlers
+    // ============================================================
+
+    private void OnNamingDialogClose(object? sender, RoutedEventArgs e)
+    {
+        _vm?.CancelNamingDialog();
+    }
+
+    private void OnNamingDialogBackdropPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.Source == sender)
+        {
+            _vm?.CancelNamingDialog();
+        }
+    }
+
+    private async void OnNamingDialogConfirm(object? sender, RoutedEventArgs e)
+    {
+        if (_vm is null) return;
+        await _vm.ConfirmNamingDialogAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Enter = confirm, Escape = cancel. Same UX as the existing create dialog.
+    /// </summary>
+    private void OnNamingDialogKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (_vm is null) return;
+        if (e.Key == Key.Enter)
+        {
+            if (_vm.CanConfirmNamingDialog)
+            {
+                _ = _vm.ConfirmNamingDialogAsync();
+                e.Handled = true;
+            }
+        }
+        else if (e.Key == Key.Escape)
+        {
+            _vm.CancelNamingDialog();
+            e.Handled = true;
+        }
+    }
 }
 
 /// <summary>Visible when the bound string is non-null and non-empty.</summary>

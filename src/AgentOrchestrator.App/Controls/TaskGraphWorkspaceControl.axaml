@@ -295,7 +295,7 @@
             <Border Classes="create-dialog-card"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center">
-                <Grid RowDefinitions="Auto,Auto,*,Auto">
+                <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
                     <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
                         <StackPanel Grid.Column="0" Spacing="4">
                             <TextBlock Classes="create-dialog-title"
@@ -355,14 +355,20 @@
                         </ToggleButton>
                     </StackPanel>
 
+                    <!-- Cross-mode Name field -->
+                    <StackPanel Grid.Row="2" Orientation="Vertical" Spacing="6" Margin="0,12,0,4">
+                        <TextBlock Text="编排名称" Foreground="#6E727A" FontSize="12" />
+                        <TextBox Classes="create-dialog-input"
+                                 Text="{Binding NewGraphNameDraft, Mode=TwoWay}"
+                                 PlaceholderText="为新编排起一个名字(必填)" />
+                    </StackPanel>
+
                     <!-- Body — one panel visible at a time -->
-                    <Border Grid.Row="2" Classes="create-dialog-body">
+                    <Border Grid.Row="3" Classes="create-dialog-body">
                         <Grid>
                             <StackPanel Spacing="10" IsVisible="{Binding IsTemplateMode}">
                                 <TextBlock Text="选择模板后，可填写编排名称和输入数据。" Foreground="#6E727A" />
-                                <Grid ColumnDefinitions="220,*" ColumnSpacing="8">
-                                    <ComboBox Grid.Column="0"
-                                              Classes="create-dialog-input"
+                                <ComboBox Classes="create-dialog-input"
                                               ItemsSource="{Binding Templates}"
                                               SelectedItem="{Binding SelectedTemplate, Mode=TwoWay}">
                                         <ComboBox.ItemTemplate>
@@ -371,11 +377,6 @@
                                             </DataTemplate>
                                         </ComboBox.ItemTemplate>
                                     </ComboBox>
-                                    <TextBox Grid.Column="1"
-                                             Classes="create-dialog-input"
-                                             Text="{Binding TemplateGraphName, Mode=TwoWay}"
-                                             PlaceholderText="编排名称（可选）" />
-                                </Grid>
                                 <TextBlock Text="{Binding SelectedTemplate.Description}" Foreground="#6E727A" TextWrapping="Wrap" />
                                 <TextBox Classes="create-dialog-input"
                                          Text="{Binding TemplateInputText, Mode=TwoWay}"
@@ -442,7 +443,7 @@
                     </Border>
 
                     <!-- Footer bar: separated from form body with top border -->
-                    <Border Grid.Row="3"
+                    <Border Grid.Row="4"
                             Background="#FAFBFC"
                             BorderBrush="#E3E5E9"
                             BorderThickness="0,1,0,0"
@@ -458,6 +459,71 @@
                                     Content="创建" />
                         </StackPanel>
                     </Border>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ============================================================ -->
+        <!-- Naming dialog: appears BEFORE any "new TaskGraph" save to     -->
+        <!-- enforce a non-empty name and a non-empty graph.               -->
+        <!-- ============================================================ -->
+        <Grid x:Name="NamingDialog"
+              IsVisible="{Binding IsNamingDialogVisible}"
+              Background="#66000000"
+              PointerPressed="OnNamingDialogBackdropPressed"
+              ZIndex="10">
+            <Border Classes="create-dialog-card"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+                <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+                    <!-- Title row + close button -->
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Classes="create-dialog-title" Text="新建任务编排" />
+                            <TextBlock Classes="create-dialog-subtitle"
+                                       Text="为新编排起一个名字。新建后会默认带一个执行节点。" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Classes="task-toolbar-btn"
+                                Click="OnNamingDialogClose"
+                                ToolTip.Tip="关闭"
+                                Margin="8,0,0,0">
+                            <Path Classes="toolbar-icon-path window-close-icon" />
+                        </Button>
+                    </Grid>
+
+                    <!-- Name input -->
+                    <StackPanel Grid.Row="1" Spacing="6" Margin="0,16,0,12">
+                        <TextBlock Text="编排名称" Foreground="#6E727A" FontSize="12" />
+                        <TextBox x:Name="NamingDialogNameBox"
+                                 Classes="create-dialog-input"
+                                 Text="{Binding NamingDialogNameDraft, Mode=TwoWay}"
+                                 KeyDown="OnNamingDialogKeyDown" />
+                    </StackPanel>
+
+                    <!-- Spacer row to push footer down -->
+                    <Border Grid.Row="2" />
+
+                    <!-- Footer -->
+                    <Border Grid.Row="3"
+                            Background="#FAFBFC"
+                            BorderBrush="#E3E5E9"
+                            BorderThickness="0,1,0,0"
+                            Padding="0,12">
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    Spacing="8">
+                            <Button Classes="create-dialog-secondary"
+                                    Click="OnNamingDialogClose"
+                                    Content="取消" />
+                            <Button Classes="create-dialog-primary"
+                                    Click="OnNamingDialogConfirm"
+                                    IsEnabled="{Binding CanConfirmNamingDialog}"
+                                    Content="创建" />
+                        </StackPanel>
+                    </Border>
+
                 </Grid>
             </Border>
         </Grid>
