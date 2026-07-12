@@ -44,6 +44,7 @@ public sealed class TaskOrchestrationWorkspaceViewModelTests : IDisposable
         var store = storeOverride ?? new JsonTaskGraphStore(_tempDir);
         var sidebarRepo = new FakeSidebarRepository();
         var sidebar = new SidebarViewModel(sidebarRepo, store);
+        var dialogHost = new FakeDialogHost();
         var workspace = new TaskGraphWorkspaceViewModel(
             store,
             new FakeDirectParser(),
@@ -51,9 +52,9 @@ public sealed class TaskOrchestrationWorkspaceViewModelTests : IDisposable
             new FakeDocumentReader(),
             new FakeExecutor(),
             sidebar,
-            new AvaloniaDialogHost());
+            dialogHost);
         var editor = new TaskGraphDocumentEditorViewModel(store, sidebar);
-        return new TaskOrchestrationWorkspaceViewModel(store, workspace, editor);
+        return new TaskOrchestrationWorkspaceViewModel(store, workspace, editor, dialogHost);
     }
 
     // ── Test: NewTemplate creates a TaskGraph with DocumentKind=Template ──
@@ -224,8 +225,208 @@ public sealed class TaskOrchestrationWorkspaceViewModelTests : IDisposable
         Assert.Contains(vm.TaskGraphs, t => t.Id == "run-1");
     }
 
+    // ── Regression: Bug #4 — NewTemplateAsync must update the Templates collection ──
+    [Fact]
+    public async Task NewTemplateAsync_NewTemplateAppearsInTemplatesCollection()
+    {
+        var store = CreateStore();
+        var vm = CreateVM(store);
+        await Task.Delay(100);
+
+        Assert.Empty(vm.Templates);
+        await vm.NewTemplateCommand.ExecuteAsync(null);
+
+        Assert.NotEmpty(vm.Templates);
+        Assert.Contains(vm.Templates, t => t.Name == "新模板");
+    }
+
+    // ── Regression: Bug #2 — DeleteTemplate must remove from the Templates collection ──
+    [Fact]
+    public async Task DeleteTemplateAsync_TemplateRemovedFromCollection()
+    {
+        var store = CreateStore();
+
+        var userTemplate = new TaskGraphModel
+        {
+            Id = "del-tpl",
+            Name = "待删除模板",
+            DocumentKind = TaskGraphDocumentKind.Template,
+            IsBuiltInTemplate = false,
+        };
+        await store.SaveAsync(userTemplate);
+
+        var vm = CreateVM(store);
+        await Task.Delay(100);
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Contains(vm.Templates, t => t.Id == "del-tpl");
+
+        var templateVm = vm.Templates.First(t => t.Id == "del-tpl");
+        await vm.DeleteTemplateCommand.ExecuteAsync(templateVm);
+
+        Assert.DoesNotContain(vm.Templates, t => t.Id == "del-tpl");
+    }
+
+    // ── Regression: Bug #3 — CommitTemplateRename must reflect in Templates and selection ──
+    [Fact]
+    public async Task CommitTemplateRenameAsync_NewNameReflectedInTemplatesAndSelection()
+    {
+        var store = CreateStore();
+
+        var template = new TaskGraphModel
+        {
+            Id = "rename-tpl",
+            Name = "Old Name",
+            DocumentKind = TaskGraphDocumentKind.Template,
+            IsBuiltInTemplate = false,
+        };
+        await store.SaveAsync(template);
+
+        var vm = CreateVM(store);
+        await Task.Delay(100);
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        var templateVm = vm.Templates.First(t => t.Id == "rename-tpl");
+        // Select the template so we can verify selection is preserved after rename.
+        vm.SelectTemplateCommand.Execute(templateVm);
+        Assert.Equal("rename-tpl", vm.SelectedTemplate?.Id);
+
+        templateVm.Name = "New Name";
+        await vm.CommitTemplateRenameCommand.ExecuteAsync(templateVm);
+
+        // Data persisted and reflected in the collection.
+        Assert.Contains(vm.Templates, t => t.Id == "rename-tpl" && t.Name == "New Name");
+        // Selection preserved with the new name.
+        Assert.NotNull(vm.SelectedTemplate);
+        Assert.Equal("rename-tpl", vm.SelectedTemplate!.Id);
+        Assert.Equal("New Name", vm.SelectedTemplate!.Name);
+    }
+
+    // ── Regression: Bug #1 — RenameTaskGraph must update TaskOrchestration list ──
+    [Fact]
+    public async Task RenameTaskGraph_UpdatesTaskOrchestrationList()
+    {
+        var store = CreateStore();
+
+        var graph = new TaskGraphModel
+        {
+            Id = "run-rename",
+            Name = "Old Runtime",
+            DocumentKind = TaskGraphDocumentKind.Runtime,
+            Nodes = { new TaskNode { Id = "n1", Title = "seed", Kind = TaskNodeKind.Execute } },
+        };
+        await store.SaveAsync(graph);
+
+        var sidebarRepo = new FakeSidebarRepository();
+        var sidebar = new SidebarViewModel(sidebarRepo, store);
+        var dialogHost1 = new FakeDialogHost();
+        var workspace = new TaskGraphWorkspaceViewModel(
+            store, new FakeDirectParser(), new FakePlanner(),
+            new FakeDocumentReader(), new FakeExecutor(), sidebar,
+            dialogHost1);
+        var editor = new TaskGraphDocumentEditorViewModel(store, sidebar);
+        var vm = new TaskOrchestrationWorkspaceViewModel(store, workspace, editor, dialogHost1);
+        await Task.Delay(100);
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Contains(vm.TaskGraphs, g => g.Id == "run-rename" && g.Name == "Old Runtime");
+
+        // Simulate what MainWindowViewModel does: rename via Sidebar, then refresh orchestration.
+        await sidebar.RenameTaskGraphAsync("run-rename", "New Runtime");
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Contains(vm.TaskGraphs, g => g.Id == "run-rename" && g.Name == "New Runtime");
+    }
+
+    // ── Regression: Bug #1 — RemoveTaskGraph must update TaskOrchestration list ──
+    [Fact]
+    public async Task RemoveTaskGraph_UpdatesTaskOrchestrationList()
+    {
+        var store = CreateStore();
+
+        var graph = new TaskGraphModel
+        {
+            Id = "run-remove",
+            Name = "To Remove",
+            DocumentKind = TaskGraphDocumentKind.Runtime,
+            Nodes = { new TaskNode { Id = "n1", Title = "seed", Kind = TaskNodeKind.Execute } },
+        };
+        await store.SaveAsync(graph);
+
+        var sidebarRepo = new FakeSidebarRepository();
+        var sidebar = new SidebarViewModel(sidebarRepo, store);
+        var dialogHost2 = new FakeDialogHost();
+        var workspace = new TaskGraphWorkspaceViewModel(
+            store, new FakeDirectParser(), new FakePlanner(),
+            new FakeDocumentReader(), new FakeExecutor(), sidebar,
+            dialogHost2);
+        var editor = new TaskGraphDocumentEditorViewModel(store, sidebar);
+        var vm = new TaskOrchestrationWorkspaceViewModel(store, workspace, editor, dialogHost2);
+        await Task.Delay(100);
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Contains(vm.TaskGraphs, g => g.Id == "run-remove");
+
+        // Simulate what MainWindowViewModel does: remove via Sidebar, then refresh orchestration.
+        await sidebar.RemoveTaskGraphAsync("run-remove");
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain(vm.TaskGraphs, g => g.Id == "run-remove");
+    }
+
+    // ── Test: DeleteTemplateAsync shows confirmation; cancel does NOT delete ──
+    [Fact]
+    public async Task DeleteTemplateAsync_UserCancels_DoesNotDelete()
+    {
+        var store = CreateStore();
+
+        var userTemplate = new TaskGraphModel
+        {
+            Id = "cancel-del-tpl",
+            Name = "不可删除",
+            DocumentKind = TaskGraphDocumentKind.Template,
+            IsBuiltInTemplate = false,
+        };
+        await store.SaveAsync(userTemplate);
+
+        var cancelDialogHost = new FakeDialogHost { ConfirmResult = false };
+        var sidebarRepo = new FakeSidebarRepository();
+        var sidebar = new SidebarViewModel(sidebarRepo, store);
+        var workspace = new TaskGraphWorkspaceViewModel(
+            store, new FakeDirectParser(), new FakePlanner(),
+            new FakeDocumentReader(), new FakeExecutor(), sidebar,
+            cancelDialogHost);
+        var editor = new TaskGraphDocumentEditorViewModel(store, sidebar);
+        var vm = new TaskOrchestrationWorkspaceViewModel(store, workspace, editor, cancelDialogHost);
+        await Task.Delay(100);
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Contains(vm.Templates, t => t.Id == "cancel-del-tpl");
+
+        var templateVm = vm.Templates.First(t => t.Id == "cancel-del-tpl");
+        await vm.DeleteTemplateCommand.ExecuteAsync(templateVm);
+
+        // Template should still exist in the store.
+        var templates = await store.ListTemplatesAsync();
+        Assert.Contains(templates, t => t.Id == "cancel-del-tpl");
+
+        // Template should still exist in the VM's Templates collection.
+        Assert.Contains(vm.Templates, t => t.Id == "cancel-del-tpl");
+    }
+
     // ── Fake implementations ─────────────────────────────────────────────
     // Must match those in TaskGraphWorkspaceViewModelTemplateModeTests.
+
+    private sealed class FakeDialogHost : IDialogHost
+    {
+        public bool ConfirmResult { get; set; } = true;
+        public Task<bool> ConfirmAsync(Avalonia.Controls.Window? owner, string title, string message)
+            => Task.FromResult(ConfirmResult);
+        public Task<string?> InputAsync(Avalonia.Controls.Window? owner, string title, string label, string initial)
+            => Task.FromResult<string?>(initial);
+        public Task<string?> SelectAsync(Avalonia.Controls.Window? owner, string title, string label, IReadOnlyList<string> options, string? selectedOption = null)
+            => Task.FromResult<string?>(options.FirstOrDefault());
+    }
 
     private sealed class FakeDirectParser : ITaskGraphDirectParser
     {

@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using AgentOrchestrator.App.ViewModels;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -16,6 +17,18 @@ public sealed partial class TaskOrchestrationSidebarControl : UserControl
 
     private new TaskOrchestrationWorkspaceViewModel? DataContext
         => base.DataContext as TaskOrchestrationWorkspaceViewModel;
+
+    private void OnNewTemplateClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        DataContext?.NewTemplateCommand.Execute(null);
+    }
+
+    private void OnNewTaskGraphClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        DataContext?.NewTaskGraphCommand.Execute(null);
+    }
 
     private void OnTemplateRowClick(object? sender, RoutedEventArgs e)
     {
@@ -41,7 +54,7 @@ public sealed partial class TaskOrchestrationSidebarControl : UserControl
 
         RowActionPanel.Children.Clear();
 
-        void Add(string label, Action action)
+        void Add(string label, Func<Task> action)
         {
             var b = new Button
             {
@@ -59,20 +72,27 @@ public sealed partial class TaskOrchestrationSidebarControl : UserControl
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Left,
             };
-            b.Click += (_, _) =>
+            b.Click += async (_, _) =>
             {
                 RowActionPopup.IsOpen = false;
-                action();
+                try
+                {
+                    await action();
+                }
+                catch
+                {
+                    // Suppress exceptions from template actions to keep the UI stable.
+                }
             };
             RowActionPanel.Children.Add(b);
         }
 
-        Add("重命名", () => vm.BeginRenameTemplateCommand.Execute(templateVm));
-        Add("复制", () => vm.DuplicateTemplateCommand.Execute(templateVm));
+        Add("重命名", () => ((CommunityToolkit.Mvvm.Input.IAsyncRelayCommand<SidebarTaskGraphItemViewModel?>)vm.BeginRenameTemplateCommand).ExecuteAsync(templateVm));
+        Add("复制", () => ((CommunityToolkit.Mvvm.Input.IAsyncRelayCommand<SidebarTaskGraphItemViewModel?>)vm.DuplicateTemplateCommand).ExecuteAsync(templateVm));
 
         if (!templateVm.IsBuiltIn)
         {
-            Add("删除", () => vm.DeleteTemplateCommand.Execute(templateVm));
+            Add("删除", () => ((CommunityToolkit.Mvvm.Input.IAsyncRelayCommand<SidebarTaskGraphItemViewModel?>)vm.DeleteTemplateCommand).ExecuteAsync(templateVm));
         }
 
         RowActionPopup.PlacementTarget = anchor;

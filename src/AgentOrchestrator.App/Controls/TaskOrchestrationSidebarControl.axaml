@@ -44,7 +44,7 @@
                                       Classes.sidebar-chevron-expanded="{Binding AreTemplatesExpanded}" />
                                 <Button Grid.Column="3"
                                         Classes="sidebar-section-action-btn"
-                                        Command="{Binding NewTemplateCommand}"
+                                        Click="OnNewTemplateClick"
                                         IsVisible="{Binding #TemplatesHeader.IsPointerOver}">
                                     <Path Classes="sidebar-action-icon sidebar-plus-icon" />
                                 </Button>
@@ -131,7 +131,7 @@
                                       Classes.sidebar-chevron-expanded="{Binding AreTaskGraphsExpanded}" />
                                 <Button Grid.Column="3"
                                         Classes="sidebar-section-action-btn"
-                                        Command="{Binding NewTaskGraphCommand}"
+                                        Click="OnNewTaskGraphClick"
                                         IsVisible="{Binding #TaskGraphsHeader.IsPointerOver}">
                                     <Path Classes="sidebar-action-icon sidebar-plus-icon" />
                                 </Button>

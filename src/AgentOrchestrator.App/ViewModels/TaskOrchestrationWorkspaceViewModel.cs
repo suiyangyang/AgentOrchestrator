@@ -7,7 +7,11 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOrchestrator.App.Models.TaskGraph;
+using AgentOrchestrator.App.Services.DialogHost;
 using AgentOrchestrator.App.Services.TaskGraph;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -25,6 +29,7 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
     private readonly ITaskGraphStore _taskGraphStore;
     private readonly TaskGraphWorkspaceViewModel _workspace;
     private readonly TaskGraphDocumentEditorViewModel _editor;
+    private readonly IDialogHost _dialogHost;
     private readonly Dictionary<string, SidebarTaskGraphItemViewModel> _templatesById = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SidebarTaskGraphItemViewModel> _taskGraphsById = new(StringComparer.Ordinal);
     private IReadOnlyList<TaskGraphListItem> _allTemplateItems = [];
@@ -33,11 +38,13 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
     public TaskOrchestrationWorkspaceViewModel(
         ITaskGraphStore taskGraphStore,
         TaskGraphWorkspaceViewModel workspace,
-        TaskGraphDocumentEditorViewModel editor)
+        TaskGraphDocumentEditorViewModel editor,
+        IDialogHost dialogHost)
     {
         _taskGraphStore = taskGraphStore;
         _workspace = workspace;
         _editor = editor;
+        _dialogHost = dialogHost;
         _ = InitializeAsync();
     }
 
@@ -132,9 +139,15 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
 
     private async Task InitializeAsync()
     {
-        await RefreshAsync();
+        await RefreshInternalAsync();
     }
 
+    /// <summary>
+    /// Public re-entrance-guarded refresh point. Callers that already manage
+    /// <see cref="IsBusy"/> themselves (e.g. <see cref="NewTemplateAsync"/>)
+    /// must call <see cref="RefreshInternalAsync"/> directly to avoid the
+    /// early-out guard.
+    /// </summary>
     [RelayCommand]
     private async Task RefreshAsync()
     {
@@ -143,6 +156,16 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
             return;
         }
 
+        await RefreshInternalAsync();
+    }
+
+    /// <summary>
+    /// Performs the actual data reload and UI refresh WITHOUT the
+    /// <see cref="IsBusy"/> re-entrance guard. Callers that have already
+    /// set <c>IsBusy = true</c> must use this entry point.
+    /// </summary>
+    private async Task RefreshInternalAsync()
+    {
         IsBusy = true;
         try
         {
@@ -191,20 +214,38 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
             return;
         }
 
+        var name = await _dialogHost.InputAsync(
+            GetOwnerWindow(),
+            "新建任务模板",
+            "模板名称",
+            string.Empty).ConfigureAwait(true);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
         IsBusy = true;
         try
         {
             // Create a minimal template via the builder, then save.
             var graph = TaskGraphTemplateBuilder.Build(TaskGraphTemplateKind.Custom, string.Empty, TaskGraphDocumentKind.Template);
             graph.Id = Guid.NewGuid().ToString("N");
-            graph.Name = "新模板";
+            graph.Name = name.Trim();
             graph.IsBuiltInTemplate = false;
             graph.TemplateMetadata = new TaskGraphTemplateMetadata
             {
                 AllowDynamicExpansion = true,
             };
-            await _taskGraphStore.SaveAsync(graph).ConfigureAwait(true);
-            await RefreshAsync();
+            try
+            {
+                await _taskGraphStore.SaveAsync(graph).ConfigureAwait(true);
+            }
+            catch (DuplicateTaskGraphNameException ex)
+            {
+                await _dialogHost.ShowMessageAsync(GetOwnerWindow(), "名称重复", ex.Message).ConfigureAwait(true);
+                return;
+            }
+            await RefreshInternalAsync();
 
             if (_templatesById.TryGetValue(graph.Id, out var vm))
             {
@@ -306,6 +347,16 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
             return;
         }
 
+        var owner = GetOwnerWindow();
+        var ok = await _dialogHost.ConfirmAsync(
+            owner,
+            "删除模板",
+            $"确定要删除模板 \u201c{template.Name}\u201d 吗？该操作无法撤销。");
+        if (!ok)
+        {
+            return;
+        }
+
         try
         {
             await _taskGraphStore.DeleteAsync(template.Id).ConfigureAwait(true);
@@ -313,6 +364,7 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
         catch (InvalidOperationException)
         {
             // Deletion of built-in was rejected.
+            return;
         }
 
         if (SelectedTemplate is not null && SelectedTemplate.Id == template.Id)
@@ -320,7 +372,7 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
             SelectTemplate(null!);
         }
 
-        await RefreshAsync();
+        await RefreshInternalAsync();
     }
 
     [RelayCommand]
@@ -355,7 +407,7 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
         clone.Name = $"{source.Name} 副本";
         clone.IsBuiltInTemplate = false;
         await _taskGraphStore.SaveAsync(clone).ConfigureAwait(true);
-        await RefreshAsync();
+        await RefreshInternalAsync();
 
         if (_templatesById.TryGetValue(clone.Id, out var vm))
         {
@@ -394,11 +446,26 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
             return;
         }
 
-        graph.Name = string.IsNullOrWhiteSpace(template.Name) ? "未命名模板" : template.Name.Trim();
+        var originalName = graph.Name;
+        var newName = string.IsNullOrWhiteSpace(template.Name) ? "未命名模板" : template.Name.Trim();
+        graph.Name = newName;
 
-        await _taskGraphStore.SaveAsync(graph).ConfigureAwait(true);
+        try
+        {
+            await _taskGraphStore.SaveAsync(graph).ConfigureAwait(true);
+        }
+        catch (DuplicateTaskGraphNameException ex)
+        {
+            template.Name = originalName;
+            template.IsEditing = false;
+            await _dialogHost.ShowMessageAsync(GetOwnerWindow(), "名称重复", ex.Message).ConfigureAwait(true);
+            return;
+        }
+        // Defensive: force the Name property on the existing VM before
+        // hiding the TextBox so the TextBlock shows the committed name.
+        template.Name = newName;
         template.IsEditing = false;
-        await RefreshAsync();
+        await RefreshInternalAsync();
     }
 
     // ================================================================
@@ -626,5 +693,14 @@ public sealed partial class TaskOrchestrationWorkspaceViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasMoreTaskGraphs));
         OnPropertyChanged(nameof(CanCollapseTaskGraphs));
         OnPropertyChanged(nameof(HasTaskGraphPaginationControls));
+    }
+
+    private static Window? GetOwnerWindow()
+    {
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            return desktop.MainWindow;
+        }
+        return null;
     }
 }

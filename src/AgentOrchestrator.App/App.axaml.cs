@@ -246,7 +246,8 @@ public partial class App : Application
         services.AddSingleton<TaskOrchestrationWorkspaceViewModel>(sp => new TaskOrchestrationWorkspaceViewModel(
             sp.GetRequiredService<ITaskGraphStore>(),
             sp.GetRequiredService<TaskGraphWorkspaceViewModel>(),
-            sp.GetRequiredService<TaskGraphDocumentEditorViewModel>()));
+            sp.GetRequiredService<TaskGraphDocumentEditorViewModel>(),
+            sp.GetRequiredService<IDialogHost>()));
         services.AddTransient<TaskGraphNodeDetailViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<SettingsViewModel>();
