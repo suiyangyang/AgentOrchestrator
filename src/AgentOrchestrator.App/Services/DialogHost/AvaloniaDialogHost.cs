@@ -14,6 +14,11 @@ namespace AgentOrchestrator.App.Services.DialogHost;
 /// </summary>
 public sealed class AvaloniaDialogHost : IDialogHost
 {
+    public async Task ShowMessageAsync(Window? owner, string title, string message)
+    {
+        _ = await ConfirmAsync(owner, title, message);
+    }
+
     public Task<bool> ConfirmAsync(Window? owner, string title, string message)
     {
         var tcs = new TaskCompletionSource<bool>();
@@ -103,11 +108,16 @@ public sealed class AvaloniaDialogHost : IDialogHost
             FontSize = 13,
             Padding = new Thickness(10, 8),
             Background = new SolidColorBrush(Color.FromRgb(0xF5, 0xF6, 0xF8)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xDC, 0xE1, 0xE8)),
+            BorderThickness = new Thickness(0),
+        };
+        root.Children.Add(new Border
+        {
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xB8, 0xC0, 0xCC)),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
-        };
-        root.Children.Add(input);
+            ClipToBounds = true,
+            Child = input,
+        });
 
         var buttons = new StackPanel
         {
