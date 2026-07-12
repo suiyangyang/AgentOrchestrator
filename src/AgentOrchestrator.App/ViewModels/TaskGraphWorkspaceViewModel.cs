@@ -19,6 +19,7 @@ namespace AgentOrchestrator.App.ViewModels;
 
 public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
 {
+    public event EventHandler? GraphSaved;
     private const double NodeWidth = 240;
     private const double NodeHeight = 132;
     private const double CanvasPadding = 80;
@@ -467,15 +468,24 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
             return;
         }
 
-        IsNamingDialogVisible = false;
-
-        if (_pendingDropX is not null && _pendingDropY is not null)
+        try
         {
-            await CompletePendingDropAsync(name).ConfigureAwait(true);
+            if (_pendingDropX is not null && _pendingDropY is not null)
+            {
+                await CompletePendingDropAsync(name).ConfigureAwait(true);
+            }
+            else
+            {
+                await CreateBlankRuntimeGraphAsync(name).ConfigureAwait(true);
+            }
+        }
+        catch (DuplicateTaskGraphNameException ex)
+        {
+            await _dialogHost.ShowMessageAsync(null, "名称重复", ex.Message).ConfigureAwait(true);
             return;
         }
 
-        await CreateBlankRuntimeGraphAsync(name).ConfigureAwait(true);
+        IsNamingDialogVisible = false;
     }
 
     /// <summary>
@@ -1447,6 +1457,7 @@ public sealed partial class TaskGraphWorkspaceViewModel : ViewModelBase
         RefreshBugReport();
         await _store.SaveAsync(graph).ConfigureAwait(true);
         await _sidebar.RefreshTaskGraphsAsync().ConfigureAwait(true);
+        GraphSaved?.Invoke(this, EventArgs.Empty);
         StatusText = statusMessage;
     }
 

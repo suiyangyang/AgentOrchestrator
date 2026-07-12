@@ -242,7 +242,8 @@ public partial class App : Application
             sp.GetRequiredService<IDialogHost>()));
         services.AddSingleton<TaskGraphDocumentEditorViewModel>(sp => new TaskGraphDocumentEditorViewModel(
             sp.GetRequiredService<ITaskGraphStore>(),
-            sp.GetRequiredService<SidebarViewModel>()));
+            sp.GetRequiredService<SidebarViewModel>(),
+            sp));
         services.AddSingleton<TaskOrchestrationWorkspaceViewModel>(sp => new TaskOrchestrationWorkspaceViewModel(
             sp.GetRequiredService<ITaskGraphStore>(),
             sp.GetRequiredService<TaskGraphWorkspaceViewModel>(),

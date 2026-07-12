@@ -11,6 +11,7 @@ using AgentOrchestrator.App.Services.Agent;
 using AgentOrchestrator.App.Services.DialogHost;
 using AgentOrchestrator.App.Services.Settings;
 using AgentOrchestrator.App.Services.Sidebar;
+using AgentOrchestrator.App.Services.TaskGraph;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -107,6 +108,7 @@ public partial class MainWindowViewModel : ViewModelBase
         TaskGraph.PropertyChanged += OnWorkspacePropertyChanged;
         TaskGraph.NodeDetailRequested += OnTaskGraphNodeDetailRequested;
         TaskGraph.UseInChatRequested += OnTaskGraphUseInChatRequested;
+        TaskGraph.GraphSaved += OnTaskGraphCreated;
 
         _agent.AgentErrorOccurred += OnAgentErrorOccurred;
 
@@ -638,7 +640,14 @@ public partial class MainWindowViewModel : ViewModelBase
                 var newName = await PromptInputAsync("重命名任务编排", "新名称", graph.Name);
                 if (!string.IsNullOrWhiteSpace(newName))
                 {
-                    await Sidebar.RenameTaskGraphAsync(req.TaskGraphId, newName);
+                    try
+                    {
+                        await Sidebar.RenameTaskGraphAsync(req.TaskGraphId, newName);
+                    }
+                    catch (DuplicateTaskGraphNameException ex)
+                    {
+                        await _dialogHost.ShowMessageAsync(GetOwnerWindow(), "名称重复", ex.Message);
+                    }
                 }
                 break;
             }
@@ -672,6 +681,11 @@ public partial class MainWindowViewModel : ViewModelBase
         TaskGraph.NewGraphCommand.Execute(null);
     }
 
+    private async void OnTaskGraphCreated(object? sender, EventArgs e)
+    {
+        await TaskOrchestration.RefreshCommand.ExecuteAsync(null);
+    }
+
     private async void OnEditorGraphInstantiated(object? sender, TaskGraph graph)
     {
         // Open the newly instantiated runtime graph in the independent TaskGraph workspace.
@@ -700,7 +714,15 @@ public partial class MainWindowViewModel : ViewModelBase
                 var newName = await PromptInputAsync("重命名任务编排", "新名称", graph.Name);
                 if (!string.IsNullOrWhiteSpace(newName))
                 {
-                    await Sidebar.RenameTaskGraphAsync(req.TaskGraphId, newName);
+                    try
+                    {
+                        await Sidebar.RenameTaskGraphAsync(req.TaskGraphId, newName);
+                        await TaskOrchestration.RefreshCommand.ExecuteAsync(null);
+                    }
+                    catch (DuplicateTaskGraphNameException ex)
+                    {
+                        await _dialogHost.ShowMessageAsync(GetOwnerWindow(), "名称重复", ex.Message);
+                    }
                 }
                 break;
             }
@@ -720,6 +742,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     {
                         await TaskGraph.ClearCurrentGraphAsync();
                     }
+                    await TaskOrchestration.RefreshCommand.ExecuteAsync(null);
                 }
                 break;
             }

@@ -8,6 +8,7 @@ using AgentOrchestrator.App.Models.TaskGraph;
 using AgentOrchestrator.App.Services.TaskGraph;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using TaskGraphModel = AgentOrchestrator.App.Models.TaskGraph.TaskGraph;
 
 namespace AgentOrchestrator.App.ViewModels;
@@ -22,14 +23,17 @@ public sealed partial class TaskGraphDocumentEditorViewModel : ViewModelBase
 {
     private readonly ITaskGraphStore _store;
     private readonly SidebarViewModel _sidebar;
+    private readonly IServiceProvider? _serviceProvider;
     private TaskGraphModel? _currentDocument;
 
     public TaskGraphDocumentEditorViewModel(
         ITaskGraphStore store,
-        SidebarViewModel sidebar)
+        SidebarViewModel sidebar,
+        IServiceProvider? serviceProvider = null)
     {
         _store = store;
         _sidebar = sidebar;
+        _serviceProvider = serviceProvider;
     }
 
     // ── Document identity ──────────────────────────────────────────────
@@ -226,6 +230,7 @@ public sealed partial class TaskGraphDocumentEditorViewModel : ViewModelBase
 
         var runtime = await _store.InstantiateTemplateAsync(CurrentDocument.Id, options).ConfigureAwait(true);
         await _sidebar.RefreshTaskGraphsAsync().ConfigureAwait(true);
+        _ = RefreshOrchestrationAsync();
         StatusText = "已基于模板生成任务图。";
         GraphInstantiated?.Invoke(this, runtime);
     }
@@ -311,6 +316,7 @@ public sealed partial class TaskGraphDocumentEditorViewModel : ViewModelBase
 
         await _store.SaveAsync(template).ConfigureAwait(true);
         await _sidebar.RefreshTaskGraphsAsync().ConfigureAwait(true);
+        _ = RefreshOrchestrationAsync();
         StatusText = $"已另存为模板\u201C{template.Name}\u201D\u3002";
     }
 
@@ -362,6 +368,19 @@ public sealed partial class TaskGraphDocumentEditorViewModel : ViewModelBase
     }
 
     // ── Helpers ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Fire-and-forget refresh of the <see cref="TaskOrchestrationWorkspaceViewModel"/>
+    /// so that the orchestration sidebar stays in sync when templates are
+    /// created or instantiated from the editor.
+    /// </summary>
+    private async Task RefreshOrchestrationAsync()
+    {
+        if (_serviceProvider?.GetService<TaskOrchestrationWorkspaceViewModel>() is { } orchestration)
+        {
+            await orchestration.RefreshCommand.ExecuteAsync(null);
+        }
+    }
 
     private TaskGraphTemplateMetadata EnsureTemplateMetadata()
     {
