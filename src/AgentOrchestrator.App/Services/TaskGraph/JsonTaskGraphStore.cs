@@ -191,6 +191,15 @@ public sealed class JsonTaskGraphStore : ITaskGraphStore
             throw new TaskGraphValidationException("任务编排不能为空,至少需要一个节点。");
         }
 
+        var normalizedName = (graph.Name ?? string.Empty).Trim();
+        var sameKindDocuments = await EnumerateDocumentsAsync(graph.DocumentKind, ct).ConfigureAwait(false);
+        if (sameKindDocuments.Any(item =>
+                !string.Equals(item.Id, graph.Id, StringComparison.Ordinal)
+                && string.Equals(item.Name.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new DuplicateTaskGraphNameException(normalizedName, graph.DocumentKind);
+        }
+
         NormalizeGraph(graph);
         graph.UpdatedAt = DateTimeOffset.UtcNow;
         graph.RebuildEdges();
